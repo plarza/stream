@@ -41,6 +41,7 @@ struct LibraryView: View {
                         .font(.title3)
                         .padding(.vertical, 4)
                 }
+                .accessibilityIdentifier("library.\(s.title)")
             }
         }
         .listStyle(.plain)
@@ -58,19 +59,9 @@ struct SectionView: View {
 
     var body: some View {
         List {
-            if section.isSongs, !items.isEmpty {
-                HStack(spacing: 12) {
-                    Button { playAll(shuffle: false) } label: {
-                        Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity)
-                    }
-                    Button { playAll(shuffle: true) } label: {
-                        Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity)
-                    }
-                }
-                .buttonStyle(.glass)
-                .controlSize(.large)
-                .listRowSeparator(.hidden)
-            }
+            #if os(macOS)
+            PageTitle(text: section.title).listRowSeparator(.hidden)
+            #endif
             ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
                 row(item, index: i)
                     .onAppear { if i == items.count - 20 { loadMore() } }
@@ -83,17 +74,19 @@ struct SectionView: View {
                 ContentUnavailableView(emptyText, systemImage: section.symbol)
             }
         }
-        .task(id: model.libraryVersion) { reload() }
+        .task(id: "\(section.title)-\(model.libraryVersion)") { reload() }
     }
 
     @ViewBuilder
     private func row(_ item: Item, index: Int) -> some View {
         if item.kind == .track {
-            Button { playFrom(index) } label: { ItemRow(item: item) }
+            Button { playFrom(index) } label: { ItemRow(item: item, showSubtitle: section != .artists) }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("row.\(item.title)")
                 .itemMenu(item)
         } else {
-            NavigationLink(value: item) { ItemRow(item: item) }
+            NavigationLink(value: item) { ItemRow(item: item, showSubtitle: section != .artists) }
+                .accessibilityIdentifier("row.\(item.title)")
                 .itemMenu(item)
         }
     }
@@ -122,11 +115,6 @@ struct SectionView: View {
         let tracks = model.core.sectionTracks(section: section)
         let id = items[index].id
         let start = tracks.firstIndex { $0.id == id } ?? 0
-        model.play(tracks, at: start, from: Item(id: "library:\(section.title)", kind: .playlist, source: .local, title: section.title, subtitle: "Library", art: nil, downloaded: false))
-    }
-
-    private func playAll(shuffle: Bool) {
-        let tracks = model.core.sectionTracks(section: section)
-        model.play(tracks, from: nil, shuffle: shuffle)
+        model.play(tracks, at: start)
     }
 }

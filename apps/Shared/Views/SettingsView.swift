@@ -21,6 +21,9 @@ struct SettingsView: View {
             syncSection
             #endif
             lastfm
+            Section("Accent color") {
+                AccentPicker()
+            }
             Section("Playback") {
                 Toggle("Normalize loudness", isOn: $settings.normalization)
                 Toggle("Scrobble local files to Last.fm", isOn: $settings.scrobbling)

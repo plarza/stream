@@ -9,29 +9,30 @@ struct QueueView: View {
     var body: some View {
         List {
             if !snapshot.upNext.isEmpty {
-                Section {
-                    ForEach(snapshot.upNext, id: \.key) { e in row(e) }
-                        .onMove { from, to in move(in: snapshot.upNext, from: from, to: to, end: snapshot.context.first?.key) }
-                        .onDelete { idx in idx.forEach { model.core.queueRemove(key: snapshot.upNext[$0].key) } }
-                } header: {
-                    HStack {
-                        Text("Playing Next")
-                        Spacer()
-                        Button("Clear") {
-                            for e in snapshot.upNext { model.core.queueRemove(key: e.key) }
-                        }
+                // Headers are plain rows so they share the rows' left edge.
+                HStack {
+                    Text("Playing Next")
+                    Spacer()
+                    Button("Clear") {
+                        for e in snapshot.upNext { model.core.queueRemove(key: e.key) }
                     }
-                    .sectionHeader()
+                    .buttonStyle(.plain)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .accessibilityIdentifier("queue.clear")
                 }
+                .sectionHeader()
+                ForEach(snapshot.upNext, id: \.key) { e in row(e) }
+                    .onMove { from, to in move(in: snapshot.upNext, from: from, to: to, end: snapshot.context.first?.key) }
+                    .onDelete { idx in idx.forEach { model.core.queueRemove(key: snapshot.upNext[$0].key) } }
             }
             if !snapshot.context.isEmpty {
-                Section {
-                    ForEach(snapshot.context, id: \.key) { e in row(e) }
-                        .onMove { from, to in move(in: snapshot.context, from: from, to: to, end: nil) }
-                        .onDelete { idx in idx.forEach { model.core.queueRemove(key: snapshot.context[$0].key) } }
-                } header: {
-                    Text(snapshot.contextTitle.map { "Continue from \($0)" } ?? "Up Next").sectionHeader()
-                }
+                Text(snapshot.contextTitle.map { "Continue from \($0)" } ?? "Up Next")
+                    .lineLimit(1)
+                    .sectionHeader()
+                ForEach(snapshot.context, id: \.key) { e in row(e) }
+                    .onMove { from, to in move(in: snapshot.context, from: from, to: to, end: nil) }
+                    .onDelete { idx in idx.forEach { model.core.queueRemove(key: snapshot.context[$0].key) } }
             }
             if snapshot.upNext.isEmpty && snapshot.context.isEmpty {
                 Text("Nothing up next").foregroundStyle(.white.opacity(0.5)).listRowBackground(Color.clear)
@@ -47,8 +48,8 @@ struct QueueView: View {
 
     private func row(_ e: QueueEntry) -> some View {
         Button { model.core.queueJump(key: e.key) } label: {
-            HStack(spacing: 12) {
-                ArtworkView(url: e.track.art, size: 42, cornerRadius: 6)
+            HStack(spacing: Metrics.artGap) {
+                ArtworkView(url: e.track.art, size: 48)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(e.track.title).lineLimit(1)
                     Text(e.track.artist).font(.subheadline).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
@@ -58,6 +59,7 @@ struct QueueView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("queue.\(e.track.title)")
         .listRowBackground(Color.clear)
         .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
         .listRowSeparator(.hidden)
@@ -75,5 +77,12 @@ struct QueueView: View {
 private extension View {
     func sectionHeader() -> some View {
         self.font(.headline).foregroundStyle(.white).textCase(nil)
+            .padding(.top, 14)
+            .padding(.bottom, 2)
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .moveDisabled(true)
+            .deleteDisabled(true)
     }
 }

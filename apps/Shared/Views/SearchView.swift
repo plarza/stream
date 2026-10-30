@@ -100,6 +100,8 @@ struct SearchResultsView: View {
                             }
                     }
                     .buttonStyle(.pressable)
+                    .accessibilityIdentifier("search.filter.\(f.title)")
+                    .accessibilityAddTraits(search.filter == f ? .isSelected : [])
                 }
             }
             .padding(.trailing, 16)
@@ -109,7 +111,7 @@ struct SearchResultsView: View {
     @ViewBuilder
     private var recentSection: some View {
         if recents.isEmpty {
-            ContentUnavailableView("Search Spotify and your library", systemImage: "magnifyingglass")
+            ContentUnavailableView("Search your library", systemImage: "magnifyingglass")
                 .listRowSeparator(.hidden)
         } else {
             Section {
@@ -117,6 +119,7 @@ struct SearchResultsView: View {
                     Button { search.query = q } label: {
                         Label(q, systemImage: "clock.arrow.circlepath").foregroundStyle(.primary)
                     }
+                    .accessibilityIdentifier("recentSearch.\(q)")
                 }
             } header: {
                 HStack {
@@ -140,10 +143,16 @@ struct SearchResultsView: View {
                 model.play(item)
             } label: { ItemRow(item: item) }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("result.\(item.title)")
                 .itemMenu(item)
         } else {
-            NavigationLink(value: item) { ItemRow(item: item) }
-                .simultaneousGesture(TapGesture().onEnded { model.core.addRecentSearch(query: search.query) })
+            Button {
+                model.core.addRecentSearch(query: search.query)
+                model.pendingNavigation = item
+                model.openRequested &+= 1
+            } label: { ItemRow(item: item) }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("result.\(item.title)")
                 .itemMenu(item)
         }
     }

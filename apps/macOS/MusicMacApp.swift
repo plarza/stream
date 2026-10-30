@@ -21,10 +21,12 @@ struct MusicMacApp: App {
                 }
         }
         .windowStyle(.hiddenTitleBar)
+        // Always open the window at launch, even if it was closed last time.
+        .defaultLaunchBehavior(.presented)
+        .restorationBehavior(.disabled)
         .commands {
             CommandMenu("Playback") {
                 Button(model.player.status == .playing ? "Pause" : "Play") { model.toggle() }
-                    .keyboardShortcut(.space, modifiers: [])
                 Button("Next") { model.next() }.keyboardShortcut(.rightArrow, modifiers: .command)
                 Button("Previous") { model.previous() }.keyboardShortcut(.leftArrow, modifiers: .command)
                 Divider()
@@ -44,7 +46,7 @@ struct MusicMacApp: App {
         MenuBarExtra {
             MenuBarCard().environment(model)
         } label: {
-            Image(systemName: model.player.status == .playing ? "music.note" : "music.note")
+            MenuBarLabel()
         }
         .menuBarExtraStyle(.window)
     }
@@ -61,12 +63,39 @@ struct MusicMacApp: App {
     }
 }
 
+/// The menu bar icon. It exists from launch, so it also makes sure the main
+/// window is up: SwiftUI sometimes launches with no window at all.
+struct MenuBarLabel: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Image(systemName: "music.note")
+            .task {
+                try? await Task.sleep(for: .milliseconds(600))
+                let visible = NSApp.windows.contains { $0.isVisible && $0.identifier?.rawValue.hasPrefix("main") == true }
+                if !visible {
+                    openWindow(id: "main")
+                    NSApp.activate()
+                }
+            }
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
+            NSApp.setActivationPolicy(.regular)
             let model = AppModel.shared
+            // Space plays/pauses anywhere except while typing.
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
+                let typing = NSApp.keyWindow?.firstResponder is NSText
+                guard e.keyCode == 49, e.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty, !typing else { return e }
+                MainActor.assumeIsolated { model.toggle() }
+                return nil
+            }
+            guard !AppModel.isTesting else { return }
             FolderWatcher.shared.watch(model.core.musicFolders())
             SyncAdvertiser.shared.start(port: model.core.startSyncServer())
         }

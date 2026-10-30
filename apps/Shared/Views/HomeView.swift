@@ -9,6 +9,7 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
+                PageTitle(text: "Home")
                 if model.home.pins.isEmpty && model.home.recents.isEmpty {
                     empty
                 }
@@ -16,6 +17,7 @@ struct HomeView: View {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: columns), spacing: 14) {
                         ForEach(model.home.pins) { item in
                             pinTile(item)
+                                .accessibilityIdentifier("pin.\(item.title)")
                                 .transition(.scale(scale: 0.85).combined(with: .opacity))
                         }
                     }
@@ -29,12 +31,13 @@ struct HomeView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(model.home.recents) { item in
                             link(item) { ItemRow(item: item).padding(.vertical, 6) }
+                                .accessibilityIdentifier("recent.\(item.title)")
                                 .scrollPolish()
                         }
                     }
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, Metrics.page)
             .padding(.bottom, 120)
         }
         .navigationTitle("Home")
@@ -43,7 +46,7 @@ struct HomeView: View {
     private func pinTile(_ item: Item) -> some View {
         link(item) {
             GeometryReader { geo in
-                ArtworkView(url: item.art, size: geo.size.width, cornerRadius: item.kind == .artist ? geo.size.width / 2 : 12, circle: item.kind == .artist)
+                ArtworkView(url: item.art, size: geo.size.width, circle: item.kind == .artist)
                     .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
             }
             .aspectRatio(1, contentMode: .fit)

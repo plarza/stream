@@ -241,9 +241,12 @@ impl Db {
         let tx = conn.transaction()?;
         let now = now();
         for t in tracks {
-            let artist_name = if t.album_artist.is_empty() { &t.artist } else { &t.album_artist };
+            // Group by the main credited artist so features don't split albums or artists.
+            let primary = crate::scan::primary_artist(&t.artist);
+            let album_artist = if t.album_artist.is_empty() { primary.clone() } else { crate::scan::primary_artist(&t.album_artist) };
+            let artist_name = &album_artist;
             let album_id = format!("local:album:{}", hash_id(&[artist_name, &t.album]));
-            let artist_id = format!("local:artist:{}", hash_id(&[&t.artist]));
+            let artist_id = format!("local:artist:{}", hash_id(&[&primary]));
             let album_artist_id = format!("local:artist:{}", hash_id(&[artist_name]));
             let existing: Option<String> = tx
                 .query_row("SELECT id FROM tracks WHERE path = ?1", [&t.path], |r| r.get(0))
@@ -282,7 +285,7 @@ impl Db {
                     art = COALESCE(albums.art, excluded.art)",
                 params![album_id, t.album, artist_name, album_artist_id, t.year, t.art_key, now],
             )?;
-            for (aid, name) in [(&artist_id, &t.artist), (&album_artist_id, artist_name)] {
+            for (aid, name) in [(&artist_id, &primary), (&album_artist_id, artist_name)] {
                 tx.execute(
                     "INSERT INTO artists(id, source, name, art, saved) VALUES(?1, 0, ?2, ?3, 1)
                      ON CONFLICT(id) DO UPDATE SET art = COALESCE(artists.art, excluded.art)",
@@ -713,6 +716,31 @@ impl Db {
             LibrarySection::LikedSongs => self.tracks_where("WHERE t.saved = 1 OR t.liked = 1 ORDER BY t.added_at DESC", &[]),
             _ => vec![],
         }
+    }
+
+    /// Local artists still showing album art instead of a photo.
+    pub fn local_artists_without_photo(&self, limit: u32) -> Vec<(String, String)> {
+        let conn = self.conn.lock();
+        let Ok(mut stmt) = conn.prepare(
+            "SELECT id, name FROM artists WHERE source = 0
+               AND id NOT IN (SELECT substr(key, 14) FROM kv WHERE key LIKE 'artist_photo:%') LIMIT ?1",
+        ) else {
+            return vec![];
+        };
+        stmt.query_map([limit], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map(|rows| rows.filter_map(Result::ok).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn set_artist_photo(&self, id: &str, url: Option<&str>) {
+        let conn = self.conn.lock();
+        if let Some(u) = url {
+            let _ = conn.execute("UPDATE artists SET art = ?2 WHERE id = ?1", params![id, u]);
+        }
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO kv(key, value) VALUES(?1, ?2)",
+            params![format!("artist_photo:{id}"), url.unwrap_or("")],
+        );
     }
 
     pub fn set_album_saved(&self, id: &str, saved: bool) {

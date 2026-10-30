@@ -44,6 +44,8 @@ struct RootView: View {
                         .toolbar {
                             ToolbarItem(placement: .topBarTrailing) {
                                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
+                                    .accessibilityLabel("Settings")
+                                    .accessibilityIdentifier("home.settings")
                             }
                         }
                         .destinations()
@@ -60,7 +62,7 @@ struct RootView: View {
                         .navigationTitle("Search")
                         .destinations()
                 }
-                .searchable(text: $search.query, prompt: "Songs, albums, artists, playlists")
+                .searchable(text: $search.query, prompt: "Search your library")
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
@@ -68,8 +70,10 @@ struct RootView: View {
             MiniPlayer()
                 .matchedTransitionSource(id: "nowplaying", in: zoom)
                 .onTapGesture { model.showNowPlaying = true }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("miniPlayer")
         }
-        .tint(model.accent.accent)
+        .tint(model.tint)
         .fullScreenCover(isPresented: $model.showNowPlaying, onDismiss: openPending) {
             NowPlayingView()
                 .navigationTransition(.zoom(sourceID: "nowplaying", in: zoom))
@@ -86,7 +90,10 @@ struct RootView: View {
             if let t = model.toast { Toast(text: t).padding(.top, 8) }
         }
         .background { WebAuthPresenter(url: $model.signInURL) }
-        .onChange(of: model.openRequested) { openPending() }
+        .onChange(of: model.openRequested) {
+            // Deep links and search results open in the tab you're on.
+            if model.showNowPlaying { model.showNowPlaying = false } else { openPending() }
+        }
     }
 
     private func openPending() {
@@ -116,15 +123,16 @@ struct MiniPlayer: View {
     var body: some View {
         let t = model.player.track
         HStack(spacing: 10) {
-            ArtworkView(url: t?.art, size: placement == .inline ? 28 : 34, cornerRadius: 6)
+            ArtworkView(url: t?.art, size: placement == .inline ? 28 : 36)
             VStack(alignment: .leading, spacing: 0) {
                 Text(t?.title ?? "Not Playing").font(.subheadline.weight(.semibold)).lineLimit(1)
+                    .accessibilityIdentifier("mini.title")
                 if placement != .inline, let a = t?.artist {
                     Text(a).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             .id(t?.id)
-            .transition(.push(from: .bottom).combined(with: .opacity))
+            .transition(.blurReplace)
             Spacer(minLength: 4)
             Button { model.toggle() } label: {
                 Image(systemName: model.player.status == .playing ? "pause.fill" : "play.fill")
@@ -133,11 +141,15 @@ struct MiniPlayer: View {
                     .frame(width: 36, height: 36)
             }
             .buttonStyle(PressableStyle(scale: 0.8))
+            .accessibilityLabel(model.player.status == .playing ? "Pause" : "Play")
+            .accessibilityIdentifier("mini.playPause")
             if placement != .inline {
                 Button { model.next() } label: {
                     Image(systemName: "forward.fill").font(.body).frame(width: 32, height: 36)
                 }
                 .buttonStyle(PressableStyle(scale: 0.8))
+                .accessibilityLabel("Next")
+                .accessibilityIdentifier("mini.next")
             }
         }
         .padding(.horizontal, 10)

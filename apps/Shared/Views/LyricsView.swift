@@ -24,7 +24,7 @@ struct LyricsView: View {
                             .padding(.vertical, 24)
                         source(lyrics)
                     }
-                    .scrollIndicators(.hidden)
+                    .scrollIndicators(.never)
                 } else {
                     synced(lyrics)
                 }
@@ -59,7 +59,7 @@ struct LyricsView: View {
                         ForEach(Array(lyrics.lines.enumerated()), id: \.offset) { i, line in
                             LyricLineView(line: line, next: i + 1 < lyrics.lines.count ? lyrics.lines[i + 1].startMs : nil,
                                           state: i == active ? .active(ms) : .inactive(distance: abs(i - (active ?? -1))),
-                                          accent: model.accent.accent)
+                                          accent: model.tint)
                                 .id(i)
                                 .onTapGesture {
                                     if let s = line.startMs { model.seek(to: s); Haptics.tap() }
@@ -70,7 +70,7 @@ struct LyricsView: View {
                     }
                     .padding(.trailing, 24)
                 }
-                .scrollIndicators(.hidden)
+                .scrollIndicators(.never)
                 .onScrollPhaseChange { _, phase in
                     if phase == .interacting {
                         userScrolling = true

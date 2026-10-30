@@ -83,7 +83,8 @@ final class CGImageBox: @unchecked Sendable {
 struct ArtworkView: View {
     let url: String?
     var size: CGFloat
-    var cornerRadius: CGFloat = 8
+    /// Defaults to the shared radius for this size.
+    var cornerRadius: CGFloat? = nil
     var circle = false
     @State private var image: CGImage?
     @Environment(\.displayScale) private var scale
@@ -103,9 +104,9 @@ struct ArtworkView: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(circle ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)))
+        .clipShape(circle ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: cornerRadius ?? Metrics.radius(for: size), style: .continuous)))
         .overlay {
-            (circle ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)))
+            (circle ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: cornerRadius ?? Metrics.radius(for: size), style: .continuous)))
                 .stroke(.white.opacity(0.08), lineWidth: 0.5)
         }
         .task(id: url) {

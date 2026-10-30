@@ -20,6 +20,8 @@ targets:
   Music-iOS:
     type: application
     platform: iOS
+    scheme:
+      testTargets: [MusicUITests-iOS]
     sources:
       - path: Shared
       - path: iOS
@@ -57,6 +59,20 @@ targets:
           - CFBundleURLName: network.aza.music
             CFBundleURLSchemes: [network-aza-music]
         ITSAppUsesNonExemptEncryption: false
+  MusicUITests-iOS:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: ../tests/Shared
+      - path: ../tests/iOSUITests
+    dependencies:
+      - target: Music-iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: network.aza.music.uitests
+        TEST_TARGET_NAME: Music-iOS
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
   Music-macOS:
     type: application
     platform: macOS

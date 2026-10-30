@@ -21,12 +21,12 @@ struct NowPlayingView: View {
                     #if os(iOS)
                     Capsule().fill(.white.opacity(0.35)).frame(width: 38, height: 5).padding(.top, 8)
                     #endif
-                    content(width: min(geo.size.width, 560))
-                        .frame(maxWidth: 560)
+                    content(width: min(geo.size.width - Metrics.nowPlaying * 2, 520), height: geo.size.height)
+                        .frame(maxWidth: 520)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 8)
+                .padding(.horizontal, Metrics.nowPlaying)
+                .padding(.bottom, 12)
             }
         }
         .environment(\.colorScheme, .dark)
@@ -34,12 +34,13 @@ struct NowPlayingView: View {
     }
 
     @ViewBuilder
-    private func content(width: CGFloat) -> some View {
+    private func content(width: CGFloat, height: CGFloat) -> some View {
         let mode = model.nowPlayingMode
         VStack(spacing: 0) {
             if mode == .artwork {
                 Spacer(minLength: 12)
-                bigArtwork(width: width - 48)
+                // Leave room for the title, scrubber and controls below.
+                bigArtwork(width: max(160, min(width - Metrics.coverInset * 2, height - 380)))
                 Spacer(minLength: 20)
                 titleRow
                     .transition(.opacity)
@@ -57,9 +58,10 @@ struct NowPlayingView: View {
                 .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.06), .init(color: .black, location: 0.88), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
             }
             Scrubber()
-                .padding(.top, 18)
+                .padding(.top, 22)
             Transport()
-                .padding(.vertical, 22)
+                .padding(.top, 18)
+                .padding(.bottom, 26)
             bottomBar
         }
         .animation(.player, value: mode)
@@ -68,8 +70,8 @@ struct NowPlayingView: View {
     private func bigArtwork(width: CGFloat) -> some View {
         FillArtwork(url: track?.art)
             .frame(width: width, height: width)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: .black.opacity(playing ? 0.45 : 0.25), radius: playing ? 30 : 14, y: playing ? 18 : 8)
+            .clipShape(RoundedRectangle(cornerRadius: Metrics.radius(for: width), style: .continuous))
+            .shadow(color: .black.opacity(playing ? 0.4 : 0.22), radius: playing ? 28 : 14, y: playing ? 16 : 8)
             .scaleEffect(playing ? 1 : 0.84)
             .animation(.spring(response: 0.5, dampingFraction: 0.72), value: playing)
             .matchedGeometryEffect(id: "art", in: art)
@@ -77,27 +79,31 @@ struct NowPlayingView: View {
     }
 
     private var compactHeader: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: Metrics.artGap) {
             FillArtwork(url: track?.art, pixels: 300)
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .frame(width: 60, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: Metrics.radius(for: 60), style: .continuous))
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
                 .matchedGeometryEffect(id: "art", in: art)
             VStack(alignment: .leading, spacing: 2) {
                 Text(track?.title ?? "Not Playing").font(.headline).lineLimit(1)
                 Text(track?.artist ?? "").font(.subheadline).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
             }
+            .id(track?.id)
+            .transition(.blurReplace)
             Spacer()
             likeButton
             moreMenu
         }
         .padding(.bottom, 8)
+        .animation(.smooth, value: track?.id)
     }
 
     private var titleRow: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(track?.title ?? "Not Playing")
+                    .accessibilityIdentifier("nowPlaying.title")
                     .font(.title2.weight(.bold))
                     .lineLimit(1)
                     .contentTransition(.opacity)
@@ -108,7 +114,7 @@ struct NowPlayingView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .id(track?.id)
-            .transition(.push(from: .trailing).combined(with: .opacity))
+            .transition(.blurReplace)
             likeButton
             moreMenu
         }
@@ -121,13 +127,15 @@ struct NowPlayingView: View {
         } label: {
             Image(systemName: track?.liked == true ? "heart.fill" : "heart")
                 .font(.title3)
-                .foregroundStyle(track?.liked == true ? model.accent.accent : .white)
+                .foregroundStyle(track?.liked == true ? model.tint : .white)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: 36, height: 36)
+                .frame(width: 38, height: 38)
                 .glassEffect(.regular.interactive(), in: .circle)
         }
         .buttonStyle(.pressable)
         .disabled(track == nil)
+        .accessibilityLabel(track?.liked == true ? "Unlike" : "Like")
+        .accessibilityIdentifier("nowPlaying.like")
     }
 
     private var moreMenu: some View {
@@ -159,11 +167,13 @@ struct NowPlayingView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.title3)
-                .frame(width: 36, height: 36)
+                .frame(width: 38, height: 38)
                 .glassEffect(.regular.interactive(), in: .circle)
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
+        .accessibilityLabel("More")
+        .accessibilityIdentifier("nowPlaying.more")
     }
 
     private func open(_ item: Item) {
@@ -174,19 +184,16 @@ struct NowPlayingView: View {
 
     private var bottomBar: some View {
         HStack {
-            modeButton(.lyrics, symbol: "quote.bubble")
+            modeButton(.lyrics, symbol: "quote.bubble").accessibilityLabel("Lyrics").accessibilityIdentifier("nowPlaying.lyrics")
             Spacer()
             HStack(spacing: 8) {
-                if let q = track?.quality, !q.isEmpty {
-                    if track?.downloaded == true { DownloadedBadge().foregroundStyle(.white.opacity(0.7)) }
-                    QualityChip(text: q)
-                }
+                if let q = track?.quality, !q.isEmpty { QualityChip(text: q) }
             }
             Spacer()
             AirPlayButton()
                 .frame(width: 36, height: 36)
             Spacer()
-            modeButton(.queue, symbol: "list.bullet")
+            modeButton(.queue, symbol: "list.bullet").accessibilityLabel("Queue").accessibilityIdentifier("nowPlaying.queue")
         }
         .font(.title3)
         .foregroundStyle(.white.opacity(0.8))
@@ -245,7 +252,7 @@ struct Scrubber: View {
                         Capsule().fill(.white.opacity(dragging == nil ? 0.85 : 1))
                             .frame(width: max(0, w * pos / duration))
                     }
-                    .frame(height: dragging == nil ? 6 : 12)
+                    .frame(height: dragging == nil ? 7 : 12)
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .gesture(
@@ -287,6 +294,8 @@ struct Transport: View {
                 Image(systemName: "backward.fill").font(.system(size: 30 * size))
             }
             .buttonStyle(PressableStyle(scale: 0.82))
+            .accessibilityLabel("Previous")
+            .accessibilityIdentifier("nowPlaying.previous")
             Spacer()
             Button { model.toggle() } label: {
                 Image(systemName: model.player.status == .playing ? "pause.fill" : "play.fill")
@@ -295,12 +304,16 @@ struct Transport: View {
                     .frame(width: 70 * size, height: 70 * size)
             }
             .buttonStyle(PressableStyle(scale: 0.86))
+            .accessibilityLabel(model.player.status == .playing ? "Pause" : "Play")
+            .accessibilityIdentifier("nowPlaying.playPause")
             .keyboardShortcut(.space, modifiers: [])
             Spacer()
             Button { model.next() } label: {
                 Image(systemName: "forward.fill").font(.system(size: 30 * size))
             }
             .buttonStyle(PressableStyle(scale: 0.82))
+            .accessibilityLabel("Next")
+            .accessibilityIdentifier("nowPlaying.next")
             Spacer()
         }
         .foregroundStyle(.white)

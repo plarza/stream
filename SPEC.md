@@ -131,8 +131,10 @@ bottom accessory.
 | Menu bar | `08` **A** compact card. Closing the window keeps music playing in the menu bar and hides the Dock icon |
 | Keyboard | Shortcuts for every view and transport action, plus a ⌘K command palette (search, play, navigate) |
 
-**Color:** the accent color comes from the current album art. Each album's palette is
-computed once and cached.
+**Color:** the accent is Apple Music red by default and can be changed in Settings
+(including "Album Art", which follows the playing cover). Backgrounds such as Now Playing
+and album pages are always tinted from the artwork; each album's palette is computed once
+and cached.
 
 ## Motion
 
@@ -158,6 +160,16 @@ Everything should feel like Apple's own apps:
   "play my liked songs", "play pinned X").
 - macOS: media keys, Now Playing, menu bar mini player, and a keep-running-when-closed
   lifecycle.
+
+## Testing
+
+- End-to-end UI tests run in the **iOS Simulator** (`tests/iOSUITests`), which never touches
+  the Mac's own mouse or keyboard. Most screens are shared SwiftUI code, so they cover the
+  Mac too. macOS XCUITest is not used: it drives the real cursor.
+- Tests launch the app with `-musicFolder <tests/fixtures/Music> -uiTesting YES`: an isolated
+  library, silent output, nothing persisted. Regenerate the fixtures with
+  `tests/make-fixtures.sh`.
+- `TourTests` walks every screen and saves screenshots to `/tmp/music-tour` for layout review.
 
 ## Out of scope
 

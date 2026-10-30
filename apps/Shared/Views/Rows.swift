@@ -6,38 +6,43 @@ struct TrackRow: View {
     var showArt = true
     var number: Int?
     var isCurrent = false
+    /// Album pages hide the artist when it's the album's own.
+    var showArtist = true
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Metrics.artGap) {
             if let number, !showArt {
                 ZStack {
                     if isCurrent {
                         NowPlayingBars(playing: model.player.status == .playing)
-                            .foregroundStyle(model.accent.accent)
+                            .foregroundStyle(model.tint)
                     } else {
                         Text("\(number)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
                     }
                 }
                 .frame(width: 22)
             } else if showArt {
-                ArtworkView(url: track.art, size: 44, cornerRadius: 6)
+                ArtworkView(url: track.art, size: 48)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.title)
                     .font(.body)
-                    .foregroundStyle(isCurrent ? model.accent.accent : .primary)
+                    .foregroundStyle(isCurrent ? model.tint : .primary)
                     .lineLimit(1)
-                HStack(spacing: 4) {
-                    if track.downloaded { DownloadedBadge() }
-                    Text(track.artist).lineLimit(1)
+                if showArtist {
+                    HStack(spacing: 4) {
+                        if track.downloaded { DownloadedBadge() }
+                        Text(track.artist).lineLimit(1)
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
+            if !showArtist && track.downloaded { DownloadedBadge() }
             if track.liked {
-                Image(systemName: "heart.fill").font(.caption).foregroundStyle(model.accent.accent.opacity(0.9))
+                Image(systemName: "heart.fill").font(.caption).foregroundStyle(model.tint.opacity(0.9))
             }
             Text(Format.time(Double(track.durationMs) / 1000))
                 .font(.subheadline.monospacedDigit())
@@ -50,22 +55,23 @@ struct TrackRow: View {
 /// Any item (song/album/artist/playlist) as a list row.
 struct ItemRow: View {
     let item: Item
+    /// Lists of one kind (e.g. Artists) don't need the kind repeated on every row.
+    var showSubtitle = true
     var body: some View {
-        HStack(spacing: 12) {
-            ArtworkView(url: item.art, size: 48, cornerRadius: 6, circle: item.kind == .artist)
+        HStack(spacing: Metrics.artGap) {
+            ArtworkView(url: item.art, size: 48, circle: item.kind == .artist)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title).lineLimit(1)
-                HStack(spacing: 4) {
-                    if item.downloaded { DownloadedBadge() }
-                    Text(item.subtitle).lineLimit(1)
+                if showSubtitle && !item.subtitle.isEmpty {
+                    HStack(spacing: 4) {
+                        if item.downloaded { DownloadedBadge() }
+                        Text(item.subtitle).lineLimit(1)
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            if item.isCollection {
-                Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-            }
         }
         .contentShape(Rectangle())
     }
@@ -79,7 +85,7 @@ struct ItemTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ArtworkView(url: item.art, size: size, cornerRadius: item.kind == .artist ? size / 2 : 10, circle: item.kind == .artist)
+            ArtworkView(url: item.art, size: size, circle: item.kind == .artist)
                 .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
             if showCaption {
                 VStack(alignment: .leading, spacing: 1) {
@@ -118,22 +124,26 @@ struct ItemMenu: ViewModifier {
     func body(content: Content) -> some View {
         content.contextMenu {
             Button { model.play(item) } label: { Label("Play", systemImage: "play") }
+                .accessibilityIdentifier("menu.play")
             if item.isCollection {
                 Button { model.play(item, shuffle: true) } label: { Label("Shuffle", systemImage: "shuffle") }
             }
             Divider()
             Button { Task { model.playNext(await resolve()) } } label: { Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") }
+                .accessibilityIdentifier("menu.playNext")
             Button { Task { model.playLater(await resolve()) } } label: { Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward") }
+                .accessibilityIdentifier("menu.playLater")
             Divider()
             let pinned = model.core.isPinned(id: item.id)
             Button { model.togglePin(item) } label: { Label(pinned ? "Unpin" : "Pin", systemImage: pinned ? "pin.slash" : "pin") }
+                .accessibilityIdentifier(pinned ? "menu.unpin" : "menu.pin")
         }
     }
 
     private func resolve() async -> [Track] {
         if let tracks { return await tracks() }
         if item.kind == .track {
-            return [Track(id: item.id, source: item.source, title: item.title, artist: item.subtitle, artistId: nil, album: "", albumId: nil, art: item.art, durationMs: 0, trackNumber: 0, discNumber: 0, downloaded: item.downloaded, liked: false, quality: "")]
+            return model.core.track(id: item.id).map { [$0] } ?? []
         }
         return (try? await model.core.collection(id: item.id).tracks) ?? []
     }

@@ -15,16 +15,16 @@ struct CollectionView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, Metrics.page)
                     .padding(.top, 12)
                 actions
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, Metrics.page)
                     .padding(.vertical, 16)
                 if let page {
                     tracks(page)
                     if !page.albums.isEmpty { albums(page) }
                     if let d = page.description, item.kind != .artist {
-                        Text(d).font(.footnote).foregroundStyle(.secondary).padding(20)
+                        Text(d).font(.footnote).foregroundStyle(.secondary).padding(Metrics.page)
                     }
                 } else if let error {
                     ContentUnavailableView("Couldn’t load", systemImage: "exclamationmark.triangle", description: Text(error))
@@ -57,7 +57,7 @@ struct CollectionView: View {
 
     private var header: some View {
         HStack(alignment: .bottom, spacing: 16) {
-            ArtworkView(url: shown.art, size: 132, cornerRadius: item.kind == .artist ? 66 : 12, circle: item.kind == .artist)
+            ArtworkView(url: shown.art, size: 132, circle: item.kind == .artist)
                 .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
             VStack(alignment: .leading, spacing: 4) {
                 Text(shown.title).font(.title2.weight(.bold)).lineLimit(3)
@@ -91,19 +91,25 @@ struct CollectionView: View {
                     .font(.title3)
                     .frame(width: 52, height: 52)
                     .foregroundStyle(.black)
-                    .background(palette.accent, in: .circle)
+                    .background(model.tint, in: .circle)
             }
             .buttonStyle(.pressable)
+            .accessibilityLabel("Play")
+            .accessibilityIdentifier("collection.play")
             Button {
                 if let page { model.play(page.tracks, from: page.item, shuffle: true) }
             } label: { Image(systemName: "shuffle").font(.title3) }
                 .buttonStyle(.pressable)
+                .accessibilityLabel("Shuffle")
+                .accessibilityIdentifier("collection.shuffle")
             if item.kind == .album, item.source == .spotify {
                 Button { toggleSaved() } label: {
                     Image(systemName: liked ? "heart.fill" : "heart").font(.title3)
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .buttonStyle(.pressable)
+                .accessibilityLabel(liked ? "Remove from Library" : "Add to Library")
+                .accessibilityIdentifier("collection.like")
             }
             Button {
                 model.togglePin(shown)
@@ -113,6 +119,8 @@ struct CollectionView: View {
                     .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.pressable)
+            .accessibilityLabel(pinned ? "Unpin" : "Pin")
+            .accessibilityIdentifier("collection.pin")
             #if os(iOS)
             if shown.source == .spotify, item.kind != .artist {
                 Button {
@@ -132,26 +140,28 @@ struct CollectionView: View {
     @ViewBuilder
     private func tracks(_ page: CollectionPage) -> some View {
         if item.kind == .artist, !page.tracks.isEmpty {
-            Text("Popular").font(.title3.weight(.bold)).padding(.horizontal, 20).padding(.bottom, 4)
+            Text("Popular").font(.title3.weight(.bold)).padding(.horizontal, Metrics.page).padding(.bottom, 4)
         }
         LazyVStack(spacing: 0) {
             ForEach(Array(page.tracks.prefix(item.kind == .artist ? 10 : .max).enumerated()), id: \.element.id) { i, t in
                 Button { model.play(page.tracks, at: i, from: page.item) } label: {
                     TrackRow(track: t, showArt: item.kind != .album, number: item.kind == .album ? Int(t.trackNumber == 0 ? UInt32(i + 1) : t.trackNumber) : nil,
-                             isCurrent: model.player.track?.id == t.id)
-                        .padding(.horizontal, 20)
+                             isCurrent: model.player.track?.id == t.id,
+                             showArtist: item.kind != .album || t.artist != page.item.subtitle)
+                        .padding(.horizontal, Metrics.page)
                         .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("track.\(t.title)")
                 .trackMenu(t)
-                Divider().padding(.leading, item.kind == .album ? 54 : 76)
+                Divider().padding(.leading, item.kind == .album ? Metrics.page + 34 : Metrics.page + 60)
             }
         }
     }
 
     private func albums(_ page: CollectionPage) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Albums").font(.title3.weight(.bold)).padding(.horizontal, 20)
+            Text("Albums").font(.title3.weight(.bold)).padding(.horizontal, Metrics.page)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
                     ForEach(page.albums) { a in
@@ -160,7 +170,7 @@ struct CollectionView: View {
                             .itemMenu(a)
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, Metrics.page)
             }
         }
         .padding(.top, 24)

@@ -4,8 +4,9 @@ enum SidebarItem: Hashable {
     case home, search, section(LibrarySection), pin(Item)
 }
 
-/// Glass sidebar, content, and a floating glass player capsule over it.
-/// Clicking the capsule's art opens Now Playing across the whole window.
+/// Glass sidebar and content above a full-width glass playing bar whose
+/// corners follow the window's, like the sidebar's. Clicking the bar's art
+/// opens Now Playing across the whole window.
 struct MacRootView: View {
     @Environment(AppModel.self) private var model
     @Binding var showPalette: Bool
@@ -14,20 +15,23 @@ struct MacRootView: View {
     @State private var search = SearchModel()
 
     var body: some View {
-        @Bindable var model = model
         ZStack {
-            NavigationSplitView {
-                sidebar
-                    .navigationSplitViewColumnWidth(min: 190, ideal: 220)
-            } detail: {
-                NavigationStack(path: $path) {
-                    detail
-                        .withPlayer()
-                        .navigationDestination(for: Item.self) { CollectionView(item: $0).withPlayer() }
-                        .navigationDestination(for: LibrarySection.self) { SectionView(section: $0).withPlayer() }
+            VStack(spacing: 0) {
+                NavigationSplitView {
+                    sidebar
+                        .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 300)
+                        .toolbar(removing: .sidebarToggle)
+                } detail: {
+                    NavigationStack(path: $path) {
+                        detail
+                            .navigationDestination(for: Item.self) { CollectionView(item: $0) }
+                            .navigationDestination(for: LibrarySection.self) { SectionView(section: $0) }
+                    }
                 }
+                PlayerBar()
+                    .padding([.horizontal, .bottom], 8)
             }
-            .tint(model.accent.accent)
+            .tint(model.tint)
 
             if model.showNowPlaying {
                 NowPlayingView()
@@ -39,15 +43,17 @@ struct MacRootView: View {
                         }
                         .buttonStyle(.pressable)
                         .keyboardShortcut(.escape, modifiers: [])
+                        .accessibilityLabel("Close Now Playing")
+                        .accessibilityIdentifier("nowPlaying.close")
                         .padding(.leading, 80)
                         .padding(.top, 14)
                     }
-                    .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .move(edge: .bottom).combined(with: .opacity)))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
             }
         }
         .overlay(alignment: .top) {
-            if let t = model.toast { Toast(text: t).padding(.top, 12) }
+            if let t = model.toast { Toast(text: t).padding(.top, 12).accessibilityIdentifier("toast") }
         }
         .sheet(isPresented: $showPalette) {
             CommandPalette { item in
@@ -80,28 +86,43 @@ struct MacRootView: View {
     }
 
     private var sidebar: some View {
-        List(selection: $selection) {
-            Label("Home", systemImage: "house").tag(SidebarItem.home)
-            Label("Search", systemImage: "magnifyingglass").tag(SidebarItem.search)
+        // Clicking the page you're on goes back to its top level.
+        let pick = Binding<SidebarItem?>(get: { selection }, set: { new in
+            if new == selection { path = NavigationPath() }
+            selection = new
+        })
+        return List(selection: pick) {
+            Label("Home", systemImage: "house").tag(SidebarItem.home).accessibilityIdentifier("sidebar.home")
+            Label("Search", systemImage: "magnifyingglass").tag(SidebarItem.search).accessibilityIdentifier("sidebar.search")
             Section("Library") {
                 ForEach(LibrarySection.ordered) { s in
-                    Label(s.title, systemImage: s.symbol).tag(SidebarItem.section(s))
+                    Label(s.title, systemImage: s.symbol)
+                        .tag(SidebarItem.section(s))
+                        .accessibilityIdentifier("sidebar.\(s.title)")
                 }
             }
             if !model.home.pins.isEmpty {
                 Section("Pinned") {
                     ForEach(model.home.pins) { p in
                         HStack(spacing: 8) {
-                            ArtworkView(url: p.art, size: 20, cornerRadius: 4, circle: p.kind == .artist)
+                            ArtworkView(url: p.art, size: 20, circle: p.kind == .artist)
                             Text(p.title).lineLimit(1)
                         }
                         .tag(SidebarItem.pin(p))
+                        .accessibilityIdentifier("sidebar.pin.\(p.title)")
                         .itemMenu(p)
                     }
                 }
             }
         }
         .listStyle(.sidebar)
+        .onChange(of: selection) { _, new in
+            // A pinned song plays rather than opening a page.
+            if case let .pin(item) = new, item.kind == .track {
+                model.play(item)
+                selection = .home
+            }
+        }
     }
 
     @ViewBuilder
@@ -110,126 +131,226 @@ struct MacRootView: View {
         case .home:
             HomeView(columns: 6)
         case .search:
-            SearchResultsView(search: search)
-                .navigationTitle("Search")
-                .searchable(text: $search.query, placement: .toolbar, prompt: "Songs, albums, artists, playlists")
+            MacSearchView(search: search)
         case let .section(s):
-            SectionView(section: s)
+            SectionView(section: s).id(s)
         case let .pin(item):
-            if item.kind == .track {
-                HomeView(columns: 6).onAppear { model.play(item) }
-            } else {
-                CollectionView(item: item).id(item.id)
+            CollectionView(item: item).id(item.id)
+        }
+    }
+}
+
+/// Search with its field centered at the top of the page.
+struct MacSearchView: View {
+    @Bindable var search: SearchModel
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Search your library", text: $search.query)
+                    .textFieldStyle(.plain)
+                    .font(.title3)
+                    .focused($focused)
+                    .accessibilityIdentifier("search.field")
+                if !search.query.isEmpty {
+                    Button { search.query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Clear search")
+                }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .glassEffect(.regular, in: .capsule)
+            .frame(maxWidth: 520)
+            .padding(.top, 14)
+            .padding(.bottom, 6)
+            SearchResultsView(search: search)
         }
+        .navigationTitle("Search")
+        .onAppear { focused = true }
     }
 }
 
-extension View {
-    /// Every page carries the capsule, so it floats over whatever is shown.
-    func withPlayer() -> some View {
-        safeAreaInset(edge: .bottom) {
-            PlayerCapsule()
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-        }
-    }
-}
-
-/// The floating glass player at the bottom of the window.
-struct PlayerCapsule: View {
+/// The playing strip along the bottom: song on the left (its art nested in
+/// the bar's corner), transport and scrubber in the middle, extras on the right.
+struct PlayerBar: View {
     @Environment(AppModel.self) private var model
+    private let height: CGFloat = 64
+    private let inset: CGFloat = 6
+    private let artRadius: CGFloat = 12
 
     var body: some View {
         let t = model.player.track
-        GlassEffectContainer {
-            HStack(spacing: 14) {
+        HStack(spacing: 0) {
+            // Song
+            HStack(spacing: 12) {
                 Button {
                     withAnimation(.player) { model.showNowPlaying = true }
                 } label: {
-                    ArtworkView(url: t?.art, size: 40, cornerRadius: 7)
+                    // Inset by `inset` inside the bar, so its corner is the bar's minus the inset.
+                    ArtworkView(url: t?.art, size: height - inset * 2, cornerRadius: artRadius)
                 }
                 .buttonStyle(.pressable)
                 .help("Now Playing")
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(t?.title ?? "Not Playing").font(.callout.weight(.semibold)).lineLimit(1)
+                .accessibilityLabel("Now Playing")
+                .accessibilityIdentifier("player.artwork")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t?.title ?? "Not Playing")
+                        .font(.callout.weight(.semibold)).lineLimit(1)
+                        .accessibilityIdentifier("player.title")
                     Text(t?.artist ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
-                .frame(width: 170, alignment: .leading)
                 .id(t?.id)
-                .transition(.push(from: .bottom).combined(with: .opacity))
-                HStack(spacing: 18) {
+                .transition(.blurReplace)
+                if let t {
+                    Button { model.setLiked(t, !t.liked) } label: {
+                        Image(systemName: t.liked ? "heart.fill" : "heart")
+                            .foregroundStyle(t.liked ? model.tint : .secondary)
+                            .contentTransition(.symbolEffect(.replace))
+                    }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel(t.liked ? "Unlike" : "Like")
+                    .accessibilityIdentifier("player.like")
+                }
+                Spacer(minLength: 8)
+            }
+            .padding(.leading, inset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Transport + scrubber
+            VStack(spacing: 4) {
+                HStack(spacing: 22) {
+                    Button { model.core.setShuffle(on: !model.player.shuffle) } label: {
+                        Image(systemName: "shuffle").foregroundStyle(model.player.shuffle ? model.tint : .secondary)
+                    }
+                    .accessibilityLabel("Shuffle")
+                    .accessibilityValue(model.player.shuffle ? "on" : "off")
+                    .accessibilityIdentifier("player.shuffle")
                     Button { model.previous() } label: { Image(systemName: "backward.fill") }
+                        .accessibilityLabel("Previous").accessibilityIdentifier("player.previous")
                     Button { model.toggle() } label: {
                         Image(systemName: model.player.status == .playing ? "pause.fill" : "play.fill")
                             .font(.title2)
                             .contentTransition(.symbolEffect(.replace))
                             .frame(width: 26)
                     }
+                    .accessibilityLabel(model.player.status == .playing ? "Pause" : "Play")
+                    .accessibilityIdentifier("player.playPause")
                     Button { model.next() } label: { Image(systemName: "forward.fill") }
+                        .accessibilityLabel("Next").accessibilityIdentifier("player.next")
+                    Button { cycleRepeat() } label: {
+                        Image(systemName: model.player.repeat == .one ? "repeat.1" : "repeat")
+                            .foregroundStyle(model.player.repeat == .off ? .secondary : model.tint)
+                    }
+                    .accessibilityLabel("Repeat")
+                    .accessibilityValue(repeatValue)
+                    .accessibilityIdentifier("player.repeat")
                 }
                 .buttonStyle(PressableStyle(scale: 0.8))
                 .disabled(t == nil)
-                CapsuleScrubber()
-                if let q = t?.quality, !q.isEmpty { QualityChip(text: q) }
-                if let t {
-                    Button { model.setLiked(t, !t.liked) } label: {
-                        Image(systemName: t.liked ? "heart.fill" : "heart")
-                            .foregroundStyle(t.liked ? model.accent.accent : .primary)
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                    .buttonStyle(.pressable)
-                }
-                modeButton(.lyrics, "quote.bubble")
-                modeButton(.queue, "list.bullet")
-                AirPlayButton().frame(width: 24, height: 24)
+                BarScrubber()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .glassEffect(.regular, in: .capsule)
+            .frame(width: 380)
+
+            // Extras
+            HStack(spacing: 16) {
+                Spacer(minLength: 8)
+                modeButton(.lyrics, "quote.bubble", "Lyrics")
+                modeButton(.queue, "list.bullet", "Queue")
+                AirPlayButton().frame(width: 22, height: 22)
+                HStack(spacing: 6) {
+                    @Bindable var model = model
+                    Image(systemName: model.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill").foregroundStyle(.secondary)
+                    Slider(value: $model.volume, in: 0...1)
+                        .frame(width: 90)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("player.volume")
+                }
+            }
+            .padding(.trailing, 18)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .frame(height: height)
+        .glassEffect(.regular, in: ConcentricRectangle(corners: .concentric(minimum: 12), isUniform: true))
         .animation(.smooth, value: t?.id)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("player.bar")
     }
 
-    private func modeButton(_ m: AppModel.NowPlayingMode, _ symbol: String) -> some View {
-        Button {
+    private var repeatValue: String {
+        switch model.player.repeat {
+        case .off: "off"
+        case .all: "all"
+        case .one: "one"
+        }
+    }
+
+    private func cycleRepeat() {
+        let next: RepeatMode = switch model.player.repeat {
+        case .off: .all
+        case .all: .one
+        case .one: .off
+        }
+        model.core.setRepeat(mode: next)
+    }
+
+    private func modeButton(_ m: AppModel.NowPlayingMode, _ symbol: String, _ label: String) -> some View {
+        let on = model.showNowPlaying && model.nowPlayingMode == m
+        return Button {
             withAnimation(.player) {
-                model.nowPlayingMode = m
-                model.showNowPlaying = true
+                if on {
+                    model.showNowPlaying = false
+                } else {
+                    model.nowPlayingMode = m
+                    model.showNowPlaying = true
+                }
             }
-        } label: { Image(systemName: symbol) }
+        } label: { Image(systemName: symbol).foregroundStyle(on ? model.tint : .primary) }
         .buttonStyle(.pressable)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier("player.\(label.lowercased())")
     }
 }
 
-private struct CapsuleScrubber: View {
+/// Thin scrubber with times; thickens on hover, click or drag to seek.
+private struct BarScrubber: View {
     @Environment(AppModel.self) private var model
     @State private var hover = false
+    @State private var dragging: Double?
 
     var body: some View {
         let dur = max(1, Double(model.player.durationMs) / 1000)
-        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
-            let pos = min(dur, model.position())
+        TimelineView(.periodic(from: .now, by: 0.25)) { _ in
+            let pos = dragging ?? min(dur, model.position())
             HStack(spacing: 8) {
-                Text(Format.time(pos)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                Text(Format.time(pos)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(.quaternary)
-                        Capsule().fill(.primary.opacity(0.8)).frame(width: geo.size.width * pos / dur)
+                        Capsule().fill(.primary.opacity(0.75)).frame(width: geo.size.width * pos / dur)
                     }
-                    .frame(height: hover ? 7 : 4)
+                    .frame(height: hover || dragging != nil ? 6 : 3)
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .onTapGesture { p in model.seek(to: UInt32(p.x / geo.size.width * dur * 1000)) }
-                    .gesture(DragGesture(minimumDistance: 2).onEnded { v in
-                        model.seek(to: UInt32(max(0, min(1, v.location.x / geo.size.width)) * dur * 1000))
-                    })
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { v in dragging = max(0, min(1, v.location.x / geo.size.width)) * dur }
+                            .onEnded { _ in
+                                if let d = dragging { model.seek(to: UInt32(d * 1000)) }
+                                dragging = nil
+                            }
+                    )
                 }
-                .frame(height: 14)
-                Text("-" + Format.time(dur - pos)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                .frame(height: 12)
+                .accessibilityElement()
+                .accessibilityLabel("Position")
+                .accessibilityValue("\(Int(pos)) seconds")
+                .accessibilityIdentifier("player.scrubber")
+                Text("-" + Format.time(dur - pos)).font(.caption2.monospacedDigit()).foregroundStyle(.secondary).frame(width: 38, alignment: .leading)
             }
         }
-        .frame(minWidth: 140)
         .onHover { h in withAnimation(.press) { hover = h } }
     }
 }
@@ -243,7 +364,7 @@ struct MenuBarCard: View {
         let t = model.player.track
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                ArtworkView(url: t?.art, size: 54, cornerRadius: 9)
+                ArtworkView(url: t?.art, size: 54)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(t?.title ?? "Not Playing").font(.headline).lineLimit(1)
                     Text(t?.artist ?? "").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
@@ -251,7 +372,7 @@ struct MenuBarCard: View {
                 Spacer(minLength: 0)
                 if let q = t?.quality, !q.isEmpty { QualityChip(text: q) }
             }
-            CapsuleScrubber()
+            BarScrubber()
             HStack(spacing: 28) {
                 Spacer()
                 Button { model.previous() } label: { Image(systemName: "backward.fill") }
@@ -299,6 +420,7 @@ struct CommandPalette: View {
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($focused)
+                    .accessibilityIdentifier("palette.field")
                     .onSubmit { choose() }
                     .onKeyPress(.downArrow) { selected = min(selected + 1, max(0, results.count - 1)); return .handled }
                     .onKeyPress(.upArrow) { selected = max(selected - 1, 0); return .handled }
@@ -313,9 +435,12 @@ struct CommandPalette: View {
                             ItemRow(item: item)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
-                                .background(RoundedRectangle(cornerRadius: 8).fill(i == selected ? Color.accentColor.opacity(0.25) : .clear))
+                                .background(RoundedRectangle(cornerRadius: 8).fill(i == selected ? model.tint.opacity(0.25) : .clear))
                                 .id(i)
                                 .onTapGesture { selected = i; choose() }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityAddTraits(.isButton)
+                                .accessibilityIdentifier("palette.result.\(item.title)")
                         }
                     }
                     .padding(8)

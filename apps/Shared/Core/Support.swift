@@ -46,6 +46,42 @@ extension Track {
     }
 }
 
+/// Spacing and corner radii shared by every screen, so edges line up.
+enum Metrics {
+    /// Side margin of pages, lists and headers.
+    static let page: CGFloat = 20
+    /// Side margin of Now Playing's controls.
+    static let nowPlaying: CGFloat = 30
+    /// The Now Playing cover sits this much further in than the controls.
+    static let coverInset: CGFloat = 10
+    /// Gap between artwork and the text beside it.
+    static let artGap: CGFloat = 12
+    /// Corner radius for artwork at a given size: small thumbnails are tighter.
+    static func radius(for size: CGFloat) -> CGFloat {
+        switch size {
+        case ..<36: 4
+        case ..<64: 6
+        case ..<160: 10
+        default: 14
+        }
+    }
+}
+
+/// A large page title. iPhone shows it in the navigation bar; the Mac window
+/// has no title bar, so it sits at the top of the page.
+struct PageTitle: View {
+    let text: String
+    var body: some View {
+        #if os(macOS)
+        Text(text)
+            .font(.largeTitle.weight(.bold))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+        #endif
+    }
+}
+
 /// Motion used across the app, so everything moves with the same physics.
 extension Animation {
     static let player = Animation.spring(response: 0.42, dampingFraction: 0.86)

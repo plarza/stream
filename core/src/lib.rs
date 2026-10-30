@@ -454,6 +454,10 @@ impl MusicCore {
 
     // ---- playback ----------------------------------------------------------
 
+    pub fn track(&self, id: String) -> Option<Track> {
+        self.db.track(&id)
+    }
+
     pub fn player_state(&self) -> PlayerState {
         self.engine.state()
     }
@@ -951,7 +955,34 @@ impl MusicCore {
         }
         let _ = self.db.rebuild_search();
         self.delegate.library_changed();
+        self.fetch_artist_photos(&web).await;
         Ok(())
+    }
+
+    /// Local artists get their Spotify photo when the name matches exactly.
+    async fn fetch_artist_photos(&self, web: &Arc<WebApi>) {
+        use futures_util::StreamExt;
+        let todo = self.db.local_artists_without_photo(300);
+        if todo.is_empty() {
+            return;
+        }
+        let found: Vec<(String, Option<String>)> = futures_util::stream::iter(todo)
+            .map(|(id, name)| async move {
+                let v = web.get("/search", &[("q", format!("artist:\"{name}\"")), ("type", "artist".into()), ("limit", "5".into())]).await;
+                let url = v.ok().and_then(|v| {
+                    v["artists"]["items"].as_array()?.iter().find(|a| a["name"].as_str().is_some_and(|n| n.eq_ignore_ascii_case(&name))).and_then(api::best_image)
+                });
+                (id, url)
+            })
+            .buffer_unordered(4)
+            .collect()
+            .await;
+        for (id, url) in &found {
+            self.db.set_artist_photo(id, url.as_deref());
+        }
+        if found.iter().any(|f| f.1.is_some()) {
+            self.delegate.library_changed();
+        }
     }
 
     async fn collection_inner(self: Arc<Self>, id: &str) -> Result<CollectionPage, CoreError> {
@@ -965,7 +996,8 @@ impl MusicCore {
             let item = self.db.artist_item(id).ok_or(CoreError::NotFound)?;
             let albums = self.db.artist_albums(id);
             let tracks = self.db.artist_tracks(id, 500);
-            return Ok(CollectionPage { detail: format!("{} albums", albums.len()), item, description: None, tracks, albums, liked: false, pinned });
+            let n = albums.len();
+            return Ok(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, albums, liked: false, pinned });
         }
         if id.starts_with("spotify:album:") {
             let cached = self.db.album_tracks(id);
@@ -1223,8 +1255,10 @@ impl MusicCore {
     }
 }
 
-fn total_minutes(tracks: &[Track]) -> u64 {
-    tracks.iter().map(|t| t.duration_ms as u64).sum::<u64>() / 60_000
+/// "44 min", or "18 sec" for something shorter than a minute.
+fn total_length(tracks: &[Track]) -> String {
+    let secs = tracks.iter().map(|t| t.duration_ms as u64).sum::<u64>() / 1000;
+    if secs < 60 { format!("{secs} sec") } else { format!("{} min", secs / 60) }
 }
 
 fn detail(year: Option<u32>, tracks: &[Track]) -> String {
@@ -1233,7 +1267,7 @@ fn detail(year: Option<u32>, tracks: &[Track]) -> String {
         parts.push(y.to_string());
     }
     parts.push(format!("{} song{}", tracks.len(), if tracks.len() == 1 { "" } else { "s" }));
-    parts.push(format!("{} min", total_minutes(tracks)));
+    parts.push(total_length(tracks));
     parts.join(" · ")
 }
 

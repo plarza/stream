@@ -22,8 +22,29 @@ final class AppModel {
     var toast: String?
     var showNowPlaying = false
     var nowPlayingMode: NowPlayingMode = .artwork
-    /// Accent derived from the current artwork.
+    /// Colors derived from the current artwork (backgrounds, Now Playing).
     var accent: Palette = .fallback
+    /// The app's accent: Apple Music red unless changed in Settings.
+    var theme: AccentChoice = AppModel.isTesting ? .red : AccentChoice.saved {
+        didSet { if !AppModel.isTesting { theme.save() } }
+    }
+    /// Output volume, 0…1 (always 0 under UI tests).
+    var volume: Double = AppModel.isTesting ? 0 : (UserDefaults.standard.object(forKey: "volume") as? Double ?? 1) {
+        didSet {
+            core.setVolume(volume: Float(volume))
+            if !AppModel.isTesting { UserDefaults.standard.set(volume, forKey: "volume") }
+        }
+    }
+
+    /// Launched by the UI tests (`-uiTesting YES`): isolated library, silent, nothing persisted.
+    /// Arguments go in `-key value` pairs; AppKit misreads a bare flag followed by a pair.
+    static let isTesting = ProcessInfo.processInfo.arguments.contains("-uiTesting")
+    static func argument(_ name: String) -> String? {
+        let a = ProcessInfo.processInfo.arguments
+        guard let i = a.firstIndex(of: name), i + 1 < a.count else { return nil }
+        return a[i + 1]
+    }
+    var tint: Color { theme == .albumArt ? accent.accent : theme.color }
     var signInURL: URL?
     /// A page to open after Now Playing closes (Go to Album / Artist).
     var pendingNavigation: Item?
@@ -33,10 +54,16 @@ final class AppModel {
 
     private init() {
         let fm = FileManager.default
-        let support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.music", isDirectory: true)
-        let caches = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.music", isDirectory: true)
+        var support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.music", isDirectory: true)
+        var caches = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.music", isDirectory: true)
+        if Self.isTesting {
+            let root = fm.temporaryDirectory.appendingPathComponent("music-uitest-\(UUID().uuidString)", isDirectory: true)
+            support = root.appendingPathComponent("data")
+            caches = root.appendingPathComponent("cache")
+        }
         #if os(iOS)
-        let musicDir: URL? = fm.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Music", isDirectory: true)
+        var musicDir: URL? = fm.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Music", isDirectory: true)
+        if Self.isTesting, let m = Self.argument("-musicFolder") { musicDir = URL(fileURLWithPath: m) }
         try? fm.createDirectory(at: musicDir!, withIntermediateDirectories: true)
         let isPhone = true
         #else
@@ -52,6 +79,12 @@ final class AppModel {
         account = core.account()
         home = core.home()
         bridge.model = self
+        core.setVolume(volume: Float(volume))
+        #if os(macOS)
+        if Self.isTesting, let m = Self.argument("-musicFolder") {
+            core.setMusicFolders(folders: [m])
+        }
+        #endif
         audio.onRateChange = { [weak self] rate in self?.core.setOutputRate(rate: rate) }
         audio.start()
         nowPlaying.attach(model: self)
@@ -157,6 +190,12 @@ final class AppModel {
             guard let id = value("id") else { return }
             pendingNavigation = Item(id: id, kind: Self.kind(of: id), source: id.hasPrefix("local:") ? .local : .spotify, title: "", subtitle: "", art: nil, downloaded: false)
             openRequested &+= 1
+        case "pin":
+            guard let id = value("id") else { return }
+            Task {
+                if let t = core.track(id: id) { core.pin(item: t.item) }
+                else if let page = try? await core.collection(id: id) { core.pin(item: page.item) }
+            }
         case "nowplaying":
             nowPlayingMode = switch value("mode") { case "lyrics": .lyrics; case "queue": .queue; default: .artwork }
             showNowPlaying = true
@@ -225,6 +264,9 @@ final class AppModel {
 final class CoreBridge: CoreDelegate, @unchecked Sendable {
     weak var model: AppModel?
     private let keychain = Keychain(service: "network.aza.music")
+    private let testing = ProcessInfo.processInfo.arguments.contains("-uiTesting")
+    private var memory: [String: String] = [:]
+    private let lock = NSLock()
 
     func playerChanged(state: PlayerState) {
         Task { @MainActor in self.model?.playerChanged(state) }
@@ -249,9 +291,15 @@ final class CoreBridge: CoreDelegate, @unchecked Sendable {
         }
     }
 
-    func secretGet(key: String) -> String? { keychain.get(key) }
+    func secretGet(key: String) -> String? {
+        guard testing else { return keychain.get(key) }
+        return lock.withLock { memory[key] }
+    }
 
-    func secretSet(key: String, value: String?) { keychain.set(key, value) }
+    func secretSet(key: String, value: String?) {
+        guard testing else { return keychain.set(key, value) }
+        lock.withLock { memory[key] = value }
+    }
 
     func message(text: String) {
         Task { @MainActor in self.model?.show(text) }

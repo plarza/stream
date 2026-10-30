@@ -26,7 +26,7 @@ pub struct Progress {
 /// Scans `roots`, indexing new or changed files and dropping removed ones.
 /// Returns whether anything changed.
 /// Bump when what the scanner extracts changes, so every file is read again.
-const SCAN_VERSION: &str = "2";
+const SCAN_VERSION: &str = "3";
 
 pub fn scan(db: &Db, roots: &[PathBuf], art_dir: &Path, downloaded: bool, progress: &Progress) -> anyhow::Result<bool> {
     let mut known = db.local_index();
@@ -84,7 +84,7 @@ pub fn scan(db: &Db, roots: &[PathBuf], art_dir: &Path, downloaded: bool, progre
         }
     }
     db.upsert_local(&batch, downloaded)?;
-    if !removed.is_empty() {
+    if !removed.is_empty() || !todo.is_empty() {
         db.remove_local_paths(&removed)?;
     }
     let changed = !todo.is_empty() || !removed.is_empty();
@@ -154,6 +154,20 @@ fn read_file(
         mtime,
         size,
     })
+}
+
+/// The main credited artist: "Kanye West feat. Desiigner" → "Kanye West".
+/// Only featuring markers split; "Simon & Garfunkel" stays one artist.
+pub fn primary_artist(artist: &str) -> String {
+    let lower = artist.to_lowercase();
+    let mut cut = artist.len();
+    for marker in [" feat. ", " feat ", " ft. ", " ft ", " featuring ", " (feat", " [feat", " with ", ";", "\0"] {
+        if let Some(i) = lower.find(marker) {
+            cut = cut.min(i);
+        }
+    }
+    let p = artist[..cut].trim().trim_end_matches(',').trim();
+    if p.is_empty() { artist.trim().to_string() } else { p.to_string() }
 }
 
 fn parse_db(s: &str) -> Option<f32> {
