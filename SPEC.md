@@ -89,7 +89,8 @@ Rules:
   track, with optional hog mode. No resampling and no volume scaling in that mode.
 - No EQ.
 - **Queue:** Play Next / Play Later above the remaining context (album or playlist).
-  Shuffle and repeat live in Now Playing's ⋯ menu. Autoplay is a setting, off by default.
+  Now Playing has a shuffle on/off button next to like; there is no repeat. Autoplay is a
+  setting, off by default.
 - **Handoff:** Spotify tracks only (track, position, context URI).
 
 ## Lyrics
@@ -126,15 +127,14 @@ bottom accessory.
 
 | Element | Choice |
 |---|---|
-| Shell | `03` **A**: glass sidebar + floating glass player capsule over the content |
+| Shell | `03` **A**: glass sidebar running to the bottom of the window + a floating glass player capsule over the content beside it |
 | Now Playing | Clicking the art opens a full-window immersive Now Playing (same design as iPhone A); Esc returns |
 | Menu bar | `08` **A** compact card. Closing the window keeps music playing in the menu bar and hides the Dock icon |
 | Keyboard | Shortcuts for every view and transport action, plus a ⌘K command palette (search, play, navigate) |
 
-**Color:** the accent is Apple Music red by default and can be changed in Settings
-(including "Album Art", which follows the playing cover). Backgrounds such as Now Playing
-and album pages are always tinted from the artwork; each album's palette is computed once
-and cached.
+**Color:** the accent is always Apple Music red (#FA2D48, #FA586A in dark mode), and so is
+the app icon. Backgrounds such as Now Playing and album pages are always tinted from the
+artwork; each album's palette is computed once and cached.
 
 ## Motion
 

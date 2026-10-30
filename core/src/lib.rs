@@ -92,6 +92,8 @@ pub struct MusicCore {
     device_id: String,
     is_phone: bool,
     last_library_sync: Mutex<Option<std::time::Instant>>,
+    /// The browser sign-in in flight; a new one replaces it so its ports free up.
+    sign_in_task: Mutex<Option<tokio::task::AbortHandle>>,
 }
 
 fn err(e: impl std::fmt::Display) -> CoreError {
@@ -102,6 +104,9 @@ fn err(e: impl std::fmt::Display) -> CoreError {
 impl MusicCore {
     #[uniffi::constructor]
     pub fn new(config: CoreConfig, delegate: Arc<dyn CoreDelegate>) -> Result<Arc<Self>, CoreError> {
+        // librespot and reqwest pull in both of rustls' crypto backends, so rustls
+        // can't pick one itself and panics on the first TLS connection.
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let data = PathBuf::from(&config.data_dir);
         let cache = PathBuf::from(&config.cache_dir);
         let art_dir = cache.join("art");
@@ -184,6 +189,7 @@ impl MusicCore {
             device_id,
             is_phone: config.is_phone,
             last_library_sync: Mutex::new(None),
+            sign_in_task: Mutex::new(None),
         });
         *slot.write() = Some(Arc::downgrade(&core));
         core.restore_accounts();
@@ -226,11 +232,25 @@ impl MusicCore {
     /// Browser sign-in for the Web API, then for playback.
     pub async fn spotify_sign_in(self: Arc<Self>) -> Result<(), CoreError> {
         let me = self.clone();
-        self.rt
-            .spawn(async move { me.sign_in_inner().await })
-            .await
-            .map_err(err)?
-            .map_err(Into::into)
+        self.run_sign_in(async move { me.sign_in_inner().await }).await
+    }
+
+    /// Only the playback grant, for when the Web API is already signed in.
+    pub async fn spotify_connect_playback(self: Arc<Self>) -> Result<(), CoreError> {
+        let me = self.clone();
+        self.run_sign_in(async move {
+            me.playback_grant().await?;
+            me.emit_account();
+            Ok(())
+        })
+        .await
+    }
+
+    /// Stops a sign-in that is waiting on the browser (the user closed the sheet).
+    pub fn cancel_sign_in(&self) {
+        if let Some(h) = self.sign_in_task.lock().take() {
+            h.abort();
+        }
     }
 
     pub fn spotify_sign_out(&self) {
@@ -886,18 +906,37 @@ impl MusicCore {
         let tokens = auth::authorize(&self.http, &client_id, auth::WEB_PORT, auth::WEB_SCOPES, |u| delegate.open_url(u)).await?;
         self.delegate.secret_set(SECRET_WEB_TOKENS.into(), serde_json::to_string(&tokens).ok());
         self.install_web(client_id, tokens);
-        let user_id = self.verify_web().await?;
+        self.verify_web().await?;
         self.emit_account();
+        self.playback_grant().await?;
+        self.emit_account();
+        let _ = self.clone().refresh_spotify_inner().await;
+        Ok(())
+    }
 
+    async fn playback_grant(&self) -> anyhow::Result<()> {
         let delegate = self.delegate.clone();
         let playback = auth::authorize(&self.http, auth::PLAYBACK_CLIENT_ID, auth::PLAYBACK_PORT, auth::PLAYBACK_SCOPES, |u| {
             delegate.open_url(u)
         })
         .await?;
-        self.connect_playback(sp_session::token_credentials(&user_id, &playback.access_token)).await?;
-        self.emit_account();
-        let _ = self.clone().refresh_spotify_inner().await;
-        Ok(())
+        self.connect_playback(sp_session::token_credentials(&playback.access_token)).await
+    }
+
+    /// Runs one browser sign-in at a time on the core's runtime.
+    async fn run_sign_in(
+        &self,
+        f: impl std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
+    ) -> Result<(), CoreError> {
+        let task = self.rt.spawn(f);
+        if let Some(old) = self.sign_in_task.lock().replace(task.abort_handle()) {
+            old.abort();
+        }
+        match task.await {
+            Ok(r) => r.map_err(Into::into),
+            Err(e) if e.is_cancelled() => Err(err("Sign-in cancelled")),
+            Err(e) => Err(err(e)),
+        }
     }
 
     async fn refresh_spotify_inner(self: Arc<Self>) -> Result<(), CoreError> {

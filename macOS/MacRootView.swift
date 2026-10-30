@@ -4,32 +4,39 @@ enum SidebarItem: Hashable {
     case home, search, section(LibrarySection), pin(Item)
 }
 
-/// Glass sidebar and content above a full-width glass playing bar whose
-/// corners follow the window's, like the sidebar's. Clicking the bar's art
-/// opens Now Playing across the whole window.
+/// Glass sidebar running the full height of the window, and a capsule playing
+/// bar floating over the bottom of the page. Clicking the bar's art opens Now
+/// Playing across the whole window.
 struct MacRootView: View {
     @Environment(AppModel.self) private var model
     @Binding var showPalette: Bool
     @State private var selection: SidebarItem? = .home
     @State private var path = NavigationPath()
     @State private var search = SearchModel()
+    @State private var sidebarEdge: CGFloat = 228
 
     var body: some View {
         ZStack {
-            VStack(spacing: 0) {
-                NavigationSplitView {
-                    sidebar
-                        .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 300)
-                        .toolbar(removing: .sidebarToggle)
-                } detail: {
-                    NavigationStack(path: $path) {
-                        detail
-                            .navigationDestination(for: Item.self) { CollectionView(item: $0) }
-                            .navigationDestination(for: LibrarySection.self) { SectionView(section: $0) }
-                    }
+            NavigationSplitView {
+                sidebar
+                    .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 300)
+                    .toolbar(removing: .sidebarToggle)
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxX } action: { sidebarEdge = $0 }
+            } detail: {
+                NavigationStack(path: $path) {
+                    detail
+                        .navigationDestination(for: Item.self) { CollectionView(item: $0) }
+                        .navigationDestination(for: LibrarySection.self) { SectionView(section: $0) }
                 }
+            }
+            // The bar floats over the page, which scrolls on beneath it. (Views placed
+            // beside the NavigationStack inside the detail column don't get drawn, so it
+            // hangs off the split view, lined up with the detail column.)
+            .contentMargins(.bottom, 96, for: .scrollContent)
+            .overlay(alignment: .bottomLeading) {
                 PlayerBar()
-                    .padding([.horizontal, .bottom], 8)
+                    .padding(.leading, sidebarEdge + 16)
+                    .padding([.trailing, .bottom], 16)
             }
             .tint(model.tint)
 
@@ -173,13 +180,14 @@ struct MacSearchView: View {
     }
 }
 
-/// The playing strip along the bottom: song on the left (its art nested in
-/// the bar's corner), transport and scrubber in the middle, extras on the right.
+/// The floating capsule: song on the left, transport and scrubber in the
+/// middle, extras on the right. The art sits far enough in that its rounded
+/// corners clear the capsule's curve.
 struct PlayerBar: View {
     @Environment(AppModel.self) private var model
     private let height: CGFloat = 64
-    private let inset: CGFloat = 6
-    private let artRadius: CGFloat = 12
+    private let art: CGFloat = 44
+    private let artRadius: CGFloat = 10
 
     var body: some View {
         let t = model.player.track
@@ -189,8 +197,7 @@ struct PlayerBar: View {
                 Button {
                     withAnimation(.player) { model.showNowPlaying = true }
                 } label: {
-                    // Inset by `inset` inside the bar, so its corner is the bar's minus the inset.
-                    ArtworkView(url: t?.art, size: height - inset * 2, cornerRadius: artRadius)
+                    ArtworkView(url: t?.art, size: art, cornerRadius: artRadius)
                 }
                 .buttonStyle(.pressable)
                 .help("Now Playing")
@@ -216,7 +223,7 @@ struct PlayerBar: View {
                 }
                 Spacer(minLength: 8)
             }
-            .padding(.leading, inset)
+            .padding(.leading, (height - art) / 2 + 4)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             // Transport + scrubber
@@ -240,23 +247,15 @@ struct PlayerBar: View {
                     .accessibilityIdentifier("player.playPause")
                     Button { model.next() } label: { Image(systemName: "forward.fill") }
                         .accessibilityLabel("Next").accessibilityIdentifier("player.next")
-                    Button { cycleRepeat() } label: {
-                        Image(systemName: model.player.repeat == .one ? "repeat.1" : "repeat")
-                            .foregroundStyle(model.player.repeat == .off ? .secondary : model.tint)
-                    }
-                    .accessibilityLabel("Repeat")
-                    .accessibilityValue(repeatValue)
-                    .accessibilityIdentifier("player.repeat")
                 }
                 .buttonStyle(PressableStyle(scale: 0.8))
                 .disabled(t == nil)
                 BarScrubber()
             }
-            .frame(width: 380)
+            .frame(minWidth: 260, maxWidth: 360)
 
             // Extras
             HStack(spacing: 16) {
-                Spacer(minLength: 8)
                 modeButton(.lyrics, "quote.bubble", "Lyrics")
                 modeButton(.queue, "list.bullet", "Queue")
                 AirPlayButton().frame(width: 22, height: 22)
@@ -269,31 +268,18 @@ struct PlayerBar: View {
                         .accessibilityIdentifier("player.volume")
                 }
             }
-            .padding(.trailing, 18)
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.leading, 16)
+            .padding(.trailing, height / 2)
+            .fixedSize()
         }
         .frame(height: height)
-        .glassEffect(.regular, in: ConcentricRectangle(corners: .concentric(minimum: 12), isUniform: true))
+        .glassEffect(.regular, in: .capsule)
+        // Glass alone vanishes over a flat page; a hairline rim and a soft shadow lift it.
+        .overlay { Capsule().strokeBorder(.primary.opacity(0.1), lineWidth: 0.5) }
+        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
         .animation(.smooth, value: t?.id)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.bar")
-    }
-
-    private var repeatValue: String {
-        switch model.player.repeat {
-        case .off: "off"
-        case .all: "all"
-        case .one: "one"
-        }
-    }
-
-    private func cycleRepeat() {
-        let next: RepeatMode = switch model.player.repeat {
-        case .off: .all
-        case .all: .one
-        case .one: .off
-        }
-        model.core.setRepeat(mode: next)
     }
 
     private func modeButton(_ m: AppModel.NowPlayingMode, _ symbol: String, _ label: String) -> some View {

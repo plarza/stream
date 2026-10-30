@@ -11,7 +11,7 @@ struct MusicMacApp: App {
         Window("Music", id: "main") {
             MacRootView(showPalette: $palette)
                 .environment(model)
-                .frame(minWidth: 820, minHeight: 560)
+                .frame(minWidth: 1000, minHeight: 600)
                 .onContinueUserActivity("network.aza.music.playing") { model.continueActivity($0) }
                 .onOpenURL { model.handle(url: $0) }
                 .onAppear { NSApp.setActivationPolicy(.regular) }
@@ -21,6 +21,7 @@ struct MusicMacApp: App {
                 }
         }
         .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1240, height: 800)
         // Always open the window at launch, even if it was closed last time.
         .defaultLaunchBehavior(.presented)
         .restorationBehavior(.disabled)

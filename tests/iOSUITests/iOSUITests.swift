@@ -37,6 +37,11 @@ final class iOSUITests: MusicUITestCase {
         waitLabel(wait(el("nowPlaying.title")), "Loose Song")
         el("nowPlaying.playPause").tap()
         waitLabel(el("nowPlaying.playPause"), "Play")
+        let shuffle = el("nowPlaying.shuffle")
+        shuffle.tap()
+        waitValue(shuffle, "on")
+        shuffle.tap()
+        waitValue(shuffle, "off")
         el("nowPlaying.lyrics").tap()
         wait(text("Second line comes in"))
         el("nowPlaying.queue").tap()
@@ -67,10 +72,8 @@ final class iOSUITests: MusicUITestCase {
         waitLabel(el("mini.title"), "Tunnel")
     }
 
-    func testSettingsOpenAndAccent() {
+    func testSettingsOpen() {
         wait(el("account")).tap()
-        let blue = wait(el("accent.blue"))
-        blue.tap()
-        XCTAssertTrue(blue.isSelected)
+        wait(text("Normalize loudness"))
     }
 }

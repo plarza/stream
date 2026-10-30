@@ -52,12 +52,8 @@ pub struct Playback {
 }
 
 /// Credentials from the browser grant: the streaming access token bound to the account.
-pub fn token_credentials(username: &str, access_token: &str) -> Credentials {
-    Credentials {
-        username: Some(username.to_string()),
-        auth_type: AuthenticationType::AUTHENTICATION_SPOTIFY_TOKEN,
-        auth_data: access_token.as_bytes().to_vec(),
-    }
+pub fn token_credentials(access_token: &str) -> Credentials {
+    Credentials::with_access_token(access_token)
 }
 
 pub fn credentials_to_json(c: &Credentials) -> String {
@@ -224,3 +220,4 @@ pub fn parse_spotify_lyrics(json: &serde_json::Value) -> Option<Lyrics> {
     };
     Some(Lyrics { sync, lines, source: "Spotify".into() })
 }
+

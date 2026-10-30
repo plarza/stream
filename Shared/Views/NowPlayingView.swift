@@ -6,7 +6,6 @@ import SwiftUI
 /// scrubber and transport on the blurred art.
 struct NowPlayingView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
     @Namespace private var art
     var compact = false
 
@@ -93,7 +92,7 @@ struct NowPlayingView: View {
             .transition(.blurReplace)
             Spacer()
             likeButton
-            moreMenu
+            shuffleButton
         }
         .padding(.bottom, 8)
         .animation(.smooth, value: track?.id)
@@ -116,7 +115,7 @@ struct NowPlayingView: View {
             .id(track?.id)
             .transition(.blurReplace)
             likeButton
-            moreMenu
+            shuffleButton
         }
         .animation(.smooth, value: track?.id)
     }
@@ -138,48 +137,24 @@ struct NowPlayingView: View {
         .accessibilityIdentifier("nowPlaying.like")
     }
 
-    private var moreMenu: some View {
-        Menu {
-            Toggle(isOn: Binding(get: { model.player.shuffle }, set: { model.core.setShuffle(on: $0) })) {
-                Label("Shuffle", systemImage: "shuffle")
-            }
-            Picker(selection: Binding(get: { model.player.repeat }, set: { model.core.setRepeat(mode: $0) })) {
-                Label("Repeat Off", systemImage: "repeat").tag(RepeatMode.off)
-                Label("Repeat All", systemImage: "repeat").tag(RepeatMode.all)
-                Label("Repeat One", systemImage: "repeat.1").tag(RepeatMode.one)
-            } label: {
-                Label("Repeat", systemImage: "repeat")
-            }
-            if let t = track {
-                Divider()
-                if let album = t.albumId {
-                    Button { open(Item(id: album, kind: .album, source: t.source, title: t.album, subtitle: t.artist, art: t.art, downloaded: false)) } label: {
-                        Label("Go to Album", systemImage: "square.stack")
-                    }
-                }
-                if let artist = t.artistId {
-                    Button { open(Item(id: artist, kind: .artist, source: t.source, title: t.artist, subtitle: "Artist", art: nil, downloaded: false)) } label: {
-                        Label("Go to Artist", systemImage: "music.mic")
-                    }
-                }
-                Button { model.togglePin(t.item) } label: { Label("Pin Song", systemImage: "pin") }
-            }
+    private var shuffleButton: some View {
+        let on = model.player.shuffle
+        return Button {
+            Haptics.tap()
+            model.core.setShuffle(on: !on)
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.title3)
+            Image(systemName: "shuffle")
+                .font(.title3.weight(on ? .semibold : .regular))
+                .foregroundStyle(on ? model.onTint : .white)
                 .frame(width: 38, height: 38)
+                .background { if on { Circle().fill(model.tint) } }
                 .glassEffect(.regular.interactive(), in: .circle)
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .accessibilityLabel("More")
-        .accessibilityIdentifier("nowPlaying.more")
-    }
-
-    private func open(_ item: Item) {
-        model.pendingNavigation = item
-        model.showNowPlaying = false
-        dismiss()
+        .buttonStyle(.pressable)
+        .animation(.snappy, value: on)
+        .accessibilityLabel("Shuffle")
+        .accessibilityValue(on ? "on" : "off")
+        .accessibilityIdentifier("nowPlaying.shuffle")
     }
 
     private var bottomBar: some View {

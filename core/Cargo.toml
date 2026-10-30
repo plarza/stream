@@ -29,6 +29,7 @@ librespot-metadata = { version = "0.8", default-features = false }
 librespot-protocol = { version = "0.8", default-features = false }
 librespot-audio = { version = "0.8", default-features = false }
 protobuf = "3"
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 symphonia = { version = "0.6", default-features = false, features = ["flac", "mp3", "aac", "alac", "isomp4", "ogg", "vorbis", "wav", "aiff", "pcm"] }
 lofty = "0.25"
 rusqlite = { version = "0.37", features = ["bundled", "functions"] }

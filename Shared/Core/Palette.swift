@@ -16,12 +16,15 @@ struct Palette: Equatable, Sendable {
 
     private static let cache = PaletteCache()
 
+    /// Already computed for this cover, so a page can open with its colors in place.
+    static func cached(_ url: String?) -> Palette? { url.flatMap { cache.get($0) } }
+
     static func extract(from url: String?) async -> Palette {
         guard let url else { return .fallback }
-        if let p = await cache.get(url) { return p }
+        if let p = cache.get(url) { return p }
         guard let cg = await ArtworkStore.shared.cgImage(for: url, pixels: 128) else { return .fallback }
         let p = compute(cg)
-        await cache.set(url, p)
+        cache.set(url, p)
         return p
     }
 
@@ -94,11 +97,14 @@ struct Palette: Equatable, Sendable {
     }
 }
 
-actor PaletteCache {
+final class PaletteCache: @unchecked Sendable {
     private var map: [String: Palette] = [:]
-    func get(_ k: String) -> Palette? { map[k] }
+    private let lock = NSLock()
+    func get(_ k: String) -> Palette? { lock.withLock { map[k] } }
     func set(_ k: String, _ p: Palette) {
-        if map.count > 300 { map.removeAll() }
-        map[k] = p
+        lock.withLock {
+            if map.count > 300 { map.removeAll() }
+            map[k] = p
+        }
     }
 }

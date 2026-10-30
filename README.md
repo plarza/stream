@@ -22,7 +22,7 @@
 - Pins and recents on Home; one search across your library and Spotify
 - Last.fm scrobbling for local files
 - iPhone mirrors the Mac's music folders over Wi-Fi
-- Mac: full-width glass player, menu bar mini player, ⌘K to play or go to anything
+- Mac: floating glass player, menu bar mini player, ⌘K to play or go to anything
 
 ## How it works
 

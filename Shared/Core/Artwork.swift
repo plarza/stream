@@ -8,7 +8,12 @@ import SwiftUI
 actor ArtworkStore {
     static let shared = ArtworkStore()
 
-    private let memory = NSCache<NSString, CGImageBox>()
+    /// NSCache is thread-safe, so views can read it synchronously on first render.
+    nonisolated(unsafe) private static let memory: NSCache<NSString, CGImageBox> = {
+        let c = NSCache<NSString, CGImageBox>()
+        c.totalCostLimit = 48 * 1024 * 1024
+        return c
+    }()
     private let dir: URL
     private var inflight: [String: Task<CGImage?, Never>] = [:]
     private let session: URLSession
@@ -16,17 +21,27 @@ actor ArtworkStore {
     init() {
         dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.music/remote-art", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        memory.totalCostLimit = 24 * 1024 * 1024
         let config = URLSessionConfiguration.default
         config.urlCache = nil
         config.httpMaximumConnectionsPerHost = 6
         session = URLSession(configuration: config)
     }
 
+    private static func bucket(_ pixels: Int) -> Int {
+        pixels <= 128 ? 128 : pixels <= 320 ? 320 : pixels <= 700 ? 700 : 1400
+    }
+
+    /// A cover already decoded at this size, without waiting.
+    nonisolated static func cached(_ url: String?, pixels: Int) -> CGImage? {
+        guard let url, !url.isEmpty else { return nil }
+        return memory.object(forKey: "\(bucket(pixels))|\(url)" as NSString)?.image
+    }
+
     func cgImage(for url: String?, pixels: Int) async -> CGImage? {
         guard let url, !url.isEmpty else { return nil }
-        let bucket = pixels <= 128 ? 128 : pixels <= 320 ? 320 : pixels <= 700 ? 700 : 1400
+        let bucket = Self.bucket(pixels)
         let key = "\(bucket)|\(url)" as NSString
+        let memory = Self.memory
         if let hit = memory.object(forKey: key) { return hit.image }
         if let t = inflight[key as String] { return await t.value }
         let task = Task<CGImage?, Never> { [dir, session] in
@@ -79,6 +94,15 @@ final class CGImageBox: @unchecked Sendable {
     init(_ image: CGImage) { self.image = image }
 }
 
+enum Display {
+    /// Pixels per point of the main screen (artwork is decoded at its shown size).
+    #if os(iOS)
+    static let scale: CGFloat = 3
+    #else
+    static let scale: CGFloat = 2
+    #endif
+}
+
 /// A square cover that fades in once decoded.
 struct ArtworkView: View {
     let url: String?
@@ -87,7 +111,14 @@ struct ArtworkView: View {
     var cornerRadius: CGFloat? = nil
     var circle = false
     @State private var image: CGImage?
-    @Environment(\.displayScale) private var scale
+
+    init(url: String?, size: CGFloat, cornerRadius: CGFloat? = nil, circle: Bool = false) {
+        self.url = url
+        self.size = size
+        self.cornerRadius = cornerRadius
+        self.circle = circle
+        _image = State(initialValue: ArtworkStore.cached(url, pixels: Int(size * Display.scale)))
+    }
 
     var body: some View {
         ZStack {
@@ -110,7 +141,8 @@ struct ArtworkView: View {
                 .stroke(.white.opacity(0.08), lineWidth: 0.5)
         }
         .task(id: url) {
-            let px = Int(size * scale)
+            let px = Int(size * Display.scale)
+            if let hit = ArtworkStore.cached(url, pixels: px) { image = hit; return }
             let loaded = await ArtworkStore.shared.cgImage(for: url, pixels: px)
             withAnimation(.easeOut(duration: 0.2)) { image = loaded }
         }
@@ -122,6 +154,12 @@ struct FillArtwork: View {
     let url: String?
     var pixels: Int = 1400
     @State private var image: CGImage?
+
+    init(url: String?, pixels: Int = 1400) {
+        self.url = url
+        self.pixels = pixels
+        _image = State(initialValue: ArtworkStore.cached(url, pixels: pixels))
+    }
 
     var body: some View {
         // Color.clear takes exactly the offered size; the image fills it and is clipped,
@@ -139,6 +177,7 @@ struct FillArtwork: View {
             }
             .clipped()
             .task(id: url) {
+                if let hit = ArtworkStore.cached(url, pixels: pixels) { image = hit; return }
                 let loaded = await ArtworkStore.shared.cgImage(for: url, pixels: pixels)
                 withAnimation(.easeOut(duration: 0.35)) { image = loaded }
             }

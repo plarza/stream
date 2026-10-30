@@ -11,6 +11,16 @@ struct CollectionView: View {
     @State private var pinned = false
     @State private var liked = false
 
+    init(item: Item) {
+        self.item = item
+        // Open with what we had last time (page and colors), then refresh.
+        let cached = AppModel.shared.pages[item.id]
+        _page = State(initialValue: cached)
+        _liked = State(initialValue: cached?.liked ?? false)
+        _pinned = State(initialValue: cached?.pinned ?? false)
+        _palette = State(initialValue: Palette.cached(cached?.item.art ?? item.art) ?? .fallback)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -180,13 +190,14 @@ struct CollectionView: View {
         pinned = model.core.isPinned(id: item.id)
         do {
             let p = try await model.core.collection(id: item.id)
+            model.pages[item.id] = p
             withAnimation(.smooth) {
                 page = p
                 liked = p.liked
                 pinned = p.pinned
             }
         } catch {
-            self.error = error.localizedDescription
+            if page == nil { self.error = AppModel.message(error) }
         }
     }
 

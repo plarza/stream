@@ -24,14 +24,12 @@ final class AppModel {
     var nowPlayingMode: NowPlayingMode = .artwork
     /// Colors derived from the current artwork (backgrounds, Now Playing).
     var accent: Palette = .fallback
-    /// The app's accent: Apple Music red unless changed in Settings.
-    var theme: AccentChoice = AppModel.isTesting ? .red : AccentChoice.saved {
-        didSet { if !AppModel.isTesting { theme.save() } }
-    }
     /// Output volume, 0…1 (always 0 under UI tests).
     var volume: Double = AppModel.isTesting ? 0 : (UserDefaults.standard.object(forKey: "volume") as? Double ?? 1) {
         didSet {
             core.setVolume(volume: Float(volume))
+        // Repeat has no control any more; never leave it stuck on.
+        if player.repeat != .off { core.setRepeat(mode: .off) }
             if !AppModel.isTesting { UserDefaults.standard.set(volume, forKey: "volume") }
         }
     }
@@ -44,10 +42,10 @@ final class AppModel {
         guard let i = a.firstIndex(of: name), i + 1 < a.count else { return nil }
         return a[i + 1]
     }
-    var tint: Color { theme == .albumArt ? accent.accent : theme.color }
+    /// The app's accent everywhere.
+    let tint = Color.appleMusicRed
     /// Text and icons drawn on the accent.
-    var onTint: Color { theme.onColor }
-    var signInURL: URL?
+    let onTint = Color.white
     /// A page to open after Now Playing closes (Go to Album / Artist).
     var pendingNavigation: Item?
     var handoff: NSUserActivity?
@@ -109,7 +107,22 @@ final class AppModel {
 
     func libraryChanged() {
         home = core.home()
+        sections = [:]
         libraryVersion &+= 1
+    }
+
+    // MARK: Page caches (so switching tabs and pages shows what was there at once)
+
+    /// Album, playlist and artist pages already loaded this session.
+    @ObservationIgnored var pages: [String: CollectionPage] = [:]
+    /// The first page of each library section, for the current library version.
+    @ObservationIgnored private var sections: [LibrarySection: [Item]] = [:]
+
+    func sectionFirstPage(_ section: LibrarySection, limit: UInt32) -> [Item] {
+        if let hit = sections[section] { return hit }
+        let items = core.section(section: section, offset: 0, limit: limit)
+        sections[section] = items
+        return items
     }
 
     func accountChanged(_ state: AccountState) {
@@ -171,11 +184,28 @@ final class AppModel {
     /// Current position, cheap enough to call every frame.
     func position() -> Double { Double(core.positionMs()) / 1000 }
 
+    /// True while a Spotify sign-in waits on the browser sheet or on Spotify.
+    var signingIn = false
+
+    /// Full sign-in (Web API, then playback), or just playback when the Web API is already signed in.
     func signInToSpotify() {
+        guard !signingIn else { return }
+        signingIn = true
+        let playbackOnly = account.spotifyWeb
         Task {
-            do { try await core.spotifySignIn() } catch { show(error.localizedDescription) }
-            signInURL = nil
+            do {
+                if playbackOnly { try await core.spotifyConnectPlayback() } else { try await core.spotifySignIn() }
+            } catch {
+                show(Self.message(error))
+            }
+            signingIn = false
         }
+    }
+
+    /// The core's own message rather than Swift's generic description of the error enum.
+    static func message(_ error: Error) -> String {
+        if case let CoreError.Failed(message) = error { return message }
+        return error.localizedDescription
     }
 
     /// network-aza-music://play?id=…[&shuffle=1] · open?id=… · nowplaying?mode=lyrics|queue
@@ -188,7 +218,6 @@ final class AppModel {
             // UI tests share one launch; this puts the app back on Home, silent and with nothing open.
             core.pause()
             showNowPlaying = false
-            theme = .red
             resetRequested &+= 1
         case "play":
             guard let id = value("id") else { return }
@@ -294,11 +323,7 @@ final class CoreBridge: CoreDelegate, @unchecked Sendable {
     func openUrl(url: String) {
         guard let u = URL(string: url) else { return }
         Task { @MainActor in
-            #if os(iOS)
-            self.model?.signInURL = u
-            #else
-            NSWorkspace.shared.open(u)
-            #endif
+            WebAuth.shared.open(u) { self.model?.core.cancelSignIn() }
         }
     }
 

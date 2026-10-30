@@ -54,7 +54,12 @@ struct SectionView: View {
     @Environment(AppModel.self) private var model
     @State private var items: [Item] = []
     @State private var exhausted = false
+    @State private var loadedVersion: Int?
     private let pageSize: UInt32 = 120
+
+    init(section: LibrarySection) {
+        self.section = section
+    }
 
     var body: some View {
         List {
@@ -73,7 +78,8 @@ struct SectionView: View {
                 ContentUnavailableView(emptyText, systemImage: section.symbol)
             }
         }
-        .task(id: "\(section.title)-\(model.libraryVersion)") { reload() }
+        .onAppear { if loadedVersion != model.libraryVersion { reload() } }
+        .onChange(of: model.libraryVersion) { reload() }
     }
 
     @ViewBuilder
@@ -99,8 +105,9 @@ struct SectionView: View {
     }
 
     private func reload() {
-        items = model.core.section(section: section, offset: 0, limit: pageSize)
+        items = model.sectionFirstPage(section, limit: pageSize)
         exhausted = items.count < Int(pageSize)
+        loadedVersion = model.libraryVersion
     }
 
     private func loadMore() {

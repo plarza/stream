@@ -6,7 +6,6 @@ struct SettingsView: View {
     @State private var lastfmKey = ""
     @State private var lastfmSecret = ""
     @State private var settings = Preferences(normalization: true, crossfadeSeconds: 0, autoplay: false, bitPerfect: false, scrobbling: true)
-    @State private var signingIn = false
     @State private var sync: SyncStatus?
     #if os(macOS)
     @State private var folders: [String] = []
@@ -21,9 +20,6 @@ struct SettingsView: View {
             syncSection
             #endif
             lastfm
-            Section("Accent color") {
-                AccentPicker()
-            }
             Section("Playback") {
                 Toggle("Normalize loudness", isOn: $settings.normalization)
                 Toggle("Scrobble local files to Last.fm", isOn: $settings.scrobbling)
@@ -56,7 +52,13 @@ struct SettingsView: View {
                 LabeledContent("Plan", value: model.account.spotifyPremium ? "Premium" : "Free (playback needs Premium)")
                 LabeledContent("Playback", value: model.account.spotifyPlayback ? "Connected" : "Not connected")
                 if !model.account.spotifyPlayback {
-                    Button("Connect playback") { signIn() }
+                    Button { model.signInToSpotify() } label: {
+                        HStack {
+                            Text("Connect playback")
+                            if model.signingIn { Spacer(); ProgressView() }
+                        }
+                    }
+                    .disabled(model.signingIn)
                 }
                 Button("Refresh library") {
                     Task { try? await model.core.refreshSpotify(force: true) }
@@ -72,14 +74,14 @@ struct SettingsView: View {
                     .onSubmit { model.core.setSpotifyClientId(clientId: clientId) }
                 Button {
                     model.core.setSpotifyClientId(clientId: clientId)
-                    signIn()
+                    model.signInToSpotify()
                 } label: {
                     HStack {
                         Text("Sign in with Spotify")
-                        if signingIn { Spacer(); ProgressView() }
+                        if model.signingIn { Spacer(); ProgressView() }
                     }
                 }
-                .disabled(clientId.trimmingCharacters(in: .whitespaces).isEmpty || signingIn)
+                .disabled(clientId.trimmingCharacters(in: .whitespaces).isEmpty || model.signingIn)
             }
         } header: {
             Text("Spotify")
@@ -87,14 +89,6 @@ struct SettingsView: View {
             if !model.account.spotifyWeb {
                 Text("Create an app at developer.spotify.com with redirect URI http://127.0.0.1:8989/login and Web API enabled, then paste its Client ID. Playback needs Premium.")
             }
-        }
-    }
-
-    private func signIn() {
-        signingIn = true
-        Task {
-            do { try await model.core.spotifySignIn() } catch { model.show(error.localizedDescription) }
-            signingIn = false
         }
     }
 

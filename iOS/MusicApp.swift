@@ -1,4 +1,3 @@
-import AuthenticationServices
 import SwiftUI
 
 @main
@@ -85,7 +84,6 @@ struct RootView: View {
         .overlay(alignment: .top) {
             if let t = model.toast { Toast(text: t).padding(.top, 8) }
         }
-        .background { WebAuthPresenter(url: $model.signInURL) }
         .onChange(of: model.openRequested) {
             // Deep links and search results open in the tab you're on.
             if model.showNowPlaying { model.showNowPlaying = false } else { openPending() }
@@ -176,40 +174,5 @@ struct MiniPlayer: View {
         .contentShape(Rectangle())
         .animation(.smooth, value: t?.id)
         .disabled(t == nil)
-    }
-}
-
-/// Runs Spotify's sign-in pages in an in-app browser sheet. The loopback page
-/// redirects to network-aza-music://auth-done, which closes it.
-struct WebAuthPresenter: UIViewControllerRepresentable {
-    @Binding var url: URL?
-
-    func makeUIViewController(context: Context) -> UIViewController { UIViewController() }
-
-    func updateUIViewController(_ vc: UIViewController, context: Context) {
-        guard let url, context.coordinator.current != url else { return }
-        context.coordinator.current = url
-        let session = ASWebAuthenticationSession(url: url, callback: .customScheme("network-aza-music")) { _, _ in
-            Task { @MainActor in
-                context.coordinator.current = nil
-                self.url = nil
-            }
-        }
-        session.presentationContextProvider = context.coordinator
-        session.prefersEphemeralWebBrowserSession = false
-        context.coordinator.session = session
-        session.start()
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    final class Coordinator: NSObject, ASWebAuthenticationPresentationContextProviding {
-        var current: URL?
-        var session: ASWebAuthenticationSession?
-        func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-            MainActor.assumeIsolated {
-                UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
-            }
-        }
     }
 }
