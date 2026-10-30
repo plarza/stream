@@ -1,0 +1,154 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "SF Pro Display", "Inter", system-ui, sans-serif; color: var(--foreground); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px 16px; padding: 8px 0 16px; }
+  .opt { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .label { font-size: 13px; font-weight: 600; text-align: center; }
+  .label span { display: block; font-weight: 400; color: var(--muted-foreground, #999); font-size: 11.5px; margin-top: 2px; max-width: 300px; line-height: 1.35; }
+  .phone { width: 300px; height: 630px; border-radius: 48px; position: relative; overflow: hidden; color: #fff;
+    box-shadow: 0 0 0 9px #111, 0 0 0 10px #333, 0 20px 50px rgba(0,0,0,.45); }
+  .island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 92px; height: 27px; background: #000; border-radius: 20px; z-index: 9; }
+  .status { position: absolute; top: 15px; left: 30px; right: 26px; display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; z-index: 8; }
+  .glass { background: rgba(255,255,255,.12); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(255,255,255,.08), inset 0 0 0 .5px rgba(255,255,255,.25), 0 8px 24px rgba(0,0,0,.25); }
+  .art1 { background: radial-gradient(circle at 30% 30%, #ff9a5a, transparent 55%), radial-gradient(circle at 75% 70%, #8a2be2, transparent 60%), linear-gradient(135deg,#ff5e62,#3b1c6b); }
+  .bar { height: 4px; border-radius: 3px; background: rgba(255,255,255,.25); position: relative; }
+  .bar i { position: absolute; inset: 0 auto 0 0; width: 38%; background: #fff; border-radius: 3px; }
+  .times { display: flex; justify-content: space-between; font-size: 10.5px; opacity: .6; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .ctrls { display: flex; justify-content: space-around; align-items: center; }
+  svg { display: block; }
+  .chip { font-size: 9.5px; font-weight: 600; padding: 3px 7px; border-radius: 20px; letter-spacing: .02em; }
+  .t { font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+  .a { font-size: 15px; opacity: .65; margin-top: 2px; }
+  .row { display: flex; align-items: center; justify-content: space-between; }
+  .home { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); width: 110px; height: 4px; border-radius: 3px; background: rgba(255,255,255,.7); }
+</style></head><body>
+<div class="grid">
+
+<!-- A: Immersive -->
+<div class="opt">
+<div class="phone" style="background:#2a1240">
+  <div class="island"></div><div class="status"><span>9:41</span><span>▂▄▆ ▭</span></div>
+  <div class="art1" style="position:absolute;inset:-40px;filter:blur(50px) saturate(160%);opacity:.95"></div>
+  <div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 40%,rgba(0,0,0,.35))"></div>
+  <div style="position:absolute;top:44px;left:50%;transform:translateX(-50%);width:36px;height:5px;border-radius:3px;background:rgba(255,255,255,.45)"></div>
+  <div class="art1" style="position:absolute;top:78px;left:26px;right:26px;height:248px;border-radius:14px;box-shadow:0 18px 40px rgba(0,0,0,.4)"></div>
+  <div style="position:absolute;top:346px;left:26px;right:26px">
+    <div class="row"><div><div class="t">Midnight Static</div><div class="a">Haru Nemuri</div></div>
+      <div class="glass" style="width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:14px">⋯</div></div>
+    <div style="margin-top:18px" class="bar"><i></i></div>
+    <div class="times"><span>1:24</span><span style="opacity:.9" class="chip glass">FLAC · 24/96</span><span>-2:11</span></div>
+    <div class="ctrls" style="margin-top:22px">
+      <svg width="34" height="22" viewBox="0 0 34 22"><path d="M16 2 4 11l12 9zM30 2 18 11l12 9z" fill="#fff"/></svg>
+      <svg width="34" height="38" viewBox="0 0 34 38"><rect x="4" y="2" width="9" height="34" rx="2" fill="#fff"/><rect x="21" y="2" width="9" height="34" rx="2" fill="#fff"/></svg>
+      <svg width="34" height="22" viewBox="0 0 34 22"><path d="M4 2l12 9-12 9zM18 2l12 9-12 9z" fill="#fff"/></svg>
+    </div>
+    <div class="row" style="margin-top:26px;opacity:.75;font-size:15px;padding:0 6px"><span>❝</span><span>⌁ AirPlay</span><span>☰</span></div>
+  </div>
+  <div class="home"></div>
+</div>
+<div class="label">A · Immersive<span>Full-bleed blurred art, Apple Music lineage. Glass only on small chips. Familiar, very clean.</span></div>
+</div>
+
+<!-- B: Floating glass deck -->
+<div class="opt">
+<div class="phone" style="background:#120b1d">
+  <div class="island"></div><div class="status"><span>9:41</span><span>▂▄▆ ▭</span></div>
+  <div class="art1" style="position:absolute;top:0;left:0;right:0;height:470px"></div>
+  <div style="position:absolute;top:0;left:0;right:0;height:470px;background:linear-gradient(to bottom,rgba(0,0,0,.15),transparent 30%,transparent 70%,#120b1d)"></div>
+  <div style="position:absolute;top:52px;left:18px;right:18px" class="row">
+    <div class="glass" style="width:34px;height:34px;border-radius:50%;display:grid;place-items:center">⌄</div>
+    <div class="glass chip" style="padding:7px 12px;font-size:11px">Playing from · Liked Songs</div>
+    <div class="glass" style="width:34px;height:34px;border-radius:50%;display:grid;place-items:center">⋯</div>
+  </div>
+  <div class="glass" style="position:absolute;left:12px;right:12px;bottom:22px;border-radius:38px;padding:20px 20px 18px;background:rgba(40,20,60,.35)">
+    <div class="row"><div><div class="t">Midnight Static</div><div class="a">Haru Nemuri — Shunka Ryougen</div></div>
+      <div style="font-size:20px">♡</div></div>
+    <div style="margin-top:16px" class="bar"><i></i></div>
+    <div class="times"><span>1:24</span><span>-2:11</span></div>
+    <div class="ctrls" style="margin-top:12px">
+      <span style="opacity:.6">⤮</span>
+      <svg width="30" height="20" viewBox="0 0 34 22"><path d="M16 2 4 11l12 9zM30 2 18 11l12 9z" fill="#fff"/></svg>
+      <div class="glass" style="width:64px;height:64px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.22)"><svg width="22" height="26" viewBox="0 0 34 38"><rect x="4" y="2" width="9" height="34" rx="2" fill="#fff"/><rect x="21" y="2" width="9" height="34" rx="2" fill="#fff"/></svg></div>
+      <svg width="30" height="20" viewBox="0 0 34 22"><path d="M4 2l12 9-12 9zM18 2l12 9-12 9z" fill="#fff"/></svg>
+      <span style="opacity:.6">↻</span>
+    </div>
+    <div class="row" style="margin-top:14px;gap:6px">
+      <div class="glass chip" style="flex:1;text-align:center;padding:8px">❝ Lyrics</div>
+      <div class="glass chip" style="flex:1;text-align:center;padding:8px">☰ Queue</div>
+      <div class="glass chip" style="flex:1;text-align:center;padding:8px">⌁ Device</div>
+    </div>
+  </div>
+  <div class="home"></div>
+</div>
+<div class="label">B · Floating glass deck<span>Art bleeds to the top edge; all controls live in one thick glass slab that refracts the art. Most "Liquid Glass".</span></div>
+</div>
+
+<!-- C: Lyrics-first -->
+<div class="opt">
+<div class="phone" style="background:linear-gradient(160deg,#3a1a55,#6a2448 60%,#1d0f2b)">
+  <div class="island"></div><div class="status"><span>9:41</span><span>▂▄▆ ▭</span></div>
+  <div style="position:absolute;top:56px;left:20px;right:20px;display:flex;gap:12px;align-items:center">
+    <div class="art1" style="width:52px;height:52px;border-radius:10px;flex:none"></div>
+    <div style="flex:1"><div style="font-weight:700;font-size:15px">Midnight Static</div><div style="opacity:.6;font-size:13px">Haru Nemuri</div></div>
+    <div style="font-size:18px">♡</div>
+  </div>
+  <div style="position:absolute;top:140px;left:22px;right:22px;font-size:26px;font-weight:800;line-height:1.2;letter-spacing:-.02em">
+    <p style="opacity:.25;filter:blur(1px);margin-bottom:16px">all the lights went out</p>
+    <p style="margin-bottom:16px"><span>and I kept </span><span style="opacity:.35">singing to the</span></p>
+    <p style="opacity:.35;margin-bottom:16px">static in my head</p>
+    <p style="opacity:.2;filter:blur(1.5px)">like it could answer</p>
+  </div>
+  <div class="glass" style="position:absolute;left:16px;right:16px;bottom:26px;border-radius:30px;padding:14px 18px">
+    <div class="bar"><i></i></div>
+    <div class="ctrls" style="margin-top:14px">
+      <svg width="26" height="18" viewBox="0 0 34 22"><path d="M16 2 4 11l12 9zM30 2 18 11l12 9z" fill="#fff"/></svg>
+      <svg width="22" height="26" viewBox="0 0 34 38"><rect x="4" y="2" width="9" height="34" rx="2" fill="#fff"/><rect x="21" y="2" width="9" height="34" rx="2" fill="#fff"/></svg>
+      <svg width="26" height="18" viewBox="0 0 34 22"><path d="M4 2l12 9-12 9zM18 2l12 9-12 9z" fill="#fff"/></svg>
+    </div>
+  </div>
+  <div class="home"></div>
+</div>
+<div class="label">C · Lyrics-first<span>Word-by-word karaoke is the hero, art shrinks to a header, controls in a compact glass capsule. Swipe to toggle with A/B.</span></div>
+</div>
+
+<!-- D: Info-dense / Musicat -->
+<div class="opt">
+<div class="phone" style="background:#0e0d12">
+  <div class="island"></div><div class="status"><span>9:41</span><span>▂▄▆ ▭</span></div>
+  <div class="art1" style="position:absolute;top:58px;left:20px;right:20px;height:220px;border-radius:22px"></div>
+  <div class="glass" style="position:absolute;top:240px;left:30px;display:flex;gap:5px;padding:5px;border-radius:20px">
+    <span class="chip" style="background:rgba(255,255,255,.18)">⬇ Local</span><span class="chip" style="background:rgba(255,255,255,.18)">FLAC 24/96</span><span class="chip" style="background:rgba(255,255,255,.18)">🇯🇵 Tokyo</span>
+  </div>
+  <div style="position:absolute;top:296px;left:22px;right:22px">
+    <div class="t">Midnight Static</div><div class="a">Haru Nemuri · Shunka Ryougen · 2018</div>
+    <svg style="margin-top:16px" width="256" height="40" viewBox="0 0 256 40">
+      <g fill="#fff">
+      ${''}
+      </g>
+    </svg>
+    <div class="times" style="margin-top:2px"><span>1:24</span><span style="opacity:.9">✓ scrobbled</span><span>-2:11</span></div>
+    <div class="ctrls" style="margin-top:14px">
+      <svg width="30" height="20" viewBox="0 0 34 22"><path d="M16 2 4 11l12 9zM30 2 18 11l12 9z" fill="#fff"/></svg>
+      <svg width="30" height="34" viewBox="0 0 34 38"><rect x="4" y="2" width="9" height="34" rx="2" fill="#fff"/><rect x="21" y="2" width="9" height="34" rx="2" fill="#fff"/></svg>
+      <svg width="30" height="20" viewBox="0 0 34 22"><path d="M4 2l12 9-12 9zM18 2l12 9-12 9z" fill="#fff"/></svg>
+    </div>
+    <div class="glass" style="margin-top:18px;border-radius:18px;padding:10px 12px;font-size:11px;line-height:1.4;background:rgba(255,255,255,.07)">
+      <b>Up next</b> · Kick in the Door — 2:58<br><span style="opacity:.55">Haru Nemuri is a Japanese poetry-rapper from Yokohama… (Wikipedia)</span>
+    </div>
+  </div>
+  <div class="home"></div>
+</div>
+<div class="label">D · Info-dense (Musicat-ish)<span>Waveform scrubber, source/format/origin chips, scrobble state, up-next and wiki snippet on screen. For nerds.</span></div>
+</div>
+
+</div>
+<script>
+// waveform for D
+const g = document.querySelectorAll('svg g')[0]; let s='';
+for (let i=0;i<64;i++){const h=6+Math.abs(Math.sin(i*.55)*22+Math.sin(i*1.7)*9); s+=`<rect x="${i*4}" y="${20-h/2}" width="2.4" height="${h}" rx="1.2" opacity="${i<24?1:.3}"/>`;}
+g.innerHTML=s;
+</script>
+</body></html>
