@@ -1,4 +1,8 @@
 core/target/
-apps/Generated/
-apps/Music.xcodeproj/
+Generated/
+Music.xcodeproj/
+build/
+iOS/Info.plist
+macOS/Info.plist
 .DS_Store
+macOS/Music.entitlements

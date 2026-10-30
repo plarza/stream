@@ -35,6 +35,22 @@ enum AccentChoice: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Black on light accents, white on dark ones (relative luminance).
+    var onColor: Color {
+        switch self {
+        case .yellow, .albumArt: return .black
+        default:
+            #if os(iOS)
+            let c = UIColor(color)
+            #else
+            let c = NSColor(color).usingColorSpace(.sRGB) ?? .white
+            #endif
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            c.getRed(&r, green: &g, blue: &b, alpha: &a)
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.55 ? Color.black : Color.white
+        }
+    }
+
     static var saved: AccentChoice {
         UserDefaults.standard.string(forKey: "accent").flatMap(AccentChoice.init) ?? .red
     }

@@ -90,7 +90,7 @@ struct CollectionView: View {
                 Image(systemName: "play.fill")
                     .font(.title3)
                     .frame(width: 52, height: 52)
-                    .foregroundStyle(.black)
+                    .foregroundStyle(model.onTint)
                     .background(model.tint, in: .circle)
             }
             .buttonStyle(.pressable)

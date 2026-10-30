@@ -49,6 +49,7 @@ targets:
         UILaunchScreen: {}
         UIBackgroundModes: [audio]
         UIApplicationSupportsIndirectInputEvents: true
+        CADisableMinimumFrameDurationOnPhone: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         NSLocalNetworkUsageDescription: Music copies your library from your Mac over Wi-Fi.
         NSBonjourServices: [_musicsync._tcp]
@@ -63,8 +64,8 @@ targets:
     type: bundle.ui-testing
     platform: iOS
     sources:
-      - path: ../tests/Shared
-      - path: ../tests/iOSUITests
+      - path: tests/Shared
+      - path: tests/iOSUITests
     dependencies:
       - target: Music-iOS
     settings:

@@ -181,10 +181,12 @@ Connect receiver, Handoff for local tracks, transcoding, lyrics outside the app.
 
 ```
 SPEC.md
-core/                 Rust workspace (music-core crate, UniFFI)
-apps/project.yml      XcodeGen project: Music-iOS, Music-macOS
-apps/Shared/          SwiftUI views, models, design system (glass, motion)
-apps/iOS/, apps/macOS/  platform entry points and extras
-scripts/build-core.sh builds MusicCore.xcframework + Swift bindings
-mockups/              chosen UI mockups
+project.yml           XcodeGen project: Music-iOS, Music-macOS, MusicUITests-iOS
+Shared/               SwiftUI views and app model used by both apps
+iOS/, macOS/          each app's entry point and platform extras
+core/                 Rust core (music-core crate, UniFFI)
+Generated/            MusicCore.xcframework + Swift bindings (built, not committed)
+tests/                Simulator UI tests and fixture music
+scripts/              build-core.sh, deploy.sh, test.sh, demo.py
+docs/                 screenshots for the README, design mockups
 ```

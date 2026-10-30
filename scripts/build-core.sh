@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Builds the Rust core for iPhone, the simulator and Mac, generates the Swift
-# bindings, and packs everything into apps/Generated/MusicCore.xcframework.
+# bindings, and packs everything into Generated/MusicCore.xcframework.
 set -euo pipefail
 cd "$(dirname "$0")/../core"
 
@@ -15,7 +15,7 @@ for t in $TARGETS; do
   cargo build $FLAG --lib --target $t
 done
 
-OUT=../apps/Generated
+OUT=../Generated
 rm -rf $OUT/MusicCore.xcframework $OUT/headers
 mkdir -p $OUT/headers
 

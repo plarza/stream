@@ -45,6 +45,8 @@ final class AppModel {
         return a[i + 1]
     }
     var tint: Color { theme == .albumArt ? accent.accent : theme.color }
+    /// Text and icons drawn on the accent.
+    var onTint: Color { theme.onColor }
     var signInURL: URL?
     /// A page to open after Now Playing closes (Go to Album / Artist).
     var pendingNavigation: Item?
