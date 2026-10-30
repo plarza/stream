@@ -45,7 +45,6 @@ struct LibraryView: View {
             }
         }
         .listStyle(.plain)
-        .navigationTitle("Library")
     }
 }
 

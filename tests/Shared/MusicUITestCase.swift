@@ -5,24 +5,34 @@ import XCTest
 class MusicUITestCase: XCTestCase {
     var app: XCUIApplication!
 
-    static var fixtures: String {
+    /// The small generated library from tests/make-fixtures.sh.
+    static var library: String {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("fixtures/Music")
+            .appendingPathComponent("library/Music")
             .path
     }
 
+    /// One launch serves every test; between tests the app is reset in place.
+    private static var running: XCUIApplication?
+
     override func setUpWithError() throws {
         continueAfterFailure = false
+        if let app = Self.running, app.state == .runningForeground {
+            self.app = app
+            #if os(iOS)
+            XCUIDevice.shared.system.open(URL(string: "network-aza-music://reset")!)
+            let home = app.tabBars.buttons["Home"].firstMatch
+            XCTAssertTrue(poll(5) { home.isSelected && home.isHittable }, "reset didn't land on Home")
+            #endif
+            return
+        }
         app = XCUIApplication()
         // Pairs only: AppKit reads `-key value`, and a bare flag before a pair hides the window.
-        app.launchArguments = ["-musicFolder", Self.fixtures, "-uiTesting", "YES"]
+        app.launchArguments = ["-musicFolder", Self.library, "-uiTesting", "YES"]
         app.launch()
-    }
-
-    override func tearDownWithError() throws {
-        app.terminate()
+        Self.running = app
     }
 
     func el(_ id: String) -> XCUIElement {
@@ -33,26 +43,33 @@ class MusicUITestCase: XCTestCase {
         app.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", label, label)).firstMatch
     }
 
+    /// Checks every 0.1s. XCTest's own waits check about once a second, which made every step cost a second.
+    func poll(_ timeout: TimeInterval, _ done: () -> Bool) -> Bool {
+        let end = Date().addingTimeInterval(timeout)
+        while !done() {
+            if Date() > end { return false }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return true
+    }
+
     @discardableResult
-    func wait(_ e: XCUIElement, _ timeout: TimeInterval = 10, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
-        XCTAssertTrue(e.waitForExistence(timeout: timeout), "\(e) never appeared", file: file, line: line)
+    func wait(_ e: XCUIElement, _ timeout: TimeInterval = 5, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        XCTAssertTrue(poll(timeout) { e.exists }, "\(e) never appeared", file: file, line: line)
         return e
     }
 
     func waitGone(_ e: XCUIElement, _ timeout: TimeInterval = 5, file: StaticString = #filePath, line: UInt = #line) {
-        let p = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: e)
-        XCTAssertEqual(XCTWaiter.wait(for: [p], timeout: timeout), .completed, "\(e) still visible", file: file, line: line)
+        XCTAssertTrue(poll(timeout) { !e.exists }, "\(e) still visible", file: file, line: line)
     }
 
     /// Waits until an element's label (or value) equals `expected`.
-    func waitLabel(_ e: XCUIElement, _ expected: String, _ timeout: TimeInterval = 8, file: StaticString = #filePath, line: UInt = #line) {
-        let p = expectation(for: NSPredicate(format: "label == %@ OR value == %@", expected, expected), evaluatedWith: e)
-        let r = XCTWaiter.wait(for: [p], timeout: timeout)
-        XCTAssertEqual(r, .completed, "\(e.identifier) is “\(e.label)” / “\(String(describing: e.value))”, wanted “\(expected)”", file: file, line: line)
+    func waitLabel(_ e: XCUIElement, _ expected: String, _ timeout: TimeInterval = 5, file: StaticString = #filePath, line: UInt = #line) {
+        let ok = poll(timeout) { e.exists && (e.label == expected || e.value as? String == expected) }
+        XCTAssertTrue(ok, "\(e.identifier) is “\(e.label)” / “\(String(describing: e.value))”, wanted “\(expected)”", file: file, line: line)
     }
 
     func waitValue(_ e: XCUIElement, _ expected: String, _ timeout: TimeInterval = 5, file: StaticString = #filePath, line: UInt = #line) {
-        let p = expectation(for: NSPredicate(format: "value == %@", expected), evaluatedWith: e)
-        XCTAssertEqual(XCTWaiter.wait(for: [p], timeout: timeout), .completed, "\(e.identifier) value is \(String(describing: e.value)), wanted \(expected)", file: file, line: line)
+        XCTAssertTrue(poll(timeout) { e.exists && e.value as? String == expected }, "\(e.identifier) value is \(String(describing: e.value)), wanted \(expected)", file: file, line: line)
     }
 }

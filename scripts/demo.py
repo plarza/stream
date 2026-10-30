@@ -8,7 +8,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SIM = os.environ.get("SIM", "4C675D57-6CF7-4DDA-ACF4-4075857B2010")
 BUNDLE = "network.aza.music"
 DEST = f"platform=iOS Simulator,id={SIM}"
-FIXTURES = os.path.join(ROOT, "tests", "fixtures", "Music")
+FIXTURES = os.path.join(ROOT, "tests", "library", "Music")
 OUT = os.path.join(ROOT, "docs", "screenshots")
 
 

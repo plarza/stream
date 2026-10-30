@@ -184,6 +184,12 @@ final class AppModel {
         let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let value = { (name: String) in q.first { $0.name == name }?.value }
         switch url.host() {
+        case "reset" where Self.isTesting:
+            // UI tests share one launch; this puts the app back on Home, silent and with nothing open.
+            core.pause()
+            showNowPlaying = false
+            theme = .red
+            resetRequested &+= 1
         case "play":
             guard let id = value("id") else { return }
             let item = Item(id: id, kind: Self.kind(of: id), source: id.hasPrefix("local:") ? .local : .spotify, title: "", subtitle: "", art: nil, downloaded: false)
@@ -221,6 +227,9 @@ final class AppModel {
 
     /// Bumped when a deep link asks to open a page.
     var openRequested = 0
+
+    /// Bumped when UI tests reset the app between tests.
+    var resetRequested = 0
 
     static func kind(of id: String) -> ItemKind {
         if id.contains(":album:") { return .album }

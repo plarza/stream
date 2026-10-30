@@ -6,3 +6,4 @@ iOS/Info.plist
 macOS/Info.plist
 .DS_Store
 macOS/Music.entitlements
+tests/fixtures/

@@ -41,25 +41,21 @@ struct RootView: View {
             Tab("Home", systemImage: "house.fill", value: .home) {
                 NavigationStack(path: $homePath) {
                     HomeView()
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                                    .accessibilityLabel("Settings")
-                                    .accessibilityIdentifier("home.settings")
-                            }
-                        }
+                        .accountButton { showSettings = true }
                         .destinations()
                 }
             }
             Tab("Library", systemImage: "square.stack.fill", value: .library) {
                 NavigationStack(path: $libraryPath) {
-                    LibraryView().destinations()
+                    LibraryView()
+                        .accountButton { showSettings = true }
+                        .destinations()
                 }
             }
             Tab(value: .search, role: .search) {
                 NavigationStack(path: $searchPath) {
                     SearchResultsView(search: search)
-                        .navigationTitle("Search")
+                        .accountButton { showSettings = true }
                         .destinations()
                 }
                 .searchable(text: $search.query, prompt: "Search your library")
@@ -94,6 +90,14 @@ struct RootView: View {
             // Deep links and search results open in the tab you're on.
             if model.showNowPlaying { model.showNowPlaying = false } else { openPending() }
         }
+        .onChange(of: model.resetRequested) {
+            showSettings = false
+            search.query = ""
+            homePath = NavigationPath()
+            libraryPath = NavigationPath()
+            searchPath = NavigationPath()
+            tab = .home
+        }
     }
 
     private func openPending() {
@@ -108,6 +112,20 @@ struct RootView: View {
 }
 
 extension View {
+    /// Top-level tabs have no title, just the account button (opens Settings).
+    func accountButton(_ open: @escaping () -> Void) -> some View {
+        toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(action: open) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 22, weight: .semibold))
+                }
+                .accessibilityLabel("Account and Settings")
+                .accessibilityIdentifier("account")
+            }
+        }
+    }
+
     /// Album/playlist/artist pages and library sections, wherever we navigate from.
     func destinations() -> some View {
         navigationDestination(for: Item.self) { CollectionView(item: $0) }
@@ -123,7 +141,8 @@ struct MiniPlayer: View {
     var body: some View {
         let t = model.player.track
         HStack(spacing: 10) {
-            ArtworkView(url: t?.art, size: placement == .inline ? 28 : 36)
+            // Inset evenly from the pill's top, bottom and leading edge.
+            ArtworkView(url: t?.art, size: placement == .inline ? 24 : 30)
             VStack(alignment: .leading, spacing: 0) {
                 Text(t?.title ?? "Not Playing").font(.subheadline.weight(.semibold)).lineLimit(1)
                     .accessibilityIdentifier("mini.title")
@@ -152,7 +171,8 @@ struct MiniPlayer: View {
                 .accessibilityIdentifier("mini.next")
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.leading, placement == .inline ? 6 : 9)
+        .padding(.trailing, 8)
         .contentShape(Rectangle())
         .animation(.smooth, value: t?.id)
         .disabled(t == nil)

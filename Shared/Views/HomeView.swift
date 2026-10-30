@@ -40,7 +40,6 @@ struct HomeView: View {
             .padding(.horizontal, Metrics.page)
             .padding(.bottom, 120)
         }
-        .navigationTitle("Home")
     }
 
     private func pinTile(_ item: Item) -> some View {

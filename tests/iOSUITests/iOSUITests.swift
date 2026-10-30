@@ -43,7 +43,9 @@ final class iOSUITests: MusicUITestCase {
         wait(app.staticTexts["Nothing up next"])
         el("nowPlaying.queue").tap()
         wait(el("nowPlaying.title"))
-        app.swipeDown(velocity: .fast)
+        // Pull down from the grabber, like a person would.
+        let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
+        top.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)), withVelocity: .fast, thenHoldForDuration: 0)
         waitGone(el("nowPlaying.title"))
     }
 
@@ -66,7 +68,7 @@ final class iOSUITests: MusicUITestCase {
     }
 
     func testSettingsOpenAndAccent() {
-        wait(el("home.settings")).tap()
+        wait(el("account")).tap()
         let blue = wait(el("accent.blue"))
         blue.tap()
         XCTAssertTrue(blue.isSelected)

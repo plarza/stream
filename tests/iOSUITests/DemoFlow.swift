@@ -54,6 +54,7 @@ final class DemoFlow: MusicUITestCase {
         app.swipeDown(velocity: .fast)
 
         app.tabBars.buttons["Search"].tap()
+        shot("search-open")
         let field = wait(app.searchFields.firstMatch)
         field.tap()
         field.typeText("ne")

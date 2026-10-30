@@ -3,7 +3,7 @@
 # a featured artist, folder artwork and a synced .lrc. Quiet 6-second tones.
 set -euo pipefail
 cd "$(dirname "$0")"
-OUT=fixtures/Music
+OUT=library/Music
 rm -rf $OUT && mkdir -p $OUT
 tone() { # file freq title artist album albumartist track
   ffmpeg -loglevel error -f lavfi -i "sine=frequency=${2}:duration=6" -af "volume=-30dB" -ac 2 -ar 44100 \
@@ -30,4 +30,4 @@ cat > "$D/Loose Song.lrc" <<'LRC'
 [00:02.00]Second line comes in
 [00:04.00]Third line to finish
 LRC
-du -sh fixtures
+du -sh library
