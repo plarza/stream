@@ -46,6 +46,8 @@ impl Sink for TapSink {
 
 pub struct Playback {
     pub session: Session,
+    /// Spotify's own APIs turn away requests carrying our user agent.
+    http: reqwest::Client,
     player: Arc<Player>,
     tap: Tap,
     events: std::sync::Mutex<mpsc::Receiver<PlayerEvent>>,
@@ -115,7 +117,7 @@ impl Playback {
             }
         });
 
-        Ok((Self { session, player, tap, events: std::sync::Mutex::new(rx) }, reusable))
+        Ok((Self { session, http: reqwest::Client::new(), player, tap, events: std::sync::Mutex::new(rx) }, reusable))
     }
 
     /// Plays one song into the output, returning when it has been fully
@@ -171,6 +173,34 @@ impl Playback {
 
     pub fn stop(&self) {
         self.player.stop();
+    }
+
+    /// One of the Spotify apps' own GraphQL queries, signed with this session.
+    /// Covers what the Web API no longer gives developer apps (artist pages).
+    pub async fn pathfinder(&self, operation: &str, hash: &str, variables: serde_json::Value) -> Result<serde_json::Value> {
+        let token = self.session.login5().auth_token().await?;
+        let client_token = self.session.spclient().client_token().await?;
+        let body = serde_json::json!({
+            "variables": variables,
+            "operationName": operation,
+            "extensions": { "persistedQuery": { "version": 1, "sha256Hash": hash } },
+        });
+        let v: serde_json::Value = self
+            .http
+            .post("https://api-partner.spotify.com/pathfinder/v2/query")
+            .bearer_auth(&token.access_token)
+            .header("client-token", client_token)
+            .header("app-platform", "WebPlayer")
+            .json(&body)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        if v["data"].is_null() {
+            anyhow::bail!("Spotify didn't answer {operation}: {}", v["errors"]);
+        }
+        Ok(v)
     }
 
     pub async fn lyrics(&self, uri: &str) -> Option<Lyrics> {

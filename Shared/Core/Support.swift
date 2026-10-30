@@ -149,3 +149,27 @@ extension View {
         }
     }
 }
+
+/// Text that opens a page (an artist's name): plain, underlined under the pointer.
+struct TextLinkStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Link(configuration: configuration)
+    }
+
+    private struct Link: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var hover = false
+
+        var body: some View {
+            configuration.label
+                .underline(hover)
+                .opacity(configuration.isPressed ? 0.55 : 1)
+                .contentShape(Rectangle())
+                .onHover { hover = $0 }
+        }
+    }
+}
+
+extension ButtonStyle where Self == TextLinkStyle {
+    static var textLink: TextLinkStyle { TextLinkStyle() }
+}

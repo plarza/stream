@@ -8,7 +8,7 @@ fast startup. Built for one user and sideloaded, never shipped to the App Store
 - Name: **Music**
 - Bundle ID: `network.aza.music`
 - Platforms: iOS 26+, macOS 26+ (Liquid Glass APIs only, no fallbacks)
-- Appearance: follows the system (light and dark are both designed)
+- Appearance: System (default), Light or Dark in Settings; on the Mac, a pure-black option for dark mode (iPhone's dark mode is already black)
 - Mockups: `mockups/*.html` (each chosen option is noted below)
 
 ## Architecture
@@ -89,8 +89,9 @@ Rules:
   track, with optional hog mode. No resampling and no volume scaling in that mode.
 - No EQ.
 - **Queue:** Play Next / Play Later above the remaining context (album or playlist).
-  Now Playing has a shuffle on/off button next to like; there is no repeat. Autoplay is a
-  setting, off by default.
+  Shuffle sits left of the transport and repeat right of it; repeat only loops the current
+  song forever. Toggles, likes and saves change on screen at once and roll back if the
+  core or Spotify refuses. Autoplay is a setting, off by default.
 - **Handoff:** Spotify tracks only (track, position, context URI).
 
 ## Lyrics
@@ -127,8 +128,10 @@ bottom accessory.
 
 | Element | Choice |
 |---|---|
-| Shell | `03` **A**: glass sidebar running to the bottom of the window + a floating glass player capsule over the content beside it |
-| Now Playing | Clicking the art opens a full-window immersive Now Playing (same design as iPhone A); Esc returns |
+| Shell | Glass sidebar floating at the top left, only as tall as its contents, holding the traffic lights; one search field at the top center that stays put across root pages (Home and Search search everything, library sections filter themselves); a floating glass player capsule, centered with a max width, over the content |
+| Library sections | Playlists, albums and artists (circles) as grids of covers with names below; songs as lists without separators |
+| Artists | An artist's name opens their page everywhere it appears; artist pages come from Spotify's own artist query over the playback session (top songs, monthly listeners, releases) |
+| Now Playing | Clicking the art (which lifts under the pointer) opens a full-window immersive Now Playing (same design as iPhone A); a chevron at the top center or Esc returns |
 | Menu bar | `08` **A** compact card. Closing the window keeps music playing in the menu bar and hides the Dock icon |
 | Keyboard | Shortcuts for every view and transport action, plus a ⌘K command palette (search, play, navigate) |
 

@@ -5,6 +5,7 @@ import SwiftUI
 struct CollectionView: View {
     let item: Item
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var scheme
     @State private var page: CollectionPage?
     @State private var palette: Palette = .fallback
     @State private var error: String?
@@ -46,7 +47,9 @@ struct CollectionView: View {
             .padding(.bottom, 120)
         }
         .background(alignment: .top) {
+            // The art's colors are dark; in light mode they only wash the top.
             LinearGradient(colors: [palette.top, palette.top.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom)
+                .opacity(scheme == .dark ? 1 : 0.35)
                 .frame(height: 520)
                 .ignoresSafeArea()
                 .animation(.smooth(duration: 0.6), value: palette)
@@ -72,7 +75,15 @@ struct CollectionView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(shown.title).font(.title2.weight(.bold)).lineLimit(3)
                 if item.kind != .artist {
-                    Text(shown.subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                    if item.kind == .album, let lead = page?.tracks.first, lead.artistId != nil {
+                        Button { model.openArtist(of: lead) } label: {
+                            Text(shown.subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        .buttonStyle(.textLink)
+                        .accessibilityIdentifier("collection.artist")
+                    } else {
+                        Text(shown.subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
                 if let page {
                     Text(page.detail).font(.caption).foregroundStyle(.tertiary)
@@ -164,7 +175,6 @@ struct CollectionView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("track.\(t.title)")
                 .trackMenu(t)
-                Divider().padding(.leading, item.kind == .album ? Metrics.page + 34 : Metrics.page + 60)
             }
         }
     }
@@ -206,7 +216,10 @@ struct CollectionView: View {
         Haptics.success()
         let id = item.id, on = liked
         Task {
-            do { try await model.core.setLiked(trackId: id, liked: on) } catch { model.show(error.localizedDescription) }
+            do { try await model.core.setLiked(trackId: id, liked: on) } catch {
+                withAnimation(.snappy) { liked = !on }
+                model.show(AppModel.message(error))
+            }
         }
     }
 

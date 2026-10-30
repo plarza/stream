@@ -1086,48 +1086,66 @@ impl MusicCore {
             return self.playlist(id, pinned).await;
         }
         if id.starts_with("spotify:artist:") {
-            let web = self.web.read().clone().ok_or(CoreError::NotSignedIn)?;
-            let bare = api::bare_id(id).to_string();
-            let (p_artist, p_top, p_albums) =
-                (format!("/artists/{bare}"), format!("/artists/{bare}/top-tracks"), format!("/artists/{bare}/albums"));
-            let album_q: [(&str, String); 2] = [("include_groups", "album,single".into()), ("limit", "20".into())];
-            let (artist, top, albums) = tokio::join!(web.get(&p_artist, &[]), web.get(&p_top, &[]), web.get(&p_albums, &album_q));
-            let artist = artist.map_err(err)?;
-            let item = api::artist_item(&artist).ok_or(CoreError::NotFound)?;
-            self.db.upsert_artist(&item, None);
-            let rows: Vec<_> = top
-                .ok()
-                .and_then(|t| t["tracks"].as_array().cloned())
-                .unwrap_or_default()
-                .iter()
-                .filter_map(|t| api::track_row(t, None))
-                .collect();
-            let _ = self.db.upsert_spotify_tracks(&rows, None);
-            let tracks: Vec<Track> = rows.iter().filter_map(|r| self.db.track(&r.id)).collect();
-            let albums: Vec<Item> = albums
-                .ok()
-                .and_then(|a| a["items"].as_array().cloned())
-                .unwrap_or_default()
-                .iter()
-                .filter_map(|a| {
-                    let mut i = api::album_item(a)?;
-                    i.subtitle = a["release_date"].as_str().and_then(|d| d.get(..4)).unwrap_or("").to_string();
-                    Some(i)
-                })
-                .collect();
-            let followers = artist["followers"]["total"].as_u64().unwrap_or(0);
-            let genres: Vec<&str> = artist["genres"].as_array().map(|g| g.iter().filter_map(|x| x.as_str()).take(3).collect()).unwrap_or_default();
+            return self.artist(id, pinned).await;
+        }
+        Err(CoreError::NotFound)
+    }
+
+    /// The playback session, waiting a little for one that is still reconnecting
+    /// at launch (a page opened by a link can arrive before it does).
+    async fn playback_soon(&self) -> Option<Arc<Playback>> {
+        let saved = self.delegate.secret_get(SECRET_PLAYBACK.into()).is_some();
+        for _ in 0..(if saved { 75 } else { 0 }) {
+            if let Some(pb) = self.playback.read().clone() {
+                return Some(pb);
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+        self.playback.read().clone()
+    }
+
+    /// Artist pages come from the Spotify apps' own artist query over the playback
+    /// session (the Web API no longer gives developer apps top songs); without
+    /// playback, the Web API's header and releases.
+    async fn artist(&self, id: &str, pinned: bool) -> Result<CollectionPage, CoreError> {
+        if let Some(pb) = self.playback_soon().await {
+            let (op, hash) = api::ARTIST_OVERVIEW;
+            let vars = serde_json::json!({ "uri": id, "locale": "", "includePrerelease": true });
+            let v = pb.pathfinder(op, hash, vars).await.map_err(err)?;
+            let a = api::artist_overview(&v).ok_or(CoreError::NotFound)?;
+            self.db.upsert_artist(&a.item, None);
+            let _ = self.db.upsert_spotify_tracks(&a.top, None);
+            let tracks: Vec<Track> = a.top.iter().filter_map(|r| self.db.track(&r.id)).collect();
             return Ok(CollectionPage {
-                detail: if followers > 0 { format!("{} followers", group_thousands(followers)) } else { String::new() },
-                description: (!genres.is_empty()).then(|| genres.join(" · ")),
-                item,
+                detail: if a.monthly_listeners > 0 { format!("{} monthly listeners", group_thousands(a.monthly_listeners)) } else { String::new() },
+                description: None,
+                item: a.item,
                 tracks,
-                albums,
+                albums: a.releases,
                 liked: false,
                 pinned,
             });
         }
-        Err(CoreError::NotFound)
+        let web = self.web.read().clone().ok_or(CoreError::NotSignedIn)?;
+        let bare = api::bare_id(id).to_string();
+        let (p_artist, p_albums) = (format!("/artists/{bare}"), format!("/artists/{bare}/albums"));
+        // Developer apps get at most 10 releases a page.
+        let album_q: [(&str, String); 2] = [("include_groups", "album,single".into()), ("limit", "10".into())];
+        let (artist, albums) = tokio::join!(web.get(&p_artist, &[]), web.get(&p_albums, &album_q));
+        let item = api::artist_item(&artist.map_err(err)?).ok_or(CoreError::NotFound)?;
+        self.db.upsert_artist(&item, None);
+        let albums: Vec<Item> = albums
+            .ok()
+            .and_then(|a| a["items"].as_array().cloned())
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|a| {
+                let mut i = api::album_item(a)?;
+                i.subtitle = a["release_date"].as_str().and_then(|d| d.get(..4)).unwrap_or("").to_string();
+                Some(i)
+            })
+            .collect();
+        Ok(CollectionPage { detail: String::new(), description: None, item, tracks: vec![], albums, liked: false, pinned })
     }
 
     async fn playlist(&self, id: &str, pinned: bool) -> Result<CollectionPage, CoreError> {

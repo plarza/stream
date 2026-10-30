@@ -12,6 +12,7 @@ struct SettingsView: View {
     #endif
 
     var body: some View {
+        @Bindable var model = model
         Form {
             spotify
             #if os(macOS)
@@ -25,9 +26,22 @@ struct SettingsView: View {
                 Toggle("Scrobble local files to Last.fm", isOn: $settings.scrobbling)
             }
             .onChange(of: settings) { model.core.setSettings(s: settings) }
+            Section("Appearance") {
+                Picker("Appearance", selection: $model.appearance) {
+                    ForEach(AppModel.Appearance.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("settings.appearance")
+                #if os(macOS)
+                // iPhone's dark mode is already pure black.
+                Toggle("Pure black in dark mode", isOn: $model.pureBlack)
+                    .accessibilityIdentifier("settings.pureBlack")
+                #endif
+            }
         }
         .formStyle(.grouped)
         .navigationTitle("Settings")
+        .preferredColorScheme(model.colorScheme)
         .onAppear {
             clientId = model.account.spotifyClientId ?? ""
             settings = model.core.settings()

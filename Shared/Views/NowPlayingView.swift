@@ -11,6 +11,7 @@ struct NowPlayingView: View {
 
     private var track: Track? { model.player.track }
     private var playing: Bool { model.player.status == .playing }
+    private let smallArt: CGFloat = 60
 
     var body: some View {
         GeometryReader { geo in
@@ -35,17 +36,19 @@ struct NowPlayingView: View {
     @ViewBuilder
     private func content(width: CGFloat, height: CGFloat) -> some View {
         let mode = model.nowPlayingMode
+        // Leave room for the title, scrubber and controls below.
+        let big = max(160, min(width - Metrics.coverInset * 2, height - 400))
         VStack(spacing: 0) {
             if mode == .artwork {
                 Spacer(minLength: 12)
-                // Leave room for the title, scrubber and controls below.
-                bigArtwork(width: max(160, min(width - Metrics.coverInset * 2, height - 380)))
+                artSlot(big)
                 Spacer(minLength: 20)
                 titleRow
                     .transition(.opacity)
             } else {
                 compactHeader
                     .padding(.top, 18)
+                    .transition(.opacity)
                 Group {
                     if mode == .lyrics {
                         LyricsView(track: track)
@@ -59,40 +62,46 @@ struct NowPlayingView: View {
             Scrubber()
                 .padding(.top, 22)
             Transport()
-                .padding(.top, 18)
-                .padding(.bottom, 26)
+                .padding(.top, 14)
+                .padding(.bottom, 18)
             bottomBar
         }
+        // One cover, flying between the big slot and the header's: it morphs
+        // continuously rather than crossfading two copies.
+        .overlay { cover(size: mode == .artwork ? big : smallArt, expanded: mode == .artwork) }
         .animation(.player, value: mode)
     }
 
-    private func bigArtwork(width: CGFloat) -> some View {
+    /// Where the cover sits in the current layout.
+    private func artSlot(_ size: CGFloat) -> some View {
+        Color.clear
+            .frame(width: size, height: size)
+            .matchedGeometryEffect(id: "art", in: art, isSource: true)
+    }
+
+    private func cover(size: CGFloat, expanded: Bool) -> some View {
         FillArtwork(url: track?.art)
-            .frame(width: width, height: width)
-            .clipShape(RoundedRectangle(cornerRadius: Metrics.radius(for: width), style: .continuous))
-            .shadow(color: .black.opacity(playing ? 0.4 : 0.22), radius: playing ? 28 : 14, y: playing ? 16 : 8)
-            .scaleEffect(playing ? 1 : 0.84)
+            .clipShape(RoundedRectangle(cornerRadius: Metrics.radius(for: size), style: .continuous))
+            .matchedGeometryEffect(id: "art", in: art, isSource: false)
+            .shadow(color: .black.opacity(expanded && playing ? 0.4 : 0.25), radius: expanded ? (playing ? 28 : 14) : 8, y: expanded ? (playing ? 16 : 8) : 4)
+            .scaleEffect(expanded && !playing ? 0.84 : 1)
             .animation(.spring(response: 0.5, dampingFraction: 0.72), value: playing)
-            .matchedGeometryEffect(id: "art", in: art)
-            .onTapGesture { model.toggle() }
+            .onTapGesture { if expanded { model.toggle() } }
+            .accessibilityHidden(true)
     }
 
     private var compactHeader: some View {
         HStack(spacing: Metrics.artGap) {
-            FillArtwork(url: track?.art, pixels: 300)
-                .frame(width: 60, height: 60)
-                .clipShape(RoundedRectangle(cornerRadius: Metrics.radius(for: 60), style: .continuous))
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-                .matchedGeometryEffect(id: "art", in: art)
+            artSlot(smallArt)
             VStack(alignment: .leading, spacing: 2) {
                 Text(track?.title ?? "Not Playing").font(.headline).lineLimit(1)
-                Text(track?.artist ?? "").font(.subheadline).foregroundStyle(.white.opacity(0.65)).lineLimit(1)
+                artistLink.font(.subheadline)
+                quality.padding(.top, 2)
             }
             .id(track?.id)
             .transition(.blurReplace)
             Spacer()
             likeButton
-            shuffleButton
         }
         .padding(.bottom, 8)
         .animation(.smooth, value: track?.id)
@@ -106,18 +115,34 @@ struct NowPlayingView: View {
                     .font(.title2.weight(.bold))
                     .lineLimit(1)
                     .contentTransition(.opacity)
-                Text(track?.artist ?? "")
-                    .font(.title3)
-                    .foregroundStyle(.white.opacity(0.65))
-                    .lineLimit(1)
+                artistLink.font(.title3)
+                quality.padding(.top, 4)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .id(track?.id)
             .transition(.blurReplace)
             likeButton
-            shuffleButton
         }
         .animation(.smooth, value: track?.id)
+    }
+
+    /// The artist's name, which opens their page.
+    private var artistLink: some View {
+        Button { if let t = track { model.openArtist(of: t) } } label: {
+            Text(track?.artist ?? "")
+                .foregroundStyle(.white.opacity(0.65))
+                .lineLimit(1)
+        }
+        .buttonStyle(.textLink)
+        .disabled(track?.artistId == nil)
+        .accessibilityIdentifier("nowPlaying.artist")
+    }
+
+    @ViewBuilder
+    private var quality: some View {
+        if let q = track?.quality, !q.isEmpty {
+            QualityChip(text: q).accessibilityIdentifier("nowPlaying.quality")
+        }
     }
 
     private var likeButton: some View {
@@ -130,6 +155,8 @@ struct NowPlayingView: View {
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 38, height: 38)
                 .glassEffect(.regular.interactive(), in: .circle)
+                .padding(3)
+                .contentShape(.circle)
         }
         .buttonStyle(.pressable)
         .disabled(track == nil)
@@ -137,41 +164,19 @@ struct NowPlayingView: View {
         .accessibilityIdentifier("nowPlaying.like")
     }
 
-    private var shuffleButton: some View {
-        let on = model.player.shuffle
-        return Button {
-            Haptics.tap()
-            model.core.setShuffle(on: !on)
-        } label: {
-            Image(systemName: "shuffle")
-                .font(.title3.weight(on ? .semibold : .regular))
-                .foregroundStyle(on ? model.onTint : .white)
-                .frame(width: 38, height: 38)
-                .background { if on { Circle().fill(model.tint) } }
-                .glassEffect(.regular.interactive(), in: .circle)
-        }
-        .buttonStyle(.pressable)
-        .animation(.snappy, value: on)
-        .accessibilityLabel("Shuffle")
-        .accessibilityValue(on ? "on" : "off")
-        .accessibilityIdentifier("nowPlaying.shuffle")
-    }
-
     private var bottomBar: some View {
-        HStack {
+        HStack(spacing: 0) {
             modeButton(.lyrics, symbol: "quote.bubble").accessibilityLabel("Lyrics").accessibilityIdentifier("nowPlaying.lyrics")
             Spacer()
-            HStack(spacing: 8) {
-                if let q = track?.quality, !q.isEmpty { QualityChip(text: q) }
-            }
-            Spacer()
+            // The route picker draws its glyph as big as its frame.
             AirPlayButton()
-                .frame(width: 36, height: 36)
+                .frame(width: NowPlayingMetrics.glyph + 6, height: NowPlayingMetrics.glyph + 6)
+                .frame(width: 64, height: 48)
             Spacer()
             modeButton(.queue, symbol: "list.bullet").accessibilityLabel("Queue").accessibilityIdentifier("nowPlaying.queue")
         }
-        .font(.title3)
-        .foregroundStyle(.white.opacity(0.8))
+        .font(.system(size: NowPlayingMetrics.glyph, weight: .medium))
+        .foregroundStyle(.white.opacity(0.7))
     }
 
     private func modeButton(_ mode: AppModel.NowPlayingMode, symbol: String) -> some View {
@@ -181,12 +186,19 @@ struct NowPlayingView: View {
             withAnimation(.player) { model.nowPlayingMode = on ? .artwork : mode }
         } label: {
             Image(systemName: on && symbol == "quote.bubble" ? "quote.bubble.fill" : symbol)
-                .frame(width: 40, height: 36)
-                .background { if on { Capsule().fill(.white.opacity(0.18)) } }
+                .foregroundStyle(on ? AnyShapeStyle(model.tint) : AnyShapeStyle(.white.opacity(0.7)))
                 .contentTransition(.symbolEffect(.replace))
+                // The whole cell answers, not just the glyph.
+                .frame(width: 64, height: 48)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.pressable)
     }
+}
+
+enum NowPlayingMetrics {
+    /// Every secondary control (shuffle, repeat, lyrics, AirPlay, queue) draws at this size.
+    static let glyph: CGFloat = 18
 }
 
 /// The current cover, blurred to fill the screen, crossfading between songs.
@@ -258,41 +270,71 @@ struct Scrubber: View {
     }
 }
 
+/// Shuffle · previous · play · next · repeat.
 struct Transport: View {
     @Environment(AppModel.self) private var model
     var size: CGFloat = 1
 
     var body: some View {
-        HStack {
-            Spacer()
+        let shuffle = model.player.shuffle
+        let loop = model.player.repeat == .one
+        HStack(spacing: 0) {
+            toggle("shuffle", on: shuffle, label: "Shuffle", id: "nowPlaying.shuffle") {
+                model.setShuffle(!shuffle)
+            }
+            Spacer(minLength: 0)
             Button { model.previous() } label: {
                 Image(systemName: "backward.fill").font(.system(size: 30 * size))
+                    .frame(width: 64 * size, height: 64 * size)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(scale: 0.82))
             .accessibilityLabel("Previous")
             .accessibilityIdentifier("nowPlaying.previous")
-            Spacer()
+            Spacer(minLength: 0)
             Button { model.toggle() } label: {
                 Image(systemName: model.player.status == .playing ? "pause.fill" : "play.fill")
                     .font(.system(size: 46 * size))
                     .contentTransition(.symbolEffect(.replace.offUp))
-                    .frame(width: 70 * size, height: 70 * size)
+                    .frame(width: 76 * size, height: 76 * size)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(scale: 0.86))
             .accessibilityLabel(model.player.status == .playing ? "Pause" : "Play")
             .accessibilityIdentifier("nowPlaying.playPause")
             .keyboardShortcut(.space, modifiers: [])
-            Spacer()
+            Spacer(minLength: 0)
             Button { model.next() } label: {
                 Image(systemName: "forward.fill").font(.system(size: 30 * size))
+                    .frame(width: 64 * size, height: 64 * size)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(scale: 0.82))
             .accessibilityLabel("Next")
             .accessibilityIdentifier("nowPlaying.next")
-            Spacer()
+            Spacer(minLength: 0)
+            // Repeat here means one thing: this song, forever.
+            toggle("repeat", on: loop, label: "Repeat", id: "nowPlaying.repeat") {
+                model.setRepeat(!loop)
+            }
         }
         .foregroundStyle(.white)
         .disabled(model.player.track == nil)
+    }
+
+    private func toggle(_ symbol: String, on: Bool, label: String, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: NowPlayingMetrics.glyph * size, weight: on ? .semibold : .medium))
+                .foregroundStyle(on ? model.tint : .white.opacity(0.7))
+                .frame(width: 48 * size, height: 64 * size)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressableStyle(scale: 0.82))
+        .animation(.snappy, value: on)
+        .accessibilityLabel(label)
+        .accessibilityValue(on ? "on" : "off")
+        .accessibilityIdentifier(id)
     }
 }
 

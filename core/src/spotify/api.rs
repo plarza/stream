@@ -1,4 +1,5 @@
-//! Spotify Web API, through your own developer app.
+//! Spotify Web API, through your own developer app, and the parsing of
+//! Spotify's own GraphQL answers.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -65,7 +66,13 @@ impl WebApi {
             }
             if !status.is_success() {
                 let text = resp.text().await.unwrap_or_default();
-                bail!("Spotify {status} for {path}: {}", text.chars().take(200).collect::<String>());
+                log::warn!("Spotify {status} for {path}: {}", text.chars().take(200).collect::<String>());
+                // Said to people, so in their words; the details go to the log.
+                match status.as_u16() {
+                    404 => bail!("Spotify doesn't have this anymore"),
+                    403 => bail!("Spotify won't share this with the app"),
+                    _ => bail!("Spotify couldn't answer ({})", status.as_u16()),
+                }
             }
             let text = resp.text().await?;
             return Ok(if text.is_empty() { Value::Null } else { serde_json::from_str(&text)? });
@@ -201,4 +208,106 @@ pub fn year_of(v: &Value) -> Option<u32> {
 /// `spotify:album:abc` → `abc`.
 pub fn bare_id(uri: &str) -> &str {
     uri.rsplit(':').next().unwrap_or(uri)
+}
+
+// ---- Spotify's own GraphQL (artist pages) ------------------------------------
+
+/// The artist page query the Spotify apps use; `variables`: uri, locale, includePrerelease.
+pub const ARTIST_OVERVIEW: (&str, &str) = ("queryArtistOverview", "4bc52527bb77a5f8bbb9afe491e9aa725698d29ab73bff58d49169ee29800167");
+
+/// GraphQL `sources` lists: the one nearest 640px (Spotify leaves some sizes unlabeled;
+/// their CDN ids still say which is the 640px one).
+fn best_source(v: &Value) -> Option<String> {
+    v["sources"]
+        .as_array()?
+        .iter()
+        .filter_map(|s| {
+            let url = s["url"].as_str()?;
+            let w = s["width"].as_u64().unwrap_or(if url.contains("0000b273") || url.contains("0000e5eb") { 640 } else { 300 });
+            Some((url, w))
+        })
+        .min_by_key(|(_, w)| (*w as i64 - 640).abs())
+        .map(|(u, _)| u.to_string())
+}
+
+pub struct ArtistOverview {
+    pub item: Item,
+    pub monthly_listeners: u64,
+    pub top: Vec<SpotifyTrackRow>,
+    /// Albums, then singles and EPs, newest first; subtitle is the year.
+    pub releases: Vec<Item>,
+}
+
+pub fn artist_overview(v: &Value) -> Option<ArtistOverview> {
+    let a = &v["data"]["artistUnion"];
+    let item = Item {
+        id: a["uri"].as_str()?.to_string(),
+        kind: ItemKind::Artist,
+        source: Source::Spotify,
+        title: a["profile"]["name"].as_str().unwrap_or("").to_string(),
+        subtitle: "Artist".into(),
+        art: best_source(&a["visuals"]["avatarImage"]),
+        downloaded: false,
+    };
+    let top = a["discography"]["topTracks"]["items"]
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|i| {
+                    let t = &i["track"];
+                    let album = &t["albumOfTrack"];
+                    let artists: Vec<&Value> = t["artists"]["items"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
+                    Some(SpotifyTrackRow {
+                        id: t["uri"].as_str().filter(|u| u.starts_with("spotify:track:"))?.to_string(),
+                        title: t["name"].as_str().unwrap_or("").to_string(),
+                        artist: artists.iter().filter_map(|x| x["profile"]["name"].as_str()).collect::<Vec<_>>().join(", "),
+                        artist_id: artists.first().and_then(|x| x["uri"].as_str()).map(str::to_string),
+                        album: album["name"].as_str().unwrap_or("").to_string(),
+                        album_id: album["uri"].as_str().map(str::to_string),
+                        art: best_source(&album["coverArt"]),
+                        duration_ms: t["duration"]["totalMilliseconds"].as_u64().unwrap_or(0) as u32,
+                        track_no: 0,
+                        disc_no: t["discNumber"].as_u64().unwrap_or(1) as u32,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let releases_of = |group: &str| -> Vec<Item> {
+        a["discography"][group]["items"]
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|i| {
+                        let r = &i["releases"]["items"][0];
+                        let year = r["date"]["year"].as_u64().map(|y| y.to_string()).unwrap_or_default();
+                        let kind = match r["type"].as_str() {
+                            Some("SINGLE") => "Single",
+                            Some("EP") => "EP",
+                            _ => "",
+                        };
+                        Some(Item {
+                            id: r["uri"].as_str()?.to_string(),
+                            kind: ItemKind::Album,
+                            source: Source::Spotify,
+                            title: r["name"].as_str().unwrap_or("").to_string(),
+                            subtitle: if kind.is_empty() { year } else { format!("{year} · {kind}") },
+                            art: best_source(&r["coverArt"]),
+                            downloaded: false,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let mut releases = releases_of("albums");
+    releases.extend(releases_of("singles"));
+    Some(ArtistOverview {
+        item,
+        monthly_listeners: a["stats"]["monthlyListeners"].as_u64().unwrap_or(0),
+        top,
+        releases,
+    })
 }

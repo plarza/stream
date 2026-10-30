@@ -28,8 +28,6 @@ final class AppModel {
     var volume: Double = AppModel.isTesting ? 0 : (UserDefaults.standard.object(forKey: "volume") as? Double ?? 1) {
         didSet {
             core.setVolume(volume: Float(volume))
-        // Repeat has no control any more; never leave it stuck on.
-        if player.repeat != .off { core.setRepeat(mode: .off) }
             if !AppModel.isTesting { UserDefaults.standard.set(volume, forKey: "volume") }
         }
     }
@@ -166,10 +164,73 @@ final class AppModel {
     func previous() { Haptics.tap(); core.previous() }
     func seek(to ms: UInt32) { core.seek(ms: ms) }
 
+    /// Buttons answer at once; the core (and Spotify) catch up, and a failure puts it back.
     func setLiked(_ track: Track, _ liked: Bool) {
         Haptics.success()
+        if player.track?.id == track.id { player.track?.liked = liked }
         Task {
-            do { try await core.setLiked(trackId: track.id, liked: liked) } catch { show(error.localizedDescription) }
+            do { try await core.setLiked(trackId: track.id, liked: liked) } catch {
+                if player.track?.id == track.id { player.track?.liked = !liked }
+                show(Self.message(error))
+            }
+        }
+    }
+
+    func setShuffle(_ on: Bool) {
+        Haptics.tap()
+        player.shuffle = on
+        core.setShuffle(on: on)
+    }
+
+    /// Repeat is one thing here: this song, forever.
+    func setRepeat(_ on: Bool) {
+        Haptics.tap()
+        player.repeat = on ? .one : .off
+        core.setRepeat(mode: on ? .one : .off)
+    }
+
+    /// Opens a page from anywhere, closing Now Playing first if it's up.
+    func open(_ item: Item) {
+        pendingNavigation = item
+        if showNowPlaying {
+            withAnimation(.player) { showNowPlaying = false }
+        } else {
+            openRequested &+= 1
+        }
+    }
+
+    func openArtist(of track: Track) {
+        guard let id = track.artistId else { return }
+        open(Item(id: id, kind: .artist, source: track.source, title: track.artist, subtitle: "Artist", art: nil, downloaded: false))
+    }
+
+    func openAlbum(of track: Track) {
+        guard let id = track.albumId else { return }
+        open(Item(id: id, kind: .album, source: track.source, title: track.album, subtitle: track.artist, art: track.art, downloaded: false))
+    }
+
+    // MARK: Appearance
+
+    enum Appearance: String, CaseIterable, Identifiable {
+        case system, light, dark
+        var id: Self { self }
+        var title: String { rawValue.capitalized }
+    }
+
+    var appearance: Appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system {
+        didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
+    }
+
+    /// Pure black instead of dark grey in dark mode, for OLED screens.
+    var pureBlack: Bool = UserDefaults.standard.bool(forKey: "pureBlack") {
+        didSet { UserDefaults.standard.set(pureBlack, forKey: "pureBlack") }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch appearance {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
         }
     }
 

@@ -69,6 +69,7 @@ struct RootView: View {
                 .accessibilityIdentifier("miniPlayer")
         }
         .tint(model.tint)
+        .preferredColorScheme(model.colorScheme)
         .fullScreenCover(isPresented: $model.showNowPlaying, onDismiss: openPending) {
             NowPlayingView()
                 .navigationTransition(.zoom(sourceID: "nowplaying", in: zoom))
@@ -131,48 +132,74 @@ extension View {
     }
 }
 
-/// The glass bar above the tab bar.
+/// The glass pill above the tab bar, laid out like Apple Music's: 30pt art
+/// 16pt in, the title beside it, then play and next in 44pt cells.
 struct MiniPlayer: View {
     @Environment(AppModel.self) private var model
     @Environment(\.tabViewBottomAccessoryPlacement) private var placement
 
     var body: some View {
         let t = model.player.track
-        HStack(spacing: 10) {
-            // Inset evenly from the pill's top, bottom and leading edge.
-            ArtworkView(url: t?.art, size: placement == .inline ? 24 : 30)
+        let inline = placement == .inline
+        HStack(spacing: 0) {
+            art(t, size: inline ? 24 : 30)
             VStack(alignment: .leading, spacing: 0) {
-                Text(t?.title ?? "Not Playing").font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text(t?.title ?? "Not Playing")
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
                     .accessibilityIdentifier("mini.title")
-                if placement != .inline, let a = t?.artist {
-                    Text(a).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if !inline, let a = t?.artist {
+                    Text(a).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
+            .padding(.leading, 9)
             .id(t?.id)
             .transition(.blurReplace)
             Spacer(minLength: 4)
             Button { model.toggle() } label: {
                 Image(systemName: model.player.status == .playing ? "pause.fill" : "play.fill")
-                    .font(.title3)
+                    .font(.system(size: 18))
                     .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 36, height: 36)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle(scale: 0.8))
+            .foregroundStyle(.primary)
             .accessibilityLabel(model.player.status == .playing ? "Pause" : "Play")
             .accessibilityIdentifier("mini.playPause")
-            if placement != .inline {
+            if !inline {
                 Button { model.next() } label: {
-                    Image(systemName: "forward.fill").font(.body).frame(width: 32, height: 36)
+                    Image(systemName: "forward.fill")
+                        .font(.system(size: 18))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(PressableStyle(scale: 0.8))
+                .foregroundStyle(t == nil ? .tertiary : .primary)
+                .disabled(t == nil)
                 .accessibilityLabel("Next")
                 .accessibilityIdentifier("mini.next")
             }
         }
-        .padding(.leading, placement == .inline ? 6 : 9)
-        .padding(.trailing, 8)
+        .padding(.leading, inline ? 8 : 16)
+        .padding(.trailing, 7)
         .contentShape(Rectangle())
         .animation(.smooth, value: t?.id)
-        .disabled(t == nil)
+    }
+
+    @ViewBuilder
+    private func art(_ t: Track?, size: CGFloat) -> some View {
+        if let t {
+            ArtworkView(url: t.art, size: size, cornerRadius: 6)
+        } else {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(.primary.opacity(0.15))
+                .frame(width: size, height: size)
+                .overlay {
+                    Image(systemName: "music.note")
+                        .font(.system(size: size * 0.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+        }
     }
 }

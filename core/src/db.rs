@@ -368,7 +368,8 @@ impl Db {
                     duration_ms, quality, art, added_at, saved)
                  VALUES(?1, 1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'OGG 320', ?10, ?11, COALESCE(?12, 0))
                  ON CONFLICT(id) DO UPDATE SET title=excluded.title, artist=excluded.artist, artist_id=excluded.artist_id,
-                    album=excluded.album, album_id=excluded.album_id, track_no=excluded.track_no,
+                    album=COALESCE(NULLIF(excluded.album, ''), tracks.album), album_id=COALESCE(excluded.album_id, tracks.album_id),
+                    track_no=CASE excluded.track_no WHEN 0 THEN tracks.track_no ELSE excluded.track_no END,
                     disc_no=excluded.disc_no, duration_ms=excluded.duration_ms, art=COALESCE(excluded.art, tracks.art),
                     saved = COALESCE(?12, tracks.saved)",
                 params![

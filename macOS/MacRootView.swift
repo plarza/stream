@@ -4,63 +4,96 @@ enum SidebarItem: Hashable {
     case home, search, section(LibrarySection), pin(Item)
 }
 
-/// Glass sidebar running the full height of the window, and a capsule playing
-/// bar floating over the bottom of the page. Clicking the bar's art opens Now
-/// Playing across the whole window.
+/// A glass sidebar floating at the top left, only as tall as what's in it; the
+/// page beside it, under one search field that stays put across tabs; and a
+/// capsule playing bar floating centered over the bottom of the page. Clicking
+/// the bar's art opens Now Playing across the whole window.
 struct MacRootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var scheme
     @Binding var showPalette: Bool
-    @State private var selection: SidebarItem? = .home
+    @State private var selection: SidebarItem = .home
     @State private var path = NavigationPath()
     @State private var search = SearchModel()
-    @State private var sidebarEdge: CGFloat = 228
+    /// What the field holds while a library section is showing (it filters that section).
+    @State private var sectionFilter = ""
+    @State private var sidebarHeight: CGFloat = 0
+    @FocusState private var searchFocused: Bool
+
+    private let sidebarWidth: CGFloat = 220
+    private let inset: CGFloat = 10
+    private var pageLeading: CGFloat { sidebarWidth + inset * 2 }
+    /// The row holding the back button and search field, level with the traffic lights.
+    private let topBar: CGFloat = 52
 
     var body: some View {
-        ZStack {
-            NavigationSplitView {
-                sidebar
-                    .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 300)
-                    .toolbar(removing: .sidebarToggle)
-                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxX } action: { sidebarEdge = $0 }
-            } detail: {
-                NavigationStack(path: $path) {
-                    detail
-                        .navigationDestination(for: Item.self) { CollectionView(item: $0) }
-                        .navigationDestination(for: LibrarySection.self) { SectionView(section: $0) }
-                }
+        ZStack(alignment: .topLeading) {
+            if model.pureBlack && scheme == .dark {
+                Color.black.ignoresSafeArea()
             }
-            // The bar floats over the page, which scrolls on beneath it. (Views placed
-            // beside the NavigationStack inside the detail column don't get drawn, so it
-            // hangs off the split view, lined up with the detail column.)
+            NavigationStack(path: $path) {
+                detail
+                    .navigationDestination(for: Item.self) { CollectionView(item: $0).navigationBarBackButtonHidden() }
+                    .navigationDestination(for: LibrarySection.self) { SectionView(section: $0).navigationBarBackButtonHidden() }
+            }
+            .toolbar(removing: .title)
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            .ignoresSafeArea(.container, edges: .top)
+            // Pages start under the top row and scroll on beneath the playing bar.
+            .contentMargins(.top, topBar, for: .scrollContent)
             .contentMargins(.bottom, 96, for: .scrollContent)
-            .overlay(alignment: .bottomLeading) {
+            // Inset rather than padded, so page backgrounds run on under the sidebar.
+            .safeAreaPadding(.leading, pageLeading)
+            .overlay(alignment: .top) {
+                topRow
+                    .padding(.leading, pageLeading)
+                    .ignoresSafeArea(.container, edges: .top)
+            }
+            .overlay(alignment: .bottom) {
                 PlayerBar()
-                    .padding(.leading, sidebarEdge + 16)
-                    .padding([.trailing, .bottom], 16)
+                    .frame(maxWidth: 940)
+                    .padding(.horizontal, 16)
+                    .padding(.leading, pageLeading)
+                    .padding(.bottom, 16)
             }
             .tint(model.tint)
 
+            GeometryReader { geo in
+                sidebar(maxHeight: geo.size.height - inset * 2 - 96)
+            }
+            .padding(inset)
+            .ignoresSafeArea()
+
             if model.showNowPlaying {
                 NowPlayingView()
-                    .overlay(alignment: .topLeading) {
+                    .overlay(alignment: .top) {
                         Button { close() } label: {
-                            Image(systemName: "chevron.down").font(.title3.weight(.semibold))
-                                .frame(width: 36, height: 36)
-                                .glassEffect(.regular.interactive(), in: .circle)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.75))
+                                .frame(width: 64, height: 40)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.pressable)
                         .keyboardShortcut(.escape, modifiers: [])
+                        .help("Close")
                         .accessibilityLabel("Close Now Playing")
                         .accessibilityIdentifier("nowPlaying.close")
-                        .padding(.leading, 80)
-                        .padding(.top, 14)
+                        .padding(.top, 6)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(2)
             }
         }
+        .preferredColorScheme(model.colorScheme)
         .overlay(alignment: .top) {
             if let t = model.toast { Toast(text: t).padding(.top, 12).accessibilityIdentifier("toast") }
+        }
+        .background {
+            // ⌘F goes to the search field from anywhere.
+            Button("Search") { focusSearch() }
+                .keyboardShortcut("f", modifiers: .command)
+                .hidden()
         }
         .sheet(isPresented: $showPalette) {
             CommandPalette { item in
@@ -69,7 +102,6 @@ struct MacRootView: View {
             }
             .environment(model)
         }
-        .onChange(of: selection) { path = NavigationPath() }
         .onChange(of: model.openRequested) {
             if let item = model.pendingNavigation {
                 model.pendingNavigation = nil
@@ -92,91 +124,204 @@ struct MacRootView: View {
         if item.kind == .track { model.play(item) } else { path.append(item) }
     }
 
-    private var sidebar: some View {
-        // Clicking the page you're on goes back to its top level.
-        let pick = Binding<SidebarItem?>(get: { selection }, set: { new in
-            if new == selection { path = NavigationPath() }
-            selection = new
-        })
-        return List(selection: pick) {
-            Label("Home", systemImage: "house").tag(SidebarItem.home).accessibilityIdentifier("sidebar.home")
-            Label("Search", systemImage: "magnifyingglass").tag(SidebarItem.search).accessibilityIdentifier("sidebar.search")
-            Section("Library") {
-                ForEach(LibrarySection.ordered) { s in
-                    Label(s.title, systemImage: s.symbol)
-                        .tag(SidebarItem.section(s))
-                        .accessibilityIdentifier("sidebar.\(s.title)")
-                }
+    // MARK: Top row
+
+    /// Root pages search; pages you've gone into have the back button instead.
+    private var searchable: Bool {
+        guard path.isEmpty else { return false }
+        if case .pin = selection { return false }
+        return true
+    }
+
+    private var topRow: some View {
+        ZStack {
+            if searchable {
+                searchField
+                    .frame(maxWidth: 560)
+                    .padding(.horizontal, 72)
+                    .transition(.opacity)
             }
-            if !model.home.pins.isEmpty {
-                Section("Pinned") {
+            HStack {
+                backButton
+                Spacer()
+            }
+            .padding(.leading, Metrics.page - 4)
+        }
+        .frame(height: 36)
+        .padding(.top, 8)
+        .animation(.snappy(duration: 0.2), value: searchable)
+        .animation(.snappy(duration: 0.2), value: path.isEmpty)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField(searchPrompt, text: searchText)
+                .textFieldStyle(.plain)
+                .focused($searchFocused)
+                .accessibilityIdentifier("search.field")
+            if !searchText.wrappedValue.isEmpty {
+                Button { searchText.wrappedValue = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 34)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        // Glass alone vanishes over a flat page; a hairline rim keeps the field findable.
+        .overlay { Capsule().strokeBorder(.primary.opacity(0.12), lineWidth: 0.5) }
+    }
+
+    private var searchPrompt: String {
+        if case let .section(s) = selection { return "Search \(s.title)" }
+        return "Search your library"
+    }
+
+    /// In a library section the field filters it; elsewhere it searches everything,
+    /// and typing on Home moves over to Search.
+    private var searchText: Binding<String> {
+        if case .section = selection { return $sectionFilter }
+        return Binding(get: { search.query }, set: { q in
+            search.query = q
+            if selection == .home, !q.isEmpty { selection = .search }
+        })
+    }
+
+    private func focusSearch() {
+        if !searchable {
+            path = NavigationPath()
+            if case .pin = selection { selection = .search }
+        }
+        searchFocused = true
+    }
+
+    @ViewBuilder
+    private var backButton: some View {
+        if !path.isEmpty {
+            Button { path.removeLast() } label: {
+                Image(systemName: "chevron.left").font(.body.weight(.semibold))
+                    .frame(width: 34, height: 34)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.pressable)
+            .keyboardShortcut("[", modifiers: .command)
+            .help("Back")
+            .accessibilityLabel("Back")
+            .accessibilityIdentifier("back")
+            .transition(.opacity)
+        }
+    }
+
+    // MARK: Sidebar
+
+    private func sidebar(maxHeight: CGFloat) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                // Room for the window's traffic lights.
+                Color.clear.frame(height: 26)
+                row(.home, "Home", "house").accessibilityIdentifier("sidebar.home")
+                row(.search, "Search", "magnifyingglass").accessibilityIdentifier("sidebar.search")
+                header("Library")
+                ForEach(LibrarySection.ordered) { s in
+                    row(.section(s), s.title, s.symbol).accessibilityIdentifier("sidebar.\(s.title)")
+                }
+                if !model.home.pins.isEmpty {
+                    header("Pinned")
                     ForEach(model.home.pins) { p in
-                        HStack(spacing: 8) {
+                        SidebarRow(selected: selection == .pin(p)) {
+                            pick(.pin(p))
+                        } label: {
                             ArtworkView(url: p.art, size: 20, circle: p.kind == .artist)
                             Text(p.title).lineLimit(1)
                         }
-                        .tag(SidebarItem.pin(p))
                         .accessibilityIdentifier("sidebar.pin.\(p.title)")
                         .itemMenu(p)
                     }
                 }
             }
+            .padding(8)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { sidebarHeight = $0 }
         }
-        .listStyle(.sidebar)
-        .onChange(of: selection) { _, new in
-            // A pinned song plays rather than opening a page.
-            if case let .pin(item) = new, item.kind == .track {
-                model.play(item)
-                selection = .home
-            }
+        .scrollIndicators(.never)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(width: sidebarWidth, height: min(sidebarHeight, max(120, maxHeight)))
+        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .animation(.smooth, value: sidebarHeight)
+    }
+
+    private func header(_ text: String) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.top, 14)
+            .padding(.bottom, 4)
+    }
+
+    private func row(_ item: SidebarItem, _ title: String, _ symbol: String) -> some View {
+        SidebarRow(selected: selection == item) { pick(item) } label: {
+            Image(systemName: symbol)
+                .foregroundStyle(selection == item ? model.tint : .secondary)
+                .frame(width: 20)
+            Text(title)
         }
+    }
+
+    /// Clicking the page you're on goes back to its top level; a pinned song plays.
+    private func pick(_ item: SidebarItem) {
+        if case let .pin(p) = item, p.kind == .track {
+            model.play(p)
+            return
+        }
+        path = NavigationPath()
+        if item != selection { sectionFilter = "" }
+        selection = item
+        if item == .search { searchFocused = true }
     }
 
     @ViewBuilder
     private var detail: some View {
-        switch selection ?? .home {
+        switch selection {
         case .home:
             HomeView(columns: 6)
         case .search:
-            MacSearchView(search: search)
+            SearchResultsView(search: search)
         case let .section(s):
-            SectionView(section: s).id(s)
+            SectionView(section: s, filter: sectionFilter).id(s)
         case let .pin(item):
             CollectionView(item: item).id(item.id)
         }
     }
 }
 
-/// Search with its field centered at the top of the page.
-struct MacSearchView: View {
-    @Bindable var search: SearchModel
-    @FocusState private var focused: Bool
+/// One sidebar entry: a rounded highlight when selected, a fainter one on hover.
+private struct SidebarRow<Label: View>: View {
+    var selected: Bool
+    var action: () -> Void
+    @ViewBuilder var label: Label
+    @State private var hover = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search your library", text: $search.query)
-                    .textFieldStyle(.plain)
-                    .font(.title3)
-                    .focused($focused)
-                    .accessibilityIdentifier("search.field")
-                if !search.query.isEmpty {
-                    Button { search.query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Clear search")
+        Button(action: action) {
+            HStack(spacing: 8) { label }
+                .font(.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(.primary.opacity(selected ? 0.12 : hover ? 0.06 : 0))
                 }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .glassEffect(.regular, in: .capsule)
-            .frame(maxWidth: 520)
-            .padding(.top, 14)
-            .padding(.bottom, 6)
-            SearchResultsView(search: search)
+                .contentShape(Rectangle())
         }
-        .navigationTitle("Search")
-        .onAppear { focused = true }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .animation(.snappy(duration: 0.18), value: hover)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -197,7 +342,7 @@ struct PlayerBar: View {
                 Button {
                     withAnimation(.player) { model.showNowPlaying = true }
                 } label: {
-                    ArtworkView(url: t?.art, size: art, cornerRadius: artRadius)
+                    ExpandableArt(url: t?.art, size: art, radius: artRadius)
                 }
                 .buttonStyle(.pressable)
                 .help("Now Playing")
@@ -207,7 +352,12 @@ struct PlayerBar: View {
                     Text(t?.title ?? "Not Playing")
                         .font(.callout.weight(.semibold)).lineLimit(1)
                         .accessibilityIdentifier("player.title")
-                    Text(t?.artist ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Button { if let t { model.openArtist(of: t) } } label: {
+                        Text(t?.artist ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    .buttonStyle(.textLink)
+                    .disabled(t?.artistId == nil)
+                    .accessibilityIdentifier("player.artist")
                 }
                 .id(t?.id)
                 .transition(.blurReplace)
@@ -229,7 +379,7 @@ struct PlayerBar: View {
             // Transport + scrubber
             VStack(spacing: 4) {
                 HStack(spacing: 22) {
-                    Button { model.core.setShuffle(on: !model.player.shuffle) } label: {
+                    Button { model.setShuffle(!model.player.shuffle) } label: {
                         Image(systemName: "shuffle").foregroundStyle(model.player.shuffle ? model.tint : .secondary)
                     }
                     .accessibilityLabel("Shuffle")
@@ -247,6 +397,13 @@ struct PlayerBar: View {
                     .accessibilityIdentifier("player.playPause")
                     Button { model.next() } label: { Image(systemName: "forward.fill") }
                         .accessibilityLabel("Next").accessibilityIdentifier("player.next")
+                    Button { model.setRepeat(model.player.repeat != .one) } label: {
+                        Image(systemName: "repeat").foregroundStyle(model.player.repeat == .one ? model.tint : .secondary)
+                    }
+                    .help("Repeat")
+                    .accessibilityLabel("Repeat")
+                    .accessibilityValue(model.player.repeat == .one ? "on" : "off")
+                    .accessibilityIdentifier("player.repeat")
                 }
                 .buttonStyle(PressableStyle(scale: 0.8))
                 .disabled(t == nil)
@@ -297,6 +454,30 @@ struct PlayerBar: View {
         .buttonStyle(.pressable)
         .accessibilityLabel(label)
         .accessibilityIdentifier("player.\(label.lowercased())")
+    }
+}
+
+/// The bar's cover: under the pointer it lifts and shows that a click opens it full screen.
+private struct ExpandableArt: View {
+    let url: String?
+    let size: CGFloat
+    let radius: CGFloat
+    @State private var hover = false
+
+    var body: some View {
+        ArtworkView(url: url, size: size, cornerRadius: radius)
+            .overlay {
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
+                    .fill(.black.opacity(hover ? 0.35 : 0))
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white)
+                    .opacity(hover ? 1 : 0)
+                    .scaleEffect(hover ? 1 : 0.6)
+            }
+            .scaleEffect(hover ? 1.08 : 1)
+            .shadow(color: .black.opacity(hover ? 0.3 : 0), radius: 6, y: 3)
+            .onHover { h in withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) { hover = h } }
     }
 }
 

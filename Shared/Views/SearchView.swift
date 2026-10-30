@@ -58,6 +58,41 @@ struct SearchResultsView: View {
     @State private var recents: [String] = []
 
     var body: some View {
+        container
+            .animation(.smooth, value: search.results.map(\.id))
+            .onChange(of: search.query) { search.run(model) }
+            .onChange(of: search.filter) { search.run(model) }
+            .onAppear { recents = model.core.recentSearches() }
+            .onSubmit(of: .search) {
+                model.core.addRecentSearch(query: search.query)
+            }
+    }
+
+    #if os(macOS)
+    /// The Mac draws the page itself: a centered column on the window's own background.
+    private var container: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                if search.query.isEmpty {
+                    recentSection
+                } else {
+                    chips.padding(.bottom, 10)
+                    ForEach(search.results) { item in
+                        result(item)
+                    }
+                    if search.loading {
+                        ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(.vertical, 12)
+                    }
+                }
+            }
+            .frame(maxWidth: 680)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, Metrics.page)
+            .padding(.bottom, 120)
+        }
+    }
+    #else
+    private var container: some View {
         List {
             if search.query.isEmpty {
                 recentSection
@@ -66,7 +101,7 @@ struct SearchResultsView: View {
                     .listRowSeparator(.hidden)
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
                 ForEach(search.results) { item in
-                    result(item)
+                    result(item).listRowSeparator(.hidden)
                 }
                 if search.loading {
                     HStack { Spacer(); ProgressView(); Spacer() }.listRowSeparator(.hidden)
@@ -74,14 +109,8 @@ struct SearchResultsView: View {
             }
         }
         .listStyle(.plain)
-        .animation(.smooth, value: search.results.map(\.id))
-        .onChange(of: search.query) { search.run(model) }
-        .onChange(of: search.filter) { search.run(model) }
-        .onAppear { recents = model.core.recentSearches() }
-        .onSubmit(of: .search) {
-            model.core.addRecentSearch(query: search.query)
-        }
     }
+    #endif
 
     private var chips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -94,9 +123,9 @@ struct SearchResultsView: View {
                             .font(.subheadline.weight(search.filter == f ? .semibold : .regular))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 7)
-                            .foregroundStyle(search.filter == f ? Color.black : .primary)
+                            .foregroundStyle(search.filter == f ? AnyShapeStyle(.background) : AnyShapeStyle(.primary))
                             .background {
-                                if search.filter == f { Capsule().fill(.white) } else { Capsule().fill(.quaternary) }
+                                if search.filter == f { Capsule().fill(.primary) } else { Capsule().fill(.quaternary) }
                             }
                     }
                     .buttonStyle(.pressable)
@@ -114,10 +143,34 @@ struct SearchResultsView: View {
             ContentUnavailableView("Search your library", systemImage: "magnifyingglass")
                 .listRowSeparator(.hidden)
         } else {
+            #if os(macOS)
+            HStack {
+                Text("Recent").font(.headline)
+                Spacer()
+                clearButton.buttonStyle(.plain).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
+            ForEach(recents, id: \.self) { q in
+                Button { search.query = q } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
+                        Text(q).foregroundStyle(.primary)
+                        Spacer(minLength: 0)
+                    }
+                }
+                .buttonStyle(HoverRowStyle())
+                .accessibilityIdentifier("recentSearch.\(q)")
+            }
+            #else
             Section {
                 ForEach(recents, id: \.self) { q in
                     Button { search.query = q } label: {
-                        Label(q, systemImage: "clock.arrow.circlepath").foregroundStyle(.primary)
+                        Label {
+                            Text(q).foregroundStyle(.primary)
+                        } icon: {
+                            Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
+                        }
                     }
                     .accessibilityIdentifier("recentSearch.\(q)")
                 }
@@ -125,35 +178,65 @@ struct SearchResultsView: View {
                 HStack {
                     Text("Recent")
                     Spacer()
-                    Button("Clear") {
-                        model.core.clearRecentSearches()
-                        withAnimation { recents = [] }
-                    }
-                    .font(.subheadline)
+                    clearButton.font(.subheadline)
                 }
             }
+            #endif
+        }
+    }
+
+    private var clearButton: some View {
+        Button("Clear") {
+            model.core.clearRecentSearches()
+            withAnimation { recents = [] }
         }
     }
 
     @ViewBuilder
     private func result(_ item: Item) -> some View {
-        if item.kind == .track {
-            Button {
-                model.core.addRecentSearch(query: search.query)
+        Button {
+            model.core.addRecentSearch(query: search.query)
+            if item.kind == .track {
                 model.play(item)
-            } label: { ItemRow(item: item) }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("result.\(item.title)")
-                .itemMenu(item)
-        } else {
-            Button {
-                model.core.addRecentSearch(query: search.query)
+            } else {
                 model.pendingNavigation = item
                 model.openRequested &+= 1
-            } label: { ItemRow(item: item) }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("result.\(item.title)")
-                .itemMenu(item)
+            }
+        } label: { ItemRow(item: item) }
+            #if os(macOS)
+            .buttonStyle(HoverRowStyle())
+            #else
+            .buttonStyle(.plain)
+            #endif
+            .accessibilityIdentifier("result.\(item.title)")
+            .itemMenu(item)
+    }
+}
+
+#if os(macOS)
+/// A full-width row that lights up under the pointer.
+struct HoverRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Row(configuration: configuration)
+    }
+
+    private struct Row: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var hover = false
+
+        var body: some View {
+            configuration.label
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(.primary.opacity(configuration.isPressed ? 0.12 : hover ? 0.06 : 0))
+                }
+                .contentShape(Rectangle())
+                .onHover { hover = $0 }
+                .animation(.snappy(duration: 0.15), value: hover)
         }
     }
 }
+#endif

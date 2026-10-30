@@ -10,7 +10,9 @@ final class SyncClient {
     private var busy = false
 
     func syncNow() {
-        guard !busy else { return }
+        // Under UI tests the music folder is the repo's fixture library; mirroring
+        // a Mac into it would replace the fixtures with someone's real library.
+        guard !busy, !AppModel.isTesting else { return }
         busy = true
         let browser = NWBrowser(for: .bonjour(type: "_musicsync._tcp", domain: nil), using: .tcp)
         self.browser = browser

@@ -34,6 +34,9 @@ struct TrackRow: View {
                     HStack(spacing: 4) {
                         if track.downloaded { DownloadedBadge() }
                         Text(track.artist).lineLimit(1)
+                            // The name opens the artist; the rest of the row plays the song.
+                            .onTapGesture { model.openArtist(of: track) }
+                            .allowsHitTesting(track.artistId != nil)
                     }
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -52,11 +55,13 @@ struct TrackRow: View {
     }
 }
 
-/// Any item (song/album/artist/playlist) as a list row.
+/// Any item (song/album/artist/playlist) as a list row; songs show their length.
 struct ItemRow: View {
     let item: Item
     /// Lists of one kind (e.g. Artists) don't need the kind repeated on every row.
     var showSubtitle = true
+    @Environment(AppModel.self) private var model
+
     var body: some View {
         HStack(spacing: Metrics.artGap) {
             ArtworkView(url: item.art, size: 48, circle: item.kind == .artist)
@@ -72,6 +77,11 @@ struct ItemRow: View {
                 }
             }
             Spacer(minLength: 0)
+            if item.kind == .track, let t = model.core.track(id: item.id), t.durationMs > 0 {
+                Text(Format.time(Double(t.durationMs) / 1000))
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+            }
         }
         .contentShape(Rectangle())
     }
@@ -133,6 +143,15 @@ struct ItemMenu: ViewModifier {
                 .accessibilityIdentifier("menu.playNext")
             Button { Task { model.playLater(await resolve()) } } label: { Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward") }
                 .accessibilityIdentifier("menu.playLater")
+            if item.kind == .track, let t = model.core.track(id: item.id) {
+                Divider()
+                if t.artistId != nil {
+                    Button { model.openArtist(of: t) } label: { Label("Go to Artist", systemImage: "music.mic") }
+                }
+                if t.albumId != nil {
+                    Button { model.openAlbum(of: t) } label: { Label("Go to Album", systemImage: "square.stack") }
+                }
+            }
             Divider()
             let pinned = model.core.isPinned(id: item.id)
             Button { model.togglePin(item) } label: { Label(pinned ? "Unpin" : "Pin", systemImage: pinned ? "pin.slash" : "pin") }
