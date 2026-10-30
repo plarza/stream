@@ -32,7 +32,7 @@ struct TrackRow: View {
                     .lineLimit(1)
                 if showArtist {
                     HStack(spacing: 4) {
-                        if track.downloaded { DownloadedBadge() }
+                        if track.downloaded && track.source == .spotify { DownloadedBadge() }
                         Text(track.artist).lineLimit(1)
                             // The name opens the artist; the rest of the row plays the song.
                             .onTapGesture { model.openArtist(of: track) }
@@ -43,7 +43,7 @@ struct TrackRow: View {
                 }
             }
             Spacer(minLength: 8)
-            if !showArtist && track.downloaded { DownloadedBadge() }
+            if !showArtist && track.downloaded && track.source == .spotify { DownloadedBadge() }
             if track.liked {
                 Image(systemName: "heart.fill").font(.caption).foregroundStyle(model.tint.opacity(0.9))
             }
@@ -60,24 +60,35 @@ struct ItemRow: View {
     let item: Item
     /// Lists of one kind (e.g. Artists) don't need the kind repeated on every row.
     var showSubtitle = true
+    /// Wide song lists (the Mac's) give the album its own column.
+    var showAlbum = false
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        let song = item.kind == .track ? model.core.track(id: item.id) : nil
         HStack(spacing: Metrics.artGap) {
             ArtworkView(url: item.art, size: 48, circle: item.kind == .artist)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title).lineLimit(1)
                 if showSubtitle && !item.subtitle.isEmpty {
                     HStack(spacing: 4) {
-                        if item.downloaded { DownloadedBadge() }
+                        if item.downloaded && item.source == .spotify { DownloadedBadge() }
                         Text(item.subtitle).lineLimit(1)
                     }
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 }
             }
+            .frame(maxWidth: showAlbum ? .infinity : nil, alignment: .leading)
+            if showAlbum, let song {
+                Text(song.album)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
             Spacer(minLength: 0)
-            if item.kind == .track, let t = model.core.track(id: item.id), t.durationMs > 0 {
+            if let t = song, t.durationMs > 0 {
                 Text(Format.time(Double(t.durationMs) / 1000))
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(.tertiary)

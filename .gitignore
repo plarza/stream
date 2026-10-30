@@ -1,6 +1,7 @@
 core/target/
 Generated/
 Music.xcodeproj/
+MusicTests.xcodeproj/
 build/
 iOS/Info.plist
 macOS/Info.plist

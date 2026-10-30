@@ -50,6 +50,13 @@ extension Track {
 enum Metrics {
     /// Side margin of pages, lists and headers.
     static let page: CGFloat = 20
+    /// The right edge of rows that end in text (song lengths): on the Mac it also
+    /// clears the overlay scroll bar.
+    #if os(macOS)
+    static let pageTrailing: CGFloat = 34
+    #else
+    static let pageTrailing: CGFloat = 20
+    #endif
     /// Side margin of Now Playing's controls.
     static let nowPlaying: CGFloat = 30
     /// The Now Playing cover sits this much further in than the controls.
@@ -172,4 +179,56 @@ struct TextLinkStyle: ButtonStyle {
 
 extension ButtonStyle where Self == TextLinkStyle {
     static var textLink: TextLinkStyle { TextLinkStyle() }
+}
+
+/// One line of text that, when it doesn't fit, scrolls through after a pause and
+/// loops, fading at the edges (song titles in the playing bar and Now Playing).
+struct MarqueeText: View {
+    let text: String
+    @State private var full: CGFloat = 0
+    @State private var box: CGFloat = 0
+    private let gap: CGFloat = 32
+    private let speed: CGFloat = 30
+    private let pause: Double = 2.5
+
+    var body: some View {
+        let overflow = full > box + 1
+        Text(text)
+            .lineLimit(1)
+            .opacity(0)
+            .overlay(alignment: .leading) {
+                TimelineView(.animation(paused: !overflow)) { ctx in
+                    HStack(spacing: gap) {
+                        Text(text)
+                        if overflow { Text(text) }
+                    }
+                    .fixedSize()
+                    .offset(x: overflow ? -offset(at: ctx.date) : 0)
+                }
+            }
+            .clipped()
+            .mask {
+                if overflow {
+                    LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.04),
+                                           .init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
+                                   startPoint: .leading, endPoint: .trailing)
+                } else {
+                    Rectangle()
+                }
+            }
+            .background {
+                Text(text).lineLimit(1).fixedSize().hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { full = $0 }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { box = $0 }
+            .accessibilityElement()
+            .accessibilityLabel(text)
+    }
+
+    private func offset(at date: Date) -> CGFloat {
+        let distance = full + gap
+        let travel = Double(distance / speed)
+        let t = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: pause + travel)
+        return t < pause ? 0 : CGFloat(t - pause) * speed
+    }
 }

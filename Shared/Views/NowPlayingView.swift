@@ -20,6 +20,9 @@ struct NowPlayingView: View {
                 VStack(spacing: 0) {
                     #if os(iOS)
                     Capsule().fill(.white.opacity(0.35)).frame(width: 38, height: 5).padding(.top, 8)
+                    #else
+                    // Room for the window's close chevron above.
+                    Color.clear.frame(height: 40)
                     #endif
                     content(width: min(geo.size.width - Metrics.nowPlaying * 2, 520), height: geo.size.height)
                         .frame(maxWidth: 520)
@@ -94,7 +97,7 @@ struct NowPlayingView: View {
         HStack(spacing: Metrics.artGap) {
             artSlot(smallArt)
             VStack(alignment: .leading, spacing: 2) {
-                Text(track?.title ?? "Not Playing").font(.headline).lineLimit(1)
+                MarqueeText(text: track?.title ?? "Not Playing").font(.headline)
                 artistLink.font(.subheadline)
                 quality.padding(.top, 2)
             }
@@ -110,11 +113,9 @@ struct NowPlayingView: View {
     private var titleRow: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(track?.title ?? "Not Playing")
-                    .accessibilityIdentifier("nowPlaying.title")
+                MarqueeText(text: track?.title ?? "Not Playing")
                     .font(.title2.weight(.bold))
-                    .lineLimit(1)
-                    .contentTransition(.opacity)
+                    .accessibilityIdentifier("nowPlaying.title")
                 artistLink.font(.title3)
                 quality.padding(.top, 4)
             }
@@ -168,15 +169,16 @@ struct NowPlayingView: View {
         HStack(spacing: 0) {
             modeButton(.lyrics, symbol: "quote.bubble").accessibilityLabel("Lyrics").accessibilityIdentifier("nowPlaying.lyrics")
             Spacer()
-            // The route picker draws its glyph as big as its frame.
+            // The route picker draws its glyph about half the size of its frame.
             AirPlayButton()
-                .frame(width: NowPlayingMetrics.glyph + 6, height: NowPlayingMetrics.glyph + 6)
+                .frame(width: NowPlayingMetrics.glyph * 2, height: NowPlayingMetrics.glyph * 2)
                 .frame(width: 64, height: 48)
             Spacer()
             modeButton(.queue, symbol: "list.bullet").accessibilityLabel("Queue").accessibilityIdentifier("nowPlaying.queue")
         }
         .font(.system(size: NowPlayingMetrics.glyph, weight: .medium))
         .foregroundStyle(.white.opacity(0.7))
+        .padding(.horizontal, 28)
     }
 
     private func modeButton(_ mode: AppModel.NowPlayingMode, symbol: String) -> some View {

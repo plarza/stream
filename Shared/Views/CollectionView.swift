@@ -90,7 +90,7 @@ struct CollectionView: View {
                     if item.kind == .artist, let d = page.description {
                         Text(d).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
                     }
-                    if let q = commonQuality(page.tracks) {
+                    if item.kind != .artist, let q = commonQuality(page.tracks) {
                         HStack(spacing: 4) {
                             if page.tracks.allSatisfy(\.downloaded) { DownloadedBadge() }
                             QualityChip(text: q)
@@ -169,7 +169,8 @@ struct CollectionView: View {
                     TrackRow(track: t, showArt: item.kind != .album, number: item.kind == .album ? Int(t.trackNumber == 0 ? UInt32(i + 1) : t.trackNumber) : nil,
                              isCurrent: model.player.track?.id == t.id,
                              showArtist: item.kind != .album || t.artist != page.item.subtitle)
-                        .padding(.horizontal, Metrics.page)
+                        .padding(.leading, Metrics.page)
+                        .padding(.trailing, Metrics.pageTrailing)
                         .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)

@@ -26,7 +26,7 @@ pub struct Progress {
 /// Scans `roots`, indexing new or changed files and dropping removed ones.
 /// Returns whether anything changed.
 /// Bump when what the scanner extracts changes, so every file is read again.
-const SCAN_VERSION: &str = "3";
+const SCAN_VERSION: &str = "5";
 
 pub fn scan(db: &Db, roots: &[PathBuf], art_dir: &Path, downloaded: bool, progress: &Progress) -> anyhow::Result<bool> {
     let mut known = db.local_index();
@@ -168,6 +168,48 @@ pub fn primary_artist(artist: &str) -> String {
     }
     let p = artist[..cut].trim().trim_end_matches(',').trim();
     if p.is_empty() { artist.trim().to_string() } else { p.to_string() }
+}
+
+/// Whose song this is, for grouping. Collaborations are credited "Kanye West &
+/// Sunday Service" or "Ariana Grande & The Weeknd"; when the album's own artist is
+/// one of the names, the song is theirs. Names that merely contain a comma or
+/// ampersand ("Tyler, The Creator", "Simon & Garfunkel") are left whole.
+pub fn credited_artist(artist: &str, album_artist: Option<&str>) -> String {
+    let primary = primary_artist(artist);
+    if let Some(owner) = album_artist.filter(|a| !a.is_empty())
+        && artist_key(&primary) != artist_key(owner)
+    {
+        let mut parts = vec![primary.clone()];
+        for sep in [", ", " & ", " and ", " x ", " / "] {
+            parts = parts.iter().flat_map(|p| split_ci(p, sep)).collect();
+        }
+        if parts.len() > 1 && parts.iter().any(|p| artist_key(p) == artist_key(owner)) {
+            return owner.to_string();
+        }
+    }
+    primary
+}
+
+fn split_ci(s: &str, sep: &str) -> Vec<String> {
+    let lower = s.to_lowercase();
+    if lower.len() != s.len() {
+        return vec![s.to_string()];
+    }
+    let mut out = Vec::new();
+    let mut start = 0;
+    while let Some(i) = lower[start..].find(sep) {
+        out.push(s[start..start + i].trim().to_string());
+        start += i + sep.len();
+    }
+    out.push(s[start..].trim().to_string());
+    out
+}
+
+/// What makes two spellings the same artist: "Jay‐Z & Kanye West" and "Jay Z, Kanye
+/// West", or "Carissa's Wierd" with either apostrophe, are one artist.
+pub fn artist_key(name: &str) -> String {
+    let key: String = name.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect();
+    if key.is_empty() { name.trim().to_lowercase() } else { key }
 }
 
 fn parse_db(s: &str) -> Option<f32> {

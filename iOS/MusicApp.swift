@@ -144,9 +144,8 @@ struct MiniPlayer: View {
         HStack(spacing: 0) {
             art(t, size: inline ? 24 : 30)
             VStack(alignment: .leading, spacing: 0) {
-                Text(t?.title ?? "Not Playing")
+                MarqueeText(text: t?.title ?? "Not Playing")
                     .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
                     .accessibilityIdentifier("mini.title")
                 if !inline, let a = t?.artist {
                     Text(a).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)

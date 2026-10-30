@@ -1,13 +1,24 @@
 #!/bin/zsh
 # Builds the Rust core for iPhone, the simulator and Mac, generates the Swift
 # bindings, and packs everything into Generated/MusicCore.xcframework.
+#
+# OUT=<dir> ONLY="<targets>" packs just those targets somewhere else (the UI tests
+# build their own Simulator-only core this way). Generated/ always gets every
+# target: a framework missing a platform breaks that platform's build.
 set -euo pipefail
 cd "$(dirname "$0")/../core"
 
 PROFILE=${PROFILE:-release}
 FLAG=$([[ $PROFILE == release ]] && echo --release || echo)
+OUT=${OUT:-../Generated}
 TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin)
-if [[ -n "${ONLY:-}" ]]; then TARGETS=(${=ONLY}); fi
+if [[ -n "${ONLY:-}" ]]; then
+  if [[ $OUT:A == ${PWD:h}/Generated ]]; then
+    echo "✗ Generated/ needs every target; use OUT=<dir> with ONLY" >&2
+    exit 1
+  fi
+  TARGETS=(${=ONLY})
+fi
 
 export IPHONEOS_DEPLOYMENT_TARGET=26.0
 export MACOSX_DEPLOYMENT_TARGET=26.0
@@ -15,7 +26,6 @@ for t in $TARGETS; do
   cargo build $FLAG --lib --target $t
 done
 
-OUT=../Generated
 rm -rf $OUT/MusicCore.xcframework $OUT/headers
 mkdir -p $OUT/headers
 

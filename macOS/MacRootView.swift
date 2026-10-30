@@ -38,9 +38,10 @@ struct MacRootView: View {
             }
             .toolbar(removing: .title)
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            // Pages start under the top row (an inset, which they still scroll under)
+            // instead of the title bar's, and scroll on beneath the playing bar.
+            .safeAreaPadding(.top, topBar)
             .ignoresSafeArea(.container, edges: .top)
-            // Pages start under the top row and scroll on beneath the playing bar.
-            .contentMargins(.top, topBar, for: .scrollContent)
             .contentMargins(.bottom, 96, for: .scrollContent)
             // Inset rather than padded, so page backgrounds run on under the sidebar.
             .safeAreaPadding(.leading, pageLeading)
@@ -51,7 +52,7 @@ struct MacRootView: View {
             }
             .overlay(alignment: .bottom) {
                 PlayerBar()
-                    .frame(maxWidth: 940)
+                    .frame(maxWidth: 990)
                     .padding(.horizontal, 16)
                     .padding(.leading, pageLeading)
                     .padding(.bottom, 16)
@@ -333,102 +334,22 @@ struct PlayerBar: View {
     private let height: CGFloat = 64
     private let art: CGFloat = 44
     private let artRadius: CGFloat = 10
+    /// Every control in the bar answers across this much, whatever its glyph.
+    private let target: CGFloat = 32
 
     var body: some View {
         let t = model.player.track
-        HStack(spacing: 0) {
-            // Song
-            HStack(spacing: 12) {
-                Button {
-                    withAnimation(.player) { model.showNowPlaying = true }
-                } label: {
-                    ExpandableArt(url: t?.art, size: art, radius: artRadius)
-                }
-                .buttonStyle(.pressable)
-                .help("Now Playing")
-                .accessibilityLabel("Now Playing")
-                .accessibilityIdentifier("player.artwork")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(t?.title ?? "Not Playing")
-                        .font(.callout.weight(.semibold)).lineLimit(1)
-                        .accessibilityIdentifier("player.title")
-                    Button { if let t { model.openArtist(of: t) } } label: {
-                        Text(t?.artist ?? "").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    .buttonStyle(.textLink)
-                    .disabled(t?.artistId == nil)
-                    .accessibilityIdentifier("player.artist")
-                }
-                .id(t?.id)
-                .transition(.blurReplace)
-                if let t {
-                    Button { model.setLiked(t, !t.liked) } label: {
-                        Image(systemName: t.liked ? "heart.fill" : "heart")
-                            .foregroundStyle(t.liked ? model.tint : .secondary)
-                            .contentTransition(.symbolEffect(.replace))
-                    }
-                    .buttonStyle(.pressable)
-                    .accessibilityLabel(t.liked ? "Unlike" : "Like")
-                    .accessibilityIdentifier("player.like")
-                }
-                Spacer(minLength: 8)
-            }
-            .padding(.leading, (height - art) / 2 + 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Transport + scrubber
-            VStack(spacing: 4) {
-                HStack(spacing: 22) {
-                    Button { model.setShuffle(!model.player.shuffle) } label: {
-                        Image(systemName: "shuffle").foregroundStyle(model.player.shuffle ? model.tint : .secondary)
-                    }
-                    .accessibilityLabel("Shuffle")
-                    .accessibilityValue(model.player.shuffle ? "on" : "off")
-                    .accessibilityIdentifier("player.shuffle")
-                    Button { model.previous() } label: { Image(systemName: "backward.fill") }
-                        .accessibilityLabel("Previous").accessibilityIdentifier("player.previous")
-                    Button { model.toggle() } label: {
-                        Image(systemName: model.player.status == .playing ? "pause.fill" : "play.fill")
-                            .font(.title2)
-                            .contentTransition(.symbolEffect(.replace))
-                            .frame(width: 26)
-                    }
-                    .accessibilityLabel(model.player.status == .playing ? "Pause" : "Play")
-                    .accessibilityIdentifier("player.playPause")
-                    Button { model.next() } label: { Image(systemName: "forward.fill") }
-                        .accessibilityLabel("Next").accessibilityIdentifier("player.next")
-                    Button { model.setRepeat(model.player.repeat != .one) } label: {
-                        Image(systemName: "repeat").foregroundStyle(model.player.repeat == .one ? model.tint : .secondary)
-                    }
-                    .help("Repeat")
-                    .accessibilityLabel("Repeat")
-                    .accessibilityValue(model.player.repeat == .one ? "on" : "off")
-                    .accessibilityIdentifier("player.repeat")
-                }
-                .buttonStyle(PressableStyle(scale: 0.8))
-                .disabled(t == nil)
-                BarScrubber()
-            }
-            .frame(minWidth: 260, maxWidth: 360)
-
-            // Extras
-            HStack(spacing: 16) {
-                modeButton(.lyrics, "quote.bubble", "Lyrics")
-                modeButton(.queue, "list.bullet", "Queue")
-                AirPlayButton().frame(width: 22, height: 22)
-                HStack(spacing: 6) {
-                    @Bindable var model = model
-                    Image(systemName: model.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill").foregroundStyle(.secondary)
-                    Slider(value: $model.volume, in: 0...1)
-                        .frame(width: 90)
-                        .controlSize(.small)
-                        .accessibilityIdentifier("player.volume")
-                }
-            }
-            .padding(.leading, 16)
-            .padding(.trailing, height / 2)
-            .fixedSize()
+        // Song and extras share what's left equally, so the transport sits dead center.
+        HStack(spacing: 16) {
+            song(t)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            transport(t)
+                .frame(width: 340)
+            extras
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .padding(.leading, (height - art) / 2 + 4)
+        .padding(.trailing, height / 2 - 8)
         .frame(height: height)
         .glassEffect(.regular, in: .capsule)
         // Glass alone vanishes over a flat page; a hairline rim and a soft shadow lift it.
@@ -437,6 +358,111 @@ struct PlayerBar: View {
         .animation(.smooth, value: t?.id)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("player.bar")
+    }
+
+    private func song(_ t: Track?) -> some View {
+        HStack(spacing: 12) {
+            Button {
+                withAnimation(.player) { model.showNowPlaying = true }
+            } label: {
+                ExpandableArt(url: t?.art, size: art, radius: artRadius)
+            }
+            .buttonStyle(.pressable)
+            .help("Now Playing")
+            .accessibilityLabel("Now Playing")
+            .accessibilityIdentifier("player.artwork")
+            VStack(alignment: .leading, spacing: 2) {
+                MarqueeText(text: t?.title ?? "Not Playing")
+                    .font(.callout.weight(.semibold))
+                    .accessibilityIdentifier("player.title")
+                Button { if let t { model.openArtist(of: t) } } label: {
+                    MarqueeText(text: t?.artist ?? "")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.textLink)
+                .disabled(t?.artistId == nil)
+                .accessibilityIdentifier("player.artist")
+            }
+            .id(t?.id)
+            .transition(.blurReplace)
+            if let t {
+                Button { model.setLiked(t, !t.liked) } label: {
+                    Image(systemName: t.liked ? "heart.fill" : "heart")
+                        .foregroundStyle(t.liked ? model.tint : .secondary)
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: target, height: target)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressable)
+                .accessibilityLabel(t.liked ? "Unlike" : "Like")
+                .accessibilityIdentifier("player.like")
+            }
+        }
+    }
+
+    private func transport(_ t: Track?) -> some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 10) {
+                control("shuffle", tint: model.player.shuffle) { model.setShuffle(!model.player.shuffle) }
+                    .accessibilityLabel("Shuffle")
+                    .accessibilityValue(model.player.shuffle ? "on" : "off")
+                    .accessibilityIdentifier("player.shuffle")
+                control("backward.fill") { model.previous() }
+                    .accessibilityLabel("Previous").accessibilityIdentifier("player.previous")
+                Button { model.toggle() } label: {
+                    Image(systemName: model.player.status == .playing ? "pause.fill" : "play.fill")
+                        .font(.title2)
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: target + 6, height: target)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(model.player.status == .playing ? "Pause" : "Play")
+                .accessibilityIdentifier("player.playPause")
+                control("forward.fill") { model.next() }
+                    .accessibilityLabel("Next").accessibilityIdentifier("player.next")
+                control("repeat", tint: model.player.repeat == .one) { model.setRepeat(model.player.repeat != .one) }
+                    .help("Repeat")
+                    .accessibilityLabel("Repeat")
+                    .accessibilityValue(model.player.repeat == .one ? "on" : "off")
+                    .accessibilityIdentifier("player.repeat")
+            }
+            .buttonStyle(PressableStyle(scale: 0.8))
+            .disabled(t == nil)
+            BarScrubber()
+        }
+    }
+
+    private func control(_ symbol: String, tint: Bool? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .foregroundStyle(tint == true ? AnyShapeStyle(model.tint) : tint == false ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                .frame(width: target, height: target)
+                .contentShape(Rectangle())
+        }
+    }
+
+    private var extras: some View {
+        HStack(spacing: 4) {
+            modeButton(.lyrics, "quote.bubble", "Lyrics")
+            modeButton(.queue, "list.bullet", "Queue")
+            // The route picker draws its glyph a size smaller than its frame.
+            AirPlayButton()
+                .frame(width: 22, height: 22)
+                .frame(width: target, height: target)
+            HStack(spacing: 6) {
+                @Bindable var model = model
+                Image(systemName: model.volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+                Slider(value: $model.volume, in: 0...1)
+                    .frame(width: 90)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("player.volume")
+            }
+            .padding(.leading, 6)
+        }
+        .fixedSize()
     }
 
     private func modeButton(_ m: AppModel.NowPlayingMode, _ symbol: String, _ label: String) -> some View {
@@ -450,7 +476,12 @@ struct PlayerBar: View {
                     model.showNowPlaying = true
                 }
             }
-        } label: { Image(systemName: symbol).foregroundStyle(on ? model.tint : .primary) }
+        } label: {
+            Image(systemName: symbol)
+                .foregroundStyle(on ? model.tint : .primary)
+                .frame(width: target, height: target)
+                .contentShape(Rectangle())
+        }
         .buttonStyle(.pressable)
         .accessibilityLabel(label)
         .accessibilityIdentifier("player.\(label.lowercased())")

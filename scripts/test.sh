@@ -1,17 +1,22 @@
 #!/bin/zsh
 # End-to-end UI tests in the iOS Simulator (never touches this Mac's mouse or keyboard).
-# Builds only when something changed since the last build; extra args go to xcodebuild,
-# e.g. -only-testing:MusicUITests-iOS/iOSUITests/testSearchFindsSongs
+# Extra args go to xcodebuild, e.g. -only-testing:MusicUITests-iOS/iOSUITests/testSearchFindsSongs
 #
-# The suite should take about a minute. Every stage has a hard budget: a stage that
-# runs over is killed and the run fails, naming the stage, rather than dragging on.
+# Everything the tests build lives in build/tests: a debug Simulator-only core and its
+# own derived data, built from MusicTests.xcodeproj (the same project, pointed at that core). Nothing
+# done for the Mac app or a deploy (Generated/, build/) can break or slow a test run,
+# and each stage only rebuilds when its sources changed.
+#
+# The suite takes about a minute. Every stage has a hard budget: a stage that runs
+# over is killed and the run fails, naming the stage, rather than dragging on.
 set -eu
 set -o pipefail
 cd "$(dirname "$0")/.."
+ROOT=$PWD
 SIM="${SIM:-BC845076-8DE4-4379-88C8-F0F002C9CA47}"
-STAMP=build/.built-for-testing
+T=$ROOT/build/tests
 START=$SECONDS
-mkdir -p build
+mkdir -p $T
 
 # budget <seconds> <stage> <log> <command…>: runs the command into the log, killing it past the budget.
 budget() {
@@ -31,21 +36,35 @@ budget() {
   echo "· $stage $((SECONDS - t))s"
   return $rc
 }
-
-[ -d Generated/MusicCore.xcframework ] || PROFILE=debug ONLY=aarch64-apple-ios-sim scripts/build-core.sh
-budget 60 "boot simulator" build/boot.log xcrun simctl bootstatus "$SIM" -b
-run() {
-  xcodebuild -project Music.xcodeproj -scheme Music-iOS -destination "platform=iOS Simulator,id=$SIM" \
-    -derivedDataPath build "$@"
+# changed <stamp> <paths…>: true when the stamp is missing or anything is newer.
+changed() {
+  local stamp=$1; shift
+  [ ! -f "$stamp" ] || [ -n "$(find "$@" -newer "$stamp" -print -quit)" ]
 }
-if [ ! -f "$STAMP" ] || [ -n "$(find project.yml Shared iOS tests/Shared tests/iOSUITests Generated -newer "$STAMP" -print -quit)" ]; then
-  xcodegen generate --use-cache >/dev/null
-  budget 300 "build" build/build.log run build-for-testing -quiet \
-    || { grep -E 'error:' build/build.log || tail -20 build/build.log; exit 1; }
-  touch "$STAMP"
+
+if changed $T/.core core/src core/Cargo.toml core/Cargo.lock; then
+  budget 300 "core" $T/core.log env PROFILE=debug ONLY=aarch64-apple-ios-sim OUT=$T/core scripts/build-core.sh \
+    || { tail -20 $T/core.log; exit 1; }
+  touch $T/.core
 fi
-budget 150 "tests" build/test.log run test-without-building -skip-testing:MusicUITests-iOS/DemoFlow \
+
+budget 60 "boot simulator" $T/boot.log xcrun simctl bootstatus "$SIM" -b
+
+run() {
+  xcodebuild -project MusicTests.xcodeproj -scheme Music-iOS -destination "platform=iOS Simulator,id=$SIM" \
+    -derivedDataPath $T/dd "$@"
+}
+if changed $T/.app project.yml Shared iOS tests/Shared tests/iOSUITests $T/.core; then
+  # The same project, pointed at the tests' own core.
+  sed -e "s#Generated/#build/tests/core/#g" -e "s#^name: Music\$#name: MusicTests#" project.yml > $T/project.yml
+  xcodegen generate --spec $T/project.yml --project-root $ROOT --project $ROOT >/dev/null
+  budget 300 "build" $T/build.log run build-for-testing -quiet \
+    || { grep -E 'error:' $T/build.log || tail -20 $T/build.log; exit 1; }
+  touch $T/.app
+fi
+
+budget 150 "tests" $T/test.log run test-without-building -skip-testing:MusicUITests-iOS/DemoFlow \
   -test-timeouts-enabled YES -default-test-execution-time-allowance 60 "$@" || rc=$?
-grep -E 'Test Case .*(passed|failed)|error:|\*\* TEST' build/test.log
+grep -E 'Test Case .*(passed|failed)|error:|\*\* TEST' $T/test.log
 echo "· total $((SECONDS - START))s"
 exit ${rc:-0}

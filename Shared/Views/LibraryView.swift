@@ -108,11 +108,26 @@ struct SectionView: View {
         }
     }
 
+    #if os(macOS)
+    /// The Mac draws song lists itself: AppKit's table ignores the window's insets,
+    /// and these rows bring their own hover highlight.
+    private var list: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                PageTitle(text: section.title).padding(.horizontal, 10)
+                ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
+                    row(item)
+                        .onAppear { if query.isEmpty, i == items.count - 20 { loadMore() } }
+                }
+            }
+            .padding(.leading, Metrics.page - 10)
+            .padding(.trailing, Metrics.pageTrailing - 10)
+            .padding(.bottom, 120)
+        }
+    }
+    #else
     private var list: some View {
         List {
-            #if os(macOS)
-            PageTitle(text: section.title).listRowSeparator(.hidden)
-            #endif
             ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
                 row(item)
                     .listRowSeparator(.hidden)
@@ -120,8 +135,8 @@ struct SectionView: View {
             }
         }
         .listStyle(.plain)
-        .scrollContentBackground(.hidden)
     }
+    #endif
 
     /// Albums, artists and playlists: covers (artists in circles) with their names below.
     private var grid: some View {
@@ -153,10 +168,17 @@ struct SectionView: View {
     @ViewBuilder
     private func row(_ item: Item) -> some View {
         if item.kind == .track {
+            #if os(macOS)
+            Button { play(item) } label: { ItemRow(item: item, showAlbum: true) }
+                .buttonStyle(HoverRowStyle())
+                .accessibilityIdentifier("row.\(item.title)")
+                .itemMenu(item)
+            #else
             Button { play(item) } label: { ItemRow(item: item, showSubtitle: section != .artists) }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("row.\(item.title)")
                 .itemMenu(item)
+            #endif
         } else {
             NavigationLink(value: item) { ItemRow(item: item, showSubtitle: section != .artists) }
                 .accessibilityIdentifier("row.\(item.title)")

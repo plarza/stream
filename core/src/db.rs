@@ -241,13 +241,16 @@ impl Db {
         let tx = conn.transaction()?;
         let now = now();
         for t in tracks {
-            // Group by the main credited artist so features don't split albums or artists.
-            let primary = crate::scan::primary_artist(&t.artist);
-            let album_artist = if t.album_artist.is_empty() { primary.clone() } else { crate::scan::primary_artist(&t.album_artist) };
+            // Group by the main credited artist so features and collaborations
+            // don't split albums or artists.
+            let owner = (!t.album_artist.is_empty()).then(|| crate::scan::primary_artist(&t.album_artist));
+            let primary = crate::scan::credited_artist(&t.artist, owner.as_deref());
+            let album_artist = owner.unwrap_or_else(|| primary.clone());
             let artist_name = &album_artist;
-            let album_id = format!("local:album:{}", hash_id(&[artist_name, &t.album]));
-            let artist_id = format!("local:artist:{}", hash_id(&[&primary]));
-            let album_artist_id = format!("local:artist:{}", hash_id(&[artist_name]));
+            let key = crate::scan::artist_key;
+            let album_id = format!("local:album:{}", hash_id(&[&key(artist_name), &t.album]));
+            let artist_id = format!("local:artist:{}", hash_id(&[&key(&primary)]));
+            let album_artist_id = format!("local:artist:{}", hash_id(&[&key(artist_name)]));
             let existing: Option<String> = tx
                 .query_row("SELECT id FROM tracks WHERE path = ?1", [&t.path], |r| r.get(0))
                 .optional()?;
@@ -293,7 +296,40 @@ impl Db {
                 )?;
             }
         }
+        Self::prune_local(&tx)?;
         tx.commit()?;
+        Ok(())
+    }
+
+    fn follow_regrouped(tx: &rusqlite::Transaction) -> anyhow::Result<()> {
+        let key = crate::scan::artist_key;
+        for table in ["pins", "recents"] {
+            let stale: Vec<(String, String)> = {
+                let mut stmt = tx.prepare(&format!(
+                    "SELECT id, item FROM {table} WHERE (id LIKE 'local:artist:%' AND id NOT IN (SELECT id FROM artists))
+                        OR (id LIKE 'local:album:%' AND id NOT IN (SELECT id FROM albums))"
+                ))?;
+                stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.filter_map(Result::ok).collect()
+            };
+            for (old, json) in stale {
+                let Ok(mut item) = serde_json::from_str::<Item>(&json) else { continue };
+                let (id, exists) = if old.starts_with("local:artist:") {
+                    let id = format!("local:artist:{}", hash_id(&[&key(&item.title)]));
+                    let n: i64 = tx.query_row("SELECT COUNT(*) FROM artists WHERE id = ?1", [&id], |r| r.get(0))?;
+                    (id, n > 0)
+                } else {
+                    let id = format!("local:album:{}", hash_id(&[&key(&item.subtitle), &item.title]));
+                    let n: i64 = tx.query_row("SELECT COUNT(*) FROM albums WHERE id = ?1", [&id], |r| r.get(0))?;
+                    (id, n > 0)
+                };
+                if !exists {
+                    continue;
+                }
+                item.id = id.clone();
+                let json = serde_json::to_string(&item)?;
+                tx.execute(&format!("UPDATE OR IGNORE {table} SET id = ?1, item = ?2 WHERE id = ?3"), params![id, json, old])?;
+            }
+        }
         Ok(())
     }
 
@@ -304,6 +340,15 @@ impl Db {
         for p in paths {
             tx.execute("DELETE FROM tracks WHERE path = ?1", [p])?;
         }
+        Self::prune_local(&tx)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Local albums and artists with no songs left (a rescan can regroup songs).
+    /// Pins and recents of a regrouped album or artist follow it to its new id.
+    fn prune_local(tx: &rusqlite::Transaction) -> anyhow::Result<()> {
+        Self::follow_regrouped(tx)?;
         tx.execute(
             "DELETE FROM albums WHERE source = 0 AND id NOT IN (SELECT DISTINCT album_id FROM tracks WHERE album_id IS NOT NULL)",
             [],
@@ -313,7 +358,6 @@ impl Db {
                AND id NOT IN (SELECT DISTINCT artist_id FROM albums WHERE artist_id IS NOT NULL)",
             [],
         )?;
-        tx.commit()?;
         Ok(())
     }
 
