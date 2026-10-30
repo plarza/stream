@@ -23,8 +23,8 @@ tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "macros"
 futures-util = "0.3"
 parking_lot = "0.12"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "gzip", "http2", "form", "query", "stream"] }
-librespot-core = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
-librespot-playback = { version = "0.8", default-features = false, features = ["rustls-tls-native-roots"] }
+librespot-core = { version = "0.8", default-features = false, features = ["rustls-tls-webpki-roots"] }
+librespot-playback = { version = "0.8", default-features = false, features = ["rustls-tls-webpki-roots"] }
 librespot-metadata = { version = "0.8", default-features = false }
 librespot-protocol = { version = "0.8", default-features = false }
 librespot-audio = { version = "0.8", default-features = false }

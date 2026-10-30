@@ -1085,11 +1085,11 @@ dependencies = [
  "hyper-rustls 0.26.0",
  "hyper-util",
  "pin-project-lite",
- "rustls-native-certs 0.7.3",
  "tokio",
  "tokio-rustls 0.25.0",
  "tower-service",
  "webpki",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -1109,6 +1109,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.25.0",
  "tower-service",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -1121,11 +1122,10 @@ dependencies = [
  "hyper",
  "hyper-util",
  "rustls 0.23.46",
- "rustls-native-certs 0.8.5",
  "tokio",
  "tokio-rustls 0.26.6",
  "tower-service",
- "webpki-roots",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
@@ -2384,7 +2384,6 @@ dependencies = [
  "pin-project-lite",
  "quinn",
  "rustls 0.23.46",
- "rustls-native-certs 0.8.5",
  "rustls-pki-types",
  "serde",
  "serde_json",
@@ -2399,7 +2398,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "webpki-roots",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
@@ -3546,11 +3545,11 @@ dependencies = [
  "futures-util",
  "log",
  "rustls 0.23.46",
- "rustls-native-certs 0.8.5",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls 0.26.6",
  "tungstenite",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -4093,6 +4092,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e49d0e65abc00c142e8f9428da991da9f1a250c39be97459901eb12b9b49f62a"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
+dependencies = [
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
