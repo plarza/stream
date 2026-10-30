@@ -1,0 +1,99 @@
+name: Music
+options:
+  bundleIdPrefix: network.aza
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    DEVELOPMENT_TEAM: H5A6B4L9W8
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    DEAD_CODE_STRIPPING: YES
+    SWIFT_COMPILATION_MODE: wholemodule
+    OTHER_LDFLAGS: ["-lresolv"]
+targets:
+  Music-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Shared
+      - path: iOS
+      - path: Generated/MusicCore.swift
+    dependencies:
+      - framework: Generated/MusicCore.xcframework
+        embed: false
+      - sdk: Security.framework
+      - sdk: SystemConfiguration.framework
+      - sdk: AVFoundation.framework
+      - sdk: MediaPlayer.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: network.aza.music
+        PRODUCT_NAME: Music
+        TARGETED_DEVICE_FAMILY: "1"
+        INFOPLIST_FILE: iOS/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: iOS/Info.plist
+      properties:
+        CFBundleDisplayName: Music
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIBackgroundModes: [audio]
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSLocalNetworkUsageDescription: Music copies your library from your Mac over Wi-Fi.
+        NSBonjourServices: [_musicsync._tcp]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSUserActivityTypes: [network.aza.music.playing]
+        CFBundleURLTypes:
+          - CFBundleURLName: network.aza.music
+            CFBundleURLSchemes: [network-aza-music]
+        ITSAppUsesNonExemptEncryption: false
+  Music-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - path: Shared
+      - path: macOS
+      - path: Generated/MusicCore.swift
+    dependencies:
+      - framework: Generated/MusicCore.xcframework
+        embed: false
+      - sdk: Security.framework
+      - sdk: SystemConfiguration.framework
+      - sdk: AVFoundation.framework
+      - sdk: MediaPlayer.framework
+      - sdk: CoreAudio.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: network.aza.music
+        PRODUCT_NAME: Music
+        INFOPLIST_FILE: macOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: macOS/Music.entitlements
+        ENABLE_HARDENED_RUNTIME: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: macOS/Info.plist
+      properties:
+        CFBundleDisplayName: Music
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.music
+        NSLocalNetworkUsageDescription: Music shares your library with your iPhone over Wi-Fi.
+        NSBonjourServices: [_musicsync._tcp]
+        NSUserActivityTypes: [network.aza.music.playing]
+        CFBundleURLTypes:
+          - CFBundleURLName: network.aza.music
+            CFBundleURLSchemes: [network-aza-music]
+    entitlements:
+      path: macOS/Music.entitlements
+      properties:
+        com.apple.security.app-sandbox: false

@@ -1,0 +1,12 @@
+[package]
+name = "sysinfo"
+version = "0.36.1"
+edition = "2021"
+description = "Minimal stand-in for sysinfo: librespot only reads the OS and kernel version, and real sysinfo does not build for iOS."
+
+[features]
+default = []
+system = []
+
+[dependencies]
+libc = "0.2"
