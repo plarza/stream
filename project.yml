@@ -44,7 +44,9 @@ targets:
     info:
       path: iOS/Info.plist
       properties:
-        CFBundleDisplayName: Music
+        # "Music" is Apple's; the App Store refuses a bundle that uses it (ITMS-90129).
+        CFBundleDisplayName: azaMusic
+        CFBundleName: azaMusic
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
