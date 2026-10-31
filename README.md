@@ -37,6 +37,7 @@ Needs Xcode 26, Rust and `brew install xcodegen cmake`.
 | Build the Rust core | `scripts/build-core.sh` |
 | Open in Xcode | `xcodegen generate && open Music.xcodeproj` |
 | Install on this Mac and the iPhone | `scripts/deploy.sh` |
+| Upload to TestFlight | `scripts/testflight.sh` |
 | UI tests in the Simulator | `scripts/test.sh` |
 | Refresh these screenshots | `python3 -I scripts/demo.py --screenshots` |
 
