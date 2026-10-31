@@ -2,7 +2,7 @@
   <img src="assets/icon.png" width="96" alt="">
 </p>
 
-<h1 align="center">Music</h1>
+<h1 align="center">Stream</h1>
 
 <p align="center">Spotify and your own music files in one player for iPhone and Mac · iOS 26 / macOS 26</p>
 
@@ -35,7 +35,7 @@ Needs Xcode 26, Rust and `brew install xcodegen cmake`.
 | Task | Command |
 |---|---|
 | Build the Rust core | `scripts/build-core.sh` |
-| Open in Xcode | `xcodegen generate && open Music.xcodeproj` |
+| Open in Xcode | `xcodegen generate && open Stream.xcodeproj` |
 | Install on this Mac and the iPhone | `scripts/deploy.sh` |
 | Upload to TestFlight | `scripts/testflight.sh` |
 | UI tests in the Simulator | `scripts/test.sh` |

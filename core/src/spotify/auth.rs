@@ -36,7 +36,7 @@ pub const WEB_SCOPES: &[&str] = &[
 ];
 
 /// Where the browser lands after the loopback page; brings the app back.
-pub const APP_CALLBACK: &str = "network-aza-music://auth-done";
+pub const APP_CALLBACK: &str = "network-aza-stream://auth-done";
 
 const AUTHORIZE_URL: &str = "https://accounts.spotify.com/authorize";
 const TOKEN_URL: &str = "https://accounts.spotify.com/api/token";
@@ -145,10 +145,10 @@ async fn wait_for_code(listener: &TcpListener, state: &str) -> Result<String> {
         }
         let ok = error.is_none() && got_state.as_deref() == Some(state) && code.is_some();
         let body = format!(
-            "<!doctype html><meta name=viewport content='width=device-width'><title>Music</title>\
+            "<!doctype html><meta name=viewport content='width=device-width'><title>Stream</title>\
              <body style='font:17px -apple-system;display:grid;place-items:center;height:90vh;background:#111;color:#eee'>\
              <p>{}</p><script>location.href='{APP_CALLBACK}'</script>",
-            if ok { "Signed in. You can return to Music." } else { "Sign-in was not completed." }
+            if ok { "Signed in. You can return to Stream." } else { "Sign-in was not completed." }
         );
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",

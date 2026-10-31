@@ -117,7 +117,7 @@ pub async fn lrclib(http: &reqwest::Client, artist: &str, title: &str, album: &s
     let exact = http
         .get(format!("{LRCLIB}/get"))
         .query(&[("artist_name", artist), ("track_name", title), ("album_name", album), ("duration", &secs)])
-        .header("User-Agent", "Music (network.aza.music)")
+        .header("User-Agent", "Stream (network.aza.stream)")
         .timeout(Duration::from_secs(8))
         .send()
         .await
@@ -129,7 +129,7 @@ pub async fn lrclib(http: &reqwest::Client, artist: &str, title: &str, album: &s
         let results: serde_json::Value = http
             .get(format!("{LRCLIB}/search"))
             .query(&[("artist_name", artist), ("track_name", title)])
-            .header("User-Agent", "Music (network.aza.music)")
+            .header("User-Agent", "Stream (network.aza.stream)")
             .timeout(Duration::from_secs(8))
             .send()
             .await

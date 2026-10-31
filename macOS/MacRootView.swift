@@ -585,7 +585,7 @@ struct MenuBarCard: View {
             .font(.title3)
             Divider()
             HStack {
-                Button("Open Music") {
+                Button("Open Stream") {
                     NSApp.setActivationPolicy(.regular)
                     openWindow(id: "main")
                     NSApp.activate()

@@ -72,7 +72,7 @@ impl Engine {
         });
         let weak = Arc::downgrade(&engine);
         std::thread::Builder::new()
-            .name("music-monitor".into())
+            .name("stream-monitor".into())
             .spawn(move || {
                 while let Some(e) = weak.upgrade() {
                     let busy = e.tick();
@@ -233,7 +233,7 @@ impl Engine {
         self.feeder_done.store(u64::MAX, Ordering::Release);
         let me = self.clone();
         std::thread::Builder::new()
-            .name("music-feeder".into())
+            .name("stream-feeder".into())
             .spawn(move || me.feed(generation, index, ms))
             .expect("spawn feeder");
         self.set_status(PlaybackStatus::Playing);

@@ -1,10 +1,10 @@
 core/target/
 Generated/
-Music.xcodeproj/
-MusicTests.xcodeproj/
+Stream.xcodeproj/
+StreamTests.xcodeproj/
 build/
 iOS/Info.plist
 macOS/Info.plist
 .DS_Store
-macOS/Music.entitlements
+macOS/Stream.entitlements
 tests/fixtures/

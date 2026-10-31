@@ -1,8 +1,8 @@
 import XCTest
 
-/// Launches Music against the fixture library in test mode: isolated data,
+/// Launches Stream against the fixture library in test mode: isolated data,
 /// silent output, nothing persisted, no network services.
-class MusicUITestCase: XCTestCase {
+class StreamUITestCase: XCTestCase {
     var app: XCUIApplication!
 
     /// The small generated library from tests/make-fixtures.sh.
@@ -22,7 +22,7 @@ class MusicUITestCase: XCTestCase {
         if let app = Self.running, app.state == .runningForeground {
             self.app = app
             #if os(iOS)
-            XCUIDevice.shared.system.open(URL(string: "network-aza-music://reset")!)
+            XCUIDevice.shared.system.open(URL(string: "network-aza-stream://reset")!)
             let home = app.tabBars.buttons["Home"].firstMatch
             XCTAssertTrue(poll(5) { home.isSelected && home.isHittable }, "reset didn't land on Home")
             #endif

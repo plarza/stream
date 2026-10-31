@@ -7,7 +7,7 @@ import AppKit
 
 /// Shows Spotify's sign-in pages in the system's in-app browser sheet, on iPhone
 /// and Mac alike, so the default browser never matters. The loopback page hands
-/// the code to the core, then redirects to network-aza-music://auth-done, which
+/// the code to the core, then redirects to network-aza-stream://auth-done, which
 /// closes the sheet. Closing it by hand cancels the sign-in in the core.
 @MainActor
 final class WebAuth: NSObject, ASWebAuthenticationPresentationContextProviding {
@@ -19,7 +19,7 @@ final class WebAuth: NSObject, ASWebAuthenticationPresentationContextProviding {
         session?.cancel()
         generation += 1
         let mine = generation
-        let session = ASWebAuthenticationSession(url: url, callback: .customScheme("network-aza-music")) { @Sendable _, error in
+        let session = ASWebAuthenticationSession(url: url, callback: .customScheme("network-aza-stream")) { @Sendable _, error in
             let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
             Task { @MainActor in
                 if cancelled, self.generation == mine { onCancel() }

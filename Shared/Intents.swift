@@ -76,7 +76,7 @@ struct PlayPinIntent: AppIntent {
     }
 }
 
-struct MusicShortcuts: AppShortcutsProvider {
+struct StreamShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: PlayLikedSongsIntent(), phrases: ["Play my liked songs in \(.applicationName)"], shortTitle: "Liked Songs", systemImageName: "heart.fill")
         AppShortcut(intent: PlayPinIntent(), phrases: ["Play \(\.$pin) in \(.applicationName)"], shortTitle: "Play Pinned", systemImageName: "pin.fill")

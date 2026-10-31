@@ -1,12 +1,12 @@
-# Music — spec
+# Stream — spec
 
 A personal music player for iPhone and Mac. It plays your Spotify account and your
 own audio files as one library, with Liquid Glass design, very low memory use, and
 fast startup. Built for one user and sideloaded, never shipped to the App Store
 (embedding librespot is against Spotify's terms).
 
-- Name: **Music**
-- Bundle ID: `network.aza.music`
+- Name: **Stream** (App Store: azaStream)
+- Bundle ID: `network.aza.stream`
 - Platforms: iOS 26+, macOS 26+ (Liquid Glass APIs only, no fallbacks)
 - Appearance: System (default), Light or Dark in Settings; on the Mac, a pure-black option for dark mode (iPhone's dark mode is already black)
 - Mockups: `mockups/*.html` (each chosen option is noted below)
@@ -17,7 +17,7 @@ fast startup. Built for one user and sideloaded, never shipped to the App Store
 SwiftUI app (iOS + macOS, one shared codebase)
   │  UniFFI (async + callback interfaces)
   ▼
-Rust core  (static lib, packed as MusicCore.xcframework)
+Rust core  (static lib, packed as StreamCore.xcframework)
   ├─ spotify   librespot 0.8 session + Web API client + PKCE sign-in
   ├─ library   SQLite (FTS5) index of local files + cached Spotify library
   ├─ engine    decoding (symphonia / librespot), queue, gapless, crossfade, normalization
@@ -172,7 +172,7 @@ Everything should feel like Apple's own apps:
 - Tests launch the app with `-musicFolder <tests/fixtures/Music> -uiTesting YES`: an isolated
   library, silent output, nothing persisted. Regenerate the fixtures with
   `tests/make-fixtures.sh`.
-- `TourTests` walks every screen and saves screenshots to `/tmp/music-tour` for layout review.
+- `TourTests` walks every screen and saves screenshots to `/tmp/stream-tour` for layout review.
 
 ## Out of scope
 
@@ -184,11 +184,11 @@ Connect receiver, Handoff for local tracks, transcoding, lyrics outside the app.
 
 ```
 SPEC.md
-project.yml           XcodeGen project: Music-iOS, Music-macOS, MusicUITests-iOS
+project.yml           XcodeGen project: Stream-iOS, Stream-macOS, StreamUITests-iOS
 Shared/               SwiftUI views and app model used by both apps
 iOS/, macOS/          each app's entry point and platform extras
-core/                 Rust core (music-core crate, UniFFI)
-Generated/            MusicCore.xcframework + Swift bindings (built, not committed)
+core/                 Rust core (stream-core crate, UniFFI)
+Generated/            StreamCore.xcframework + Swift bindings (built, not committed)
 tests/                Simulator UI tests and fixture music
 scripts/              build-core.sh, deploy.sh, test.sh, demo.py
 docs/                 screenshots for the README, design mockups

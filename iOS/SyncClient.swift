@@ -14,7 +14,7 @@ final class SyncClient {
         // a Mac into it would replace the fixtures with someone's real library.
         guard !busy, !AppModel.isTesting else { return }
         busy = true
-        let browser = NWBrowser(for: .bonjour(type: "_musicsync._tcp", domain: nil), using: .tcp)
+        let browser = NWBrowser(for: .bonjour(type: "_streamsync._tcp", domain: nil), using: .tcp)
         self.browser = browser
         browser.browseResultsChangedHandler = { [weak self] results, _ in
             guard let endpoint = results.first?.endpoint else { return }

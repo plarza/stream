@@ -1,4 +1,4 @@
-//! Music core: library, Spotify, playback, lyrics, scrobbling and sync,
+//! Stream core: library, Spotify, playback, lyrics, scrobbling and sync,
 //! exposed to Swift through UniFFI.
 
 uniffi::setup_scaffolding!();
@@ -69,7 +69,7 @@ pub struct SyncStatus {
 }
 
 #[derive(uniffi::Object)]
-pub struct MusicCore {
+pub struct StreamCore {
     rt: Runtime,
     http: reqwest::Client,
     db: Arc<Db>,
@@ -101,7 +101,7 @@ fn err(e: impl std::fmt::Display) -> CoreError {
 }
 
 #[uniffi::export]
-impl MusicCore {
+impl StreamCore {
     #[uniffi::constructor]
     pub fn new(config: CoreConfig, delegate: Arc<dyn CoreDelegate>) -> Result<Arc<Self>, CoreError> {
         // librespot and reqwest pull in both of rustls' crypto backends, so rustls
@@ -118,12 +118,12 @@ impl MusicCore {
         let db = Arc::new(Db::open(&data.join("library.sqlite"), art_dir.clone()).map_err(err)?);
         let rt = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
-            .thread_name("music-io")
+            .thread_name("stream-io")
             .enable_all()
             .build()
             .map_err(err)?;
         let http = reqwest::Client::builder()
-            .user_agent("Music/1.0 (network.aza.music)")
+            .user_agent("Stream/1.0 (network.aza.stream)")
             .connect_timeout(Duration::from_secs(10))
             .build()
             .map_err(err)?;
@@ -149,7 +149,7 @@ impl MusicCore {
         let playback: Arc<RwLock<Option<Arc<Playback>>>> = Arc::new(RwLock::new(None));
         // The engine reports to the core, which is created right after; route
         // through a slot so the engine does not own the core.
-        let slot: Arc<RwLock<Option<std::sync::Weak<MusicCore>>>> = Arc::new(RwLock::new(None));
+        let slot: Arc<RwLock<Option<std::sync::Weak<StreamCore>>>> = Arc::new(RwLock::new(None));
         let slot2 = slot.clone();
         let notify = Arc::new(move |ev: EngineEvent| {
             if let Some(core) = slot2.read().as_ref().and_then(|w| w.upgrade()) {
@@ -159,7 +159,7 @@ impl MusicCore {
         let engine = Engine::new(db.clone(), playback.clone(), notify);
         engine.normalization.store(settings.normalization, Ordering::Relaxed);
 
-        let core = Arc::new(MusicCore {
+        let core = Arc::new(StreamCore {
             rt,
             http,
             db,
@@ -346,7 +346,7 @@ impl MusicCore {
         }
         let me = self.clone();
         std::thread::Builder::new()
-            .name("music-scan".into())
+            .name("stream-scan".into())
             .spawn(move || {
                 let roots: Vec<PathBuf> = match &me.music_dir {
                     Some(d) if me.is_phone => vec![d.clone()],
@@ -768,7 +768,7 @@ impl From<&Preferences> for SettingsJson {
     }
 }
 
-impl MusicCore {
+impl StreamCore {
     fn emit_account(&self) {
         self.delegate.account_changed(self.account.lock().clone());
     }

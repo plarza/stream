@@ -2,17 +2,17 @@ import AppKit
 import SwiftUI
 
 @main
-struct MusicMacApp: App {
+struct StreamMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel.shared
     @State private var palette = false
 
     var body: some Scene {
-        Window("Music", id: "main") {
+        Window("Stream", id: "main") {
             MacRootView(showPalette: $palette)
                 .environment(model)
                 .frame(minWidth: 1000, minHeight: 600)
-                .onContinueUserActivity("network.aza.music.playing") { model.continueActivity($0) }
+                .onContinueUserActivity("network.aza.stream.playing") { model.continueActivity($0) }
                 .onOpenURL { model.handle(url: $0) }
                 .onAppear { NSApp.setActivationPolicy(.regular) }
                 .onDisappear {
@@ -111,7 +111,7 @@ final class SyncAdvertiser: NSObject, NetServiceDelegate {
 
     func start(port: UInt16) {
         let name = Host.current().localizedName ?? "Mac"
-        let s = NetService(domain: "local.", type: "_musicsync._tcp.", name: name, port: Int32(port))
+        let s = NetService(domain: "local.", type: "_streamsync._tcp.", name: name, port: Int32(port))
         s.publish()
         service = s
     }

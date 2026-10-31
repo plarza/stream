@@ -19,7 +19,7 @@ actor ArtworkStore {
     private let session: URLSession
 
     init() {
-        dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.music/remote-art", isDirectory: true)
+        dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.stream/remote-art", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let config = URLSessionConfiguration.default
         config.urlCache = nil

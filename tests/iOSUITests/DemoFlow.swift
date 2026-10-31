@@ -2,7 +2,7 @@ import XCTest
 
 /// Taps through the app for the README screenshots (scripts/demo.py --screenshots
 /// captures each SHOT_ mark). Not a test.
-final class DemoFlow: MusicUITestCase {
+final class DemoFlow: StreamUITestCase {
     private func shot(_ name: String) {
         XCTContext.runActivity(named: "SHOT_\(name)") { _ in }
         Thread.sleep(forTimeInterval: 2.0)

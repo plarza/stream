@@ -1,9 +1,9 @@
 #!/bin/zsh
 # End-to-end UI tests in the iOS Simulator (never touches this Mac's mouse or keyboard).
-# Extra args go to xcodebuild, e.g. -only-testing:MusicUITests-iOS/iOSUITests/testSearchFindsSongs
+# Extra args go to xcodebuild, e.g. -only-testing:StreamUITests-iOS/iOSUITests/testSearchFindsSongs
 #
 # Everything the tests build lives in build/tests: a debug Simulator-only core and its
-# own derived data, built from MusicTests.xcodeproj (the same project, pointed at that core). Nothing
+# own derived data, built from StreamTests.xcodeproj (the same project, pointed at that core). Nothing
 # done for the Mac app or a deploy (Generated/, build/) can break or slow a test run,
 # and each stage only rebuilds when its sources changed.
 #
@@ -51,19 +51,19 @@ fi
 budget 60 "boot simulator" $T/boot.log xcrun simctl bootstatus "$SIM" -b
 
 run() {
-  xcodebuild -project MusicTests.xcodeproj -scheme Music-iOS -destination "platform=iOS Simulator,id=$SIM" \
+  xcodebuild -project StreamTests.xcodeproj -scheme Stream-iOS -destination "platform=iOS Simulator,id=$SIM" \
     -derivedDataPath $T/dd "$@"
 }
 if changed $T/.app project.yml Shared iOS tests/Shared tests/iOSUITests $T/.core; then
   # The same project, pointed at the tests' own core.
-  sed -e "s#Generated/#build/tests/core/#g" -e "s#^name: Music\$#name: MusicTests#" project.yml > $T/project.yml
+  sed -e "s#Generated/#build/tests/core/#g" -e "s#^name: Stream\$#name: StreamTests#" project.yml > $T/project.yml
   xcodegen generate --spec $T/project.yml --project-root $ROOT --project $ROOT >/dev/null
   budget 300 "build" $T/build.log run build-for-testing -quiet \
     || { grep -E 'error:' $T/build.log || tail -20 $T/build.log; exit 1; }
   touch $T/.app
 fi
 
-budget 150 "tests" $T/test.log run test-without-building -skip-testing:MusicUITests-iOS/DemoFlow \
+budget 150 "tests" $T/test.log run test-without-building -skip-testing:StreamUITests-iOS/DemoFlow \
   -test-timeouts-enabled YES -default-test-execution-time-allowance 60 "$@" || rc=$?
 grep -E 'Test Case .*(passed|failed)|error:|\*\* TEST' $T/test.log
 echo "· total $((SECONDS - START))s"

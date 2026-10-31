@@ -147,7 +147,7 @@ struct SettingsView: View {
         } header: {
             Text("Library from Mac")
         } footer: {
-            Text("Your Mac’s music copies here automatically whenever Music is open on the same Wi-Fi.")
+            Text("Your Mac’s music copies here automatically whenever Stream is open on the same Wi-Fi.")
         }
     }
     #endif

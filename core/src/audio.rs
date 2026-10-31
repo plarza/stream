@@ -2,7 +2,7 @@
 //!
 //! Decoders write interleaved stereo `f32` at the output rate into a lock-free
 //! ring buffer. Swift's AVAudioSourceNode pulls it through
-//! [`music_core_render`] on the audio thread: no locks it can wait on, no
+//! [`stream_core_render`] on the audio thread: no locks it can wait on, no
 //! allocation. Frame counters on both sides give the audible position, so the
 //! UI shows exactly what is heard even while the next song is already being
 //! decoded.
@@ -132,7 +132,7 @@ impl Output {
 /// # Safety
 /// `left` and `right` must point to at least `frames` writable floats.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn music_core_render(left: *mut f32, right: *mut f32, frames: u32) -> u32 {
+pub unsafe extern "C" fn stream_core_render(left: *mut f32, right: *mut f32, frames: u32) -> u32 {
     let frames = frames as usize;
     // SAFETY: the caller guarantees both buffers hold `frames` floats.
     let (l, r) = unsafe { (std::slice::from_raw_parts_mut(left, frames), std::slice::from_raw_parts_mut(right, frames)) };

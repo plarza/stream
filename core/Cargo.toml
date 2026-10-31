@@ -1,12 +1,12 @@
 [package]
-name = "music-core"
+name = "stream-core"
 version = "0.1.0"
 edition = "2024"
 publish = false
 
 [lib]
 crate-type = ["staticlib", "cdylib", "lib"]
-name = "music_core"
+name = "stream_core"
 
 [[bin]]
 name = "uniffi-bindgen"

@@ -1,6 +1,6 @@
 import AVFoundation
-#if canImport(music_coreFFI)
-import music_coreFFI
+#if canImport(stream_coreFFI)
+import stream_coreFFI
 #endif
 
 /// The device end of the audio path. An AVAudioSourceNode pulls PCM straight
@@ -52,7 +52,7 @@ final class AudioOutput: @unchecked Sendable {
             guard abl.count >= 2,
                   let l = abl[0].mData?.assumingMemoryBound(to: Float.self),
                   let r = abl[1].mData?.assumingMemoryBound(to: Float.self) else { return noErr }
-            _ = music_core_render(l, r, frameCount)
+            _ = stream_core_render(l, r, frameCount)
             return noErr
         }
         engine.attach(node)

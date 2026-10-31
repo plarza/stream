@@ -1,6 +1,6 @@
 import XCTest
 
-final class iOSUITests: MusicUITestCase {
+final class iOSUITests: StreamUITestCase {
     private func openAlbum(_ title: String) {
         app.tabBars.buttons["Library"].tap()
         wait(el("library.Albums")).tap()

@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct MusicApp: App {
+struct StreamApp: App {
     @State private var model = AppModel.shared
     @Environment(\.scenePhase) private var phase
 
@@ -9,7 +9,7 @@ struct MusicApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .onContinueUserActivity("network.aza.music.playing") { model.continueActivity($0) }
+                .onContinueUserActivity("network.aza.stream.playing") { model.continueActivity($0) }
                 .onOpenURL { model.handle(url: $0) }
                 .onChange(of: phase) { _, p in
                     if p == .active {

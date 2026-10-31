@@ -9,7 +9,7 @@ import SwiftUI
 final class AppModel {
     static let shared = AppModel()
 
-    let core: MusicCore
+    let core: StreamCore
     private let bridge: CoreBridge
     let audio = AudioOutput()
     let nowPlaying = NowPlayingCenter()
@@ -52,10 +52,10 @@ final class AppModel {
 
     private init() {
         let fm = FileManager.default
-        var support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.music", isDirectory: true)
-        var caches = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.music", isDirectory: true)
+        var support = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.stream", isDirectory: true)
+        var caches = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("network.aza.stream", isDirectory: true)
         if Self.isTesting {
-            let root = fm.temporaryDirectory.appendingPathComponent("music-uitest-\(UUID().uuidString)", isDirectory: true)
+            let root = fm.temporaryDirectory.appendingPathComponent("stream-uitest-\(UUID().uuidString)", isDirectory: true)
             support = root.appendingPathComponent("data")
             caches = root.appendingPathComponent("cache")
         }
@@ -72,7 +72,7 @@ final class AppModel {
         self.bridge = bridge
         let config = CoreConfig(dataDir: support.path, cacheDir: caches.path, musicDir: musicDir?.path, isPhone: isPhone)
         // A failure here means the disk is unusable; nothing sensible to show.
-        core = try! MusicCore(config: config, delegate: bridge)
+        core = try! StreamCore(config: config, delegate: bridge)
         player = core.playerState()
         account = core.account()
         home = core.home()
@@ -269,9 +269,9 @@ final class AppModel {
         return error.localizedDescription
     }
 
-    /// network-aza-music://play?id=…[&shuffle=1] · open?id=… · nowplaying?mode=lyrics|queue
+    /// network-aza-stream://play?id=…[&shuffle=1] · open?id=… · nowplaying?mode=lyrics|queue
     func handle(url: URL) {
-        guard url.scheme == "network-aza-music" else { return }
+        guard url.scheme == "network-aza-stream" else { return }
         let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let value = { (name: String) in q.first { $0.name == name }?.value }
         switch url.host() {
@@ -336,7 +336,7 @@ final class AppModel {
             handoff = nil
             return
         }
-        let activity = handoff ?? NSUserActivity(activityType: "network.aza.music.playing")
+        let activity = handoff ?? NSUserActivity(activityType: "network.aza.stream.playing")
         activity.title = "\(track.title) — \(track.artist)"
         activity.isEligibleForHandoff = true
         activity.needsSave = true
@@ -364,7 +364,7 @@ final class AppModel {
 /// Receives core callbacks on Rust threads and hops to the main actor.
 final class CoreBridge: CoreDelegate, @unchecked Sendable {
     weak var model: AppModel?
-    private let keychain = Keychain(service: "network.aza.music")
+    private let keychain = Keychain(service: "network.aza.stream")
     private let testing = ProcessInfo.processInfo.arguments.contains("-uiTesting")
     private var memory: [String: String] = [:]
     private let lock = NSLock()

@@ -6,7 +6,7 @@ import os, pty, re, subprocess, sys, tempfile, time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SIM = os.environ.get("SIM", "4C675D57-6CF7-4DDA-ACF4-4075857B2010")
-BUNDLE = "network.aza.music"
+BUNDLE = "network.aza.stream"
 DEST = f"platform=iOS Simulator,id={SIM}"
 FIXTURES = os.path.join(ROOT, "tests", "library", "Music")
 OUT = os.path.join(ROOT, "docs", "screenshots")
@@ -24,12 +24,12 @@ def simctl(*args, check=True):
 def prepare():
     """Builds the app and its tests, and gives the simulator a tidy status bar."""
     print("building…", flush=True)
-    if not os.path.isdir(os.path.join(ROOT, "Generated", "MusicCore.xcframework")):
+    if not os.path.isdir(os.path.join(ROOT, "Generated", "StreamCore.xcframework")):
         run("scripts/build-core.sh", env={"PROFILE": "debug"})
     run("xcodegen", "generate")
-    run("xcodebuild", "-project", "Music.xcodeproj", "-scheme", "Music-iOS", "-destination", DEST,
+    run("xcodebuild", "-project", "Stream.xcodeproj", "-scheme", "Stream-iOS", "-destination", DEST,
         "-derivedDataPath", "build", "build-for-testing")
-    run("xcodebuild", "-project", "Music.xcodeproj", "-scheme", "Music-macOS", "-destination", "platform=macOS",
+    run("xcodebuild", "-project", "Stream.xcodeproj", "-scheme", "Stream-macOS", "-destination", "platform=macOS",
         "-derivedDataPath", "build", "build")
     simctl("bootstatus", SIM, "-b")
     simctl("status_bar", SIM, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100",
@@ -41,9 +41,9 @@ def run_flow(method, on_line):
     """Runs one DemoFlow method, calling on_line for each output line as it happens."""
     # A pseudo-terminal keeps xcodebuild line-buffered, so marks arrive when they happen.
     master, slave = pty.openpty()
-    test = subprocess.Popen(["xcodebuild", "test-without-building", "-project", "Music.xcodeproj", "-scheme", "Music-iOS",
+    test = subprocess.Popen(["xcodebuild", "test-without-building", "-project", "Stream.xcodeproj", "-scheme", "Stream-iOS",
                              "-destination", DEST, "-derivedDataPath", "build",
-                             f"-only-testing:MusicUITests-iOS/DemoFlow/{method}"],
+                             f"-only-testing:StreamUITests-iOS/DemoFlow/{method}"],
                             cwd=ROOT, stdout=slave, stderr=slave, text=True)
     os.close(slave)
     log, buf = [], b""
@@ -62,7 +62,7 @@ def run_flow(method, on_line):
             on_line(line)
     test.wait()
     if test.returncode != 0:
-        path = os.path.join(tempfile.mkdtemp(prefix="music-demo-"), "flow.log")
+        path = os.path.join(tempfile.mkdtemp(prefix="stream-demo-"), "flow.log")
         open(path, "w").writelines(log)
         sys.exit(f"{method} failed, log in {path}")
 
@@ -86,13 +86,13 @@ def frame(path, phone=True):
 
 def mac_window():
     """Launches the Mac app in the background on the fixtures and captures its window, without taking focus."""
-    app = os.path.join(ROOT, "build/Build/Products/Debug/Music.app")
-    subprocess.run(["pkill", "-f", app + "/Contents/MacOS/Music"], check=False)
-    album = "network-aza-music://open?id=" + mac_album_id()
+    app = os.path.join(ROOT, "build/Build/Products/Debug/Stream.app")
+    subprocess.run(["pkill", "-f", app + "/Contents/MacOS/Stream"], check=False)
+    album = "network-aza-stream://open?id=" + mac_album_id()
     subprocess.run(["open", "-g", "-n", app, "--args", "-musicFolder", FIXTURES, "-uiTesting", "YES",
-                    "-url", "network-aza-music://play?id=" + mac_album_id(), "-url", album], check=True)
+                    "-url", "network-aza-stream://play?id=" + mac_album_id(), "-url", album], check=True)
     time.sleep(8)
-    pid = subprocess.run(["pgrep", "-n", "-f", app + "/Contents/MacOS/Music"], capture_output=True, text=True).stdout.split()[0]
+    pid = subprocess.run(["pgrep", "-n", "-f", app + "/Contents/MacOS/Stream"], capture_output=True, text=True).stdout.split()[0]
     find = ("import CoreGraphics\n"
             "let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as! [[String: Any]]\n"
             f"for w in list where (w[kCGWindowOwnerPID as String] as? Int) == {pid} && (w[kCGWindowLayer as String] as? Int) == 0 && (w[kCGWindowIsOnscreen as String] as? Bool) == true {{\n"
@@ -101,7 +101,7 @@ def mac_window():
     wid = subprocess.run(["swift", "-e", find], capture_output=True, text=True).stdout.strip()
     path = os.path.join(OUT, "mac.png")
     shot = subprocess.run(["screencapture", "-x", "-o", f"-l{wid}", path])
-    subprocess.run(["pkill", "-f", app + "/Contents/MacOS/Music"], check=False)
+    subprocess.run(["pkill", "-f", app + "/Contents/MacOS/Stream"], check=False)
     if shot.returncode != 0:
         # macOS refuses window captures while the screen is locked or asleep.
         print("skipped mac: unlock the screen and run again", flush=True)

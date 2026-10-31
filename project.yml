@@ -1,4 +1,4 @@
-name: Music
+name: Stream
 options:
   bundleIdPrefix: network.aza
   deploymentTarget:
@@ -17,17 +17,17 @@ settings:
     SWIFT_COMPILATION_MODE: wholemodule
     OTHER_LDFLAGS: ["-lresolv"]
 targets:
-  Music-iOS:
+  Stream-iOS:
     type: application
     platform: iOS
     scheme:
-      testTargets: [MusicUITests-iOS]
+      testTargets: [StreamUITests-iOS]
     sources:
       - path: Shared
       - path: iOS
-      - path: Generated/MusicCore.swift
+      - path: Generated/StreamCore.swift
     dependencies:
-      - framework: Generated/MusicCore.xcframework
+      - framework: Generated/StreamCore.xcframework
         embed: false
       - sdk: Security.framework
       - sdk: SystemConfiguration.framework
@@ -35,8 +35,8 @@ targets:
       - sdk: MediaPlayer.framework
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: network.aza.music
-        PRODUCT_NAME: Music
+        PRODUCT_BUNDLE_IDENTIFIER: network.aza.stream
+        PRODUCT_NAME: Stream
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_FILE: iOS/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -44,9 +44,7 @@ targets:
     info:
       path: iOS/Info.plist
       properties:
-        # "Music" is Apple's; the App Store refuses a bundle that uses it (ITMS-90129).
-        CFBundleDisplayName: azaMusic
-        CFBundleName: azaMusic
+        CFBundleDisplayName: Stream
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
@@ -54,38 +52,38 @@ targets:
         UIApplicationSupportsIndirectInputEvents: true
         CADisableMinimumFrameDurationOnPhone: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        NSLocalNetworkUsageDescription: Music copies your library from your Mac over Wi-Fi.
-        NSBonjourServices: [_musicsync._tcp]
+        NSLocalNetworkUsageDescription: Stream copies your library from your Mac over Wi-Fi.
+        NSBonjourServices: [_streamsync._tcp]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-        NSUserActivityTypes: [network.aza.music.playing]
+        NSUserActivityTypes: [network.aza.stream.playing]
         CFBundleURLTypes:
-          - CFBundleURLName: network.aza.music
-            CFBundleURLSchemes: [network-aza-music]
+          - CFBundleURLName: network.aza.stream
+            CFBundleURLSchemes: [network-aza-stream]
         ITSAppUsesNonExemptEncryption: false
-  MusicUITests-iOS:
+  StreamUITests-iOS:
     type: bundle.ui-testing
     platform: iOS
     sources:
       - path: tests/Shared
       - path: tests/iOSUITests
     dependencies:
-      - target: Music-iOS
+      - target: Stream-iOS
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: network.aza.music.uitests
-        TEST_TARGET_NAME: Music-iOS
+        PRODUCT_BUNDLE_IDENTIFIER: network.aza.stream.uitests
+        TEST_TARGET_NAME: Stream-iOS
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "1"
-  Music-macOS:
+  Stream-macOS:
     type: application
     platform: macOS
     sources:
       - path: Shared
       - path: macOS
-      - path: Generated/MusicCore.swift
+      - path: Generated/StreamCore.swift
     dependencies:
-      - framework: Generated/MusicCore.xcframework
+      - framework: Generated/StreamCore.xcframework
         embed: false
       - sdk: Security.framework
       - sdk: SystemConfiguration.framework
@@ -94,27 +92,27 @@ targets:
       - sdk: CoreAudio.framework
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: network.aza.music
-        PRODUCT_NAME: Music
+        PRODUCT_BUNDLE_IDENTIFIER: network.aza.stream
+        PRODUCT_NAME: Stream
         INFOPLIST_FILE: macOS/Info.plist
-        CODE_SIGN_ENTITLEMENTS: macOS/Music.entitlements
+        CODE_SIGN_ENTITLEMENTS: macOS/Stream.entitlements
         ENABLE_HARDENED_RUNTIME: NO
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     info:
       path: macOS/Info.plist
       properties:
-        CFBundleDisplayName: Music
+        CFBundleDisplayName: Stream
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.music
-        NSLocalNetworkUsageDescription: Music shares your library with your iPhone over Wi-Fi.
-        NSBonjourServices: [_musicsync._tcp]
-        NSUserActivityTypes: [network.aza.music.playing]
+        NSLocalNetworkUsageDescription: Stream shares your library with your iPhone over Wi-Fi.
+        NSBonjourServices: [_streamsync._tcp]
+        NSUserActivityTypes: [network.aza.stream.playing]
         CFBundleURLTypes:
-          - CFBundleURLName: network.aza.music
-            CFBundleURLSchemes: [network-aza-music]
+          - CFBundleURLName: network.aza.stream
+            CFBundleURLSchemes: [network-aza-stream]
     entitlements:
-      path: macOS/Music.entitlements
+      path: macOS/Stream.entitlements
       properties:
         com.apple.security.app-sandbox: false
