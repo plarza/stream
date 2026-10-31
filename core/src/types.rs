@@ -199,10 +199,26 @@ pub struct Lyrics {
 pub struct AccountState {
     pub spotify_web: bool,
     pub spotify_playback: bool,
+    /// Where a Spotify sign-in stands; both apps draw it the same way.
+    pub sign_in: SignInStep,
     pub spotify_user: Option<String>,
     pub spotify_premium: bool,
     pub lastfm_user: Option<String>,
     pub spotify_client_id: Option<String>,
+}
+
+/// One Spotify sign-in, step by step. It takes two approvals in the browser sheet: the
+/// account (library, likes, search, through your own Spotify app) and playback (through
+/// Spotify's desktop client, the only kind its streaming servers let in).
+#[derive(Debug, Clone, PartialEq, uniffi::Enum)]
+pub enum SignInStep {
+    Idle,
+    /// The browser sheet is up for approval `step` of 2.
+    Approving { step: u8 },
+    /// Logging in to Spotify's streaming servers.
+    Connecting,
+    /// What went wrong, in words for people; signing in again retries.
+    Failed { message: String },
 }
 
 #[derive(Debug, Clone, uniffi::Record)]

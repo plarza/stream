@@ -13,32 +13,38 @@ use super::auth::{self, Tokens};
 use crate::db::SpotifyTrackRow;
 use crate::types::{Item, ItemKind, Source, Track};
 
-const BASE: &str = "https://api.spotify.com/v1";
 
 pub struct WebApi {
     http: reqwest::Client,
+    endpoints: auth::Endpoints,
     pub client_id: String,
     tokens: Mutex<Tokens>,
     on_refresh: Arc<dyn Fn(&Tokens) + Send + Sync>,
 }
 
 impl WebApi {
-    pub fn new(http: reqwest::Client, client_id: String, tokens: Tokens, on_refresh: Arc<dyn Fn(&Tokens) + Send + Sync>) -> Self {
-        Self { http, client_id, tokens: Mutex::new(tokens), on_refresh }
+    pub fn new(
+        http: reqwest::Client,
+        endpoints: auth::Endpoints,
+        client_id: String,
+        tokens: Tokens,
+        on_refresh: Arc<dyn Fn(&Tokens) + Send + Sync>,
+    ) -> Self {
+        Self { http, endpoints, client_id, tokens: Mutex::new(tokens), on_refresh }
     }
 
     async fn token(&self) -> Result<String> {
         let mut t = self.tokens.lock().await;
         if !t.fresh() {
             let refresh = t.refresh_token.clone().ok_or_else(|| anyhow!("sign in to Spotify again"))?;
-            *t = auth::refresh(&self.http, &self.client_id, &refresh).await?;
+            *t = auth::refresh(&self.http, &self.endpoints, &self.client_id, &refresh).await?;
             (self.on_refresh)(&t);
         }
         Ok(t.access_token.clone())
     }
 
     pub async fn request(&self, method: Method, path: &str, query: &[(&str, String)], body: Option<Value>) -> Result<Value> {
-        let url = if path.starts_with("http") { path.to_string() } else { format!("{BASE}{path}") };
+        let url = if path.starts_with("http") { path.to_string() } else { format!("{}{path}", self.endpoints.api) };
         for attempt in 0..3 {
             let token = self.token().await?;
             let mut req = self.http.request(method.clone(), &url).bearer_auth(&token).query(query);

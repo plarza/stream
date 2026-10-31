@@ -51,7 +51,15 @@ Works the way spotifast does:
    `streaming` scope, exchanged for librespot's reusable credentials. These are stored in the
    Keychain. Premium is required.
 3. **Session reads**: catalogue reads over the librespot session (no per-app quota) for things
-   the Web API restricts: Made For You, other people's playlists, related artists, synced lyrics.
+   the Web API restricts: Made For You, other people's playlists, related artists, synced lyrics,
+   artist pages.
+
+Sign-in is one button, the same on iPhone and Mac (core `signin.rs`): it does only the steps
+still missing (approval 1, approval 2, connecting) and Settings draws each step from the core.
+Saved playback credentials are tried before asking again; refused ones are dropped. Every
+failure ends as a sentence and a "Try again". On iPhone the playback session presents itself
+as macOS (vendored librespot-core, one line): with a desktop client's token, a session that
+says "iPhone" is turned away by every access point ("Try another access point").
 
 Rules:
 

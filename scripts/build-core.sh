@@ -30,7 +30,9 @@ rm -rf $OUT/StreamCore.xcframework $OUT/headers
 mkdir -p $OUT/headers
 
 HOST_LIB=target/aarch64-apple-darwin/$PROFILE/libstream_core.dylib
-[[ -f $HOST_LIB ]] || cargo build $FLAG --lib --target aarch64-apple-darwin
+# The bindings are generated from the Mac library, so it has to be current even when
+# only other targets were asked for (cargo makes this a no-op when nothing changed).
+cargo build $FLAG --lib --target aarch64-apple-darwin
 cargo run -q --bin uniffi-bindgen -- generate --library $HOST_LIB --language swift --out-dir $OUT/bindings
 mv $OUT/bindings/stream_coreFFI.h $OUT/headers/
 cat > $OUT/headers/StreamCoreRender.h <<'H'

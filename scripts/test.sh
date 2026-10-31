@@ -63,6 +63,10 @@ if changed $T/.app project.yml Shared iOS tests/Shared tests/iOSUITests $T/.core
   touch $T/.app
 fi
 
+# A run killed over budget can leave its runner hanging in the Simulator, and the next
+# run would sit waiting on it; clear both out first.
+xcrun simctl terminate "$SIM" network.aza.stream.uitests.xctrunner 2>/dev/null || true
+xcrun simctl terminate "$SIM" network.aza.stream 2>/dev/null || true
 budget 150 "tests" $T/test.log run test-without-building -skip-testing:StreamUITests-iOS/DemoFlow \
   -test-timeouts-enabled YES -default-test-execution-time-allowance 60 "$@" || rc=$?
 grep -E 'Test Case .*(passed|failed)|error:|\*\* TEST' $T/test.log

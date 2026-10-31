@@ -70,7 +70,10 @@ final class AppModel {
         #endif
         let bridge = CoreBridge()
         self.bridge = bridge
-        let config = CoreConfig(dataDir: support.path, cacheDir: caches.path, musicDir: musicDir?.path, isPhone: isPhone)
+        // UI tests stand in for Spotify's accounts service and Web API (see tests/Shared/FakeSpotify.swift).
+        let config = CoreConfig(dataDir: support.path, cacheDir: caches.path, musicDir: musicDir?.path, isPhone: isPhone,
+                                spotifyAccountsUrl: Self.isTesting ? Self.argument("-spotifyAccounts") : nil,
+                                spotifyApiUrl: Self.isTesting ? Self.argument("-spotifyApi") : nil)
         // A failure here means the disk is unusable; nothing sensible to show.
         core = try! StreamCore(config: config, delegate: bridge)
         player = core.playerState()
@@ -245,22 +248,19 @@ final class AppModel {
     /// Current position, cheap enough to call every frame.
     func position() -> Double { Double(core.positionMs()) / 1000 }
 
-    /// True while a Spotify sign-in waits on the browser sheet or on Spotify.
-    var signingIn = false
+    /// True while a Spotify sign-in is under way (the core reports each step).
+    var signingIn: Bool {
+        switch account.signIn {
+        case .approving, .connecting: true
+        case .idle, .failed: false
+        }
+    }
 
-    /// Full sign-in (Web API, then playback), or just playback when the Web API is already signed in.
+    /// Signs in to Spotify: the core does whichever steps are still missing and
+    /// reports them in `account.signIn`, failures included, so there's nothing to catch.
     func signInToSpotify() {
         guard !signingIn else { return }
-        signingIn = true
-        let playbackOnly = account.spotifyWeb
-        Task {
-            do {
-                if playbackOnly { try await core.spotifyConnectPlayback() } else { try await core.spotifySignIn() }
-            } catch {
-                show(Self.message(error))
-            }
-            signingIn = false
-        }
+        Task { try? await core.spotifySignIn() }
     }
 
     /// The core's own message rather than Swift's generic description of the error enum.
@@ -278,6 +278,7 @@ final class AppModel {
         case "reset" where Self.isTesting:
             // UI tests share one launch; this puts the app back on Home, silent and with nothing open.
             core.pause()
+            core.spotifySignOut()
             showNowPlaying = false
             resetRequested &+= 1
         case "play":

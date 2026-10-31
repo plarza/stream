@@ -38,8 +38,19 @@ pub const WEB_SCOPES: &[&str] = &[
 /// Where the browser lands after the loopback page; brings the app back.
 pub const APP_CALLBACK: &str = "network-aza-stream://auth-done";
 
-const AUTHORIZE_URL: &str = "https://accounts.spotify.com/authorize";
-const TOKEN_URL: &str = "https://accounts.spotify.com/api/token";
+/// Where Spotify's accounts service and Web API live. Always Spotify's own, except in
+/// the UI tests, which point both at a stand-in so sign-in runs end to end offline.
+#[derive(Debug, Clone)]
+pub struct Endpoints {
+    pub accounts: String,
+    pub api: String,
+}
+
+impl Default for Endpoints {
+    fn default() -> Self {
+        Self { accounts: "https://accounts.spotify.com".into(), api: "https://api.spotify.com/v1".into() }
+    }
+}
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Tokens {
@@ -73,6 +84,7 @@ pub fn redirect_uri(port: u16) -> String {
 /// ASWebAuthenticationSession); this waits for Spotify's redirect.
 pub async fn authorize(
     http: &reqwest::Client,
+    endpoints: &Endpoints,
     client_id: &str,
     port: u16,
     scopes: &[&str],
@@ -80,13 +92,14 @@ pub async fn authorize(
 ) -> Result<Tokens> {
     let listener = TcpListener::bind(("127.0.0.1", port))
         .await
-        .with_context(|| format!("port {port} is busy; close whatever is using it and try again"))?;
+        .with_context(|| format!("Port {port} is in use, so Spotify can't hand the sign-in back. Quit whatever is using it (another copy of Stream?) and try again."))?;
     let verifier = random_token(48);
     let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
     let state = random_token(16);
     let redirect = redirect_uri(port);
     let url = format!(
-        "{AUTHORIZE_URL}?response_type=code&client_id={}&scope={}&redirect_uri={}&state={}&code_challenge_method=S256&code_challenge={}&show_dialog=false",
+        "{}/authorize?response_type=code&client_id={}&scope={}&redirect_uri={}&state={}&code_challenge_method=S256&code_challenge={}&show_dialog=false",
+        endpoints.accounts,
         urlencoding::encode(client_id),
         urlencoding::encode(&scopes.join(" ")),
         urlencoding::encode(&redirect),
@@ -97,10 +110,11 @@ pub async fn authorize(
 
     let code = tokio::time::timeout(Duration::from_secs(600), wait_for_code(&listener, &state))
         .await
-        .map_err(|_| anyhow!("sign-in timed out"))??;
+        .map_err(|_| anyhow!("The sign-in timed out. Try again."))??;
 
     token_request(
         http,
+        endpoints,
         &[
             ("client_id", client_id),
             ("grant_type", "authorization_code"),
@@ -157,7 +171,10 @@ async fn wait_for_code(listener: &TcpListener, state: &str) -> Result<String> {
         let _ = stream.write_all(response.as_bytes()).await;
         let _ = stream.shutdown().await;
         if let Some(e) = error {
-            bail!("Spotify refused the sign-in ({e})");
+            if e == "access_denied" {
+                bail!("Access wasn't allowed in Spotify.");
+            }
+            bail!("Spotify didn't complete the sign-in ({e}).");
         }
         if got_state.as_deref() != Some(state) {
             continue;
@@ -168,17 +185,18 @@ async fn wait_for_code(listener: &TcpListener, state: &str) -> Result<String> {
     }
 }
 
-pub async fn refresh(http: &reqwest::Client, client_id: &str, refresh_token: &str) -> Result<Tokens> {
+pub async fn refresh(http: &reqwest::Client, endpoints: &Endpoints, client_id: &str, refresh_token: &str) -> Result<Tokens> {
     token_request(
         http,
+        endpoints,
         &[("client_id", client_id), ("grant_type", "refresh_token"), ("refresh_token", refresh_token)],
         Some(refresh_token),
     )
     .await
 }
 
-async fn token_request(http: &reqwest::Client, form: &[(&str, &str)], old_refresh: Option<&str>) -> Result<Tokens> {
-    let response = http.post(TOKEN_URL).form(form).send().await?;
+async fn token_request(http: &reqwest::Client, endpoints: &Endpoints, form: &[(&str, &str)], old_refresh: Option<&str>) -> Result<Tokens> {
+    let response = http.post(format!("{}/api/token", endpoints.accounts)).form(form).send().await?;
     let status = response.status();
     let value: serde_json::Value = response.json().await.unwrap_or_default();
     if !status.is_success() {

@@ -79,6 +79,9 @@ final class iOSUITests: StreamUITestCase {
 
     func testSettingsOpen() {
         wait(el("account")).tap()
-        wait(text("Normalize loudness"))
+        wait(el("settings.spotify.signIn"))
+        let normalize = text("Normalize loudness")
+        for _ in 0..<4 where !normalize.isHittable { app.swipeUp() }
+        wait(normalize)
     }
 }

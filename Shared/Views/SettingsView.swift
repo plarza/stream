@@ -59,25 +59,15 @@ struct SettingsView: View {
         #endif
     }
 
+    /// The same on iPhone and Mac: everything shown comes from the core's sign-in step.
     private var spotify: some View {
-        Section {
-            if model.account.spotifyWeb {
-                LabeledContent("Account", value: model.account.spotifyUser ?? "Signed in")
-                LabeledContent("Plan", value: model.account.spotifyPremium ? "Premium" : "Free (playback needs Premium)")
-                LabeledContent("Playback", value: model.account.spotifyPlayback ? "Connected" : "Not connected")
-                if !model.account.spotifyPlayback {
-                    Button { model.signInToSpotify() } label: {
-                        HStack {
-                            Text("Connect playback")
-                            if model.signingIn { Spacer(); ProgressView() }
-                        }
-                    }
-                    .disabled(model.signingIn)
-                }
-                Button("Refresh library") {
-                    Task { try? await model.core.refreshSpotify(force: true) }
-                }
-                Button("Sign out", role: .destructive) { model.core.spotifySignOut() }
+        let a = model.account
+        let done = a.spotifyWeb && a.spotifyPlayback
+        return Section {
+            if a.spotifyWeb {
+                LabeledContent("Account", value: a.spotifyUser ?? "Signed in")
+                    .accessibilityIdentifier("settings.spotify.account")
+                LabeledContent("Plan", value: a.spotifyPremium ? "Premium" : "Free (playback needs Premium)")
             } else {
                 TextField("Client ID", text: $clientId)
                     .autocorrectionDisabled()
@@ -86,23 +76,91 @@ struct SettingsView: View {
                     #endif
                     .font(.body.monospaced())
                     .onSubmit { model.core.setSpotifyClientId(clientId: clientId) }
-                Button {
-                    model.core.setSpotifyClientId(clientId: clientId)
-                    model.signInToSpotify()
-                } label: {
-                    HStack {
-                        Text("Sign in with Spotify")
-                        if model.signingIn { Spacer(); ProgressView() }
-                    }
+                    .disabled(model.signingIn)
+                    .accessibilityIdentifier("settings.spotify.clientId")
+            }
+            if !done || model.signingIn {
+                signInSteps(a)
+                signInButton(a)
+            } else {
+                LabeledContent("Playback", value: "Connected")
+                    .accessibilityIdentifier("settings.spotify.playback")
+                Button("Refresh library") {
+                    Task { try? await model.core.refreshSpotify(force: true) }
                 }
-                .disabled(clientId.trimmingCharacters(in: .whitespaces).isEmpty || model.signingIn)
+                Button("Sign out", role: .destructive) { model.core.spotifySignOut() }
+                    .accessibilityIdentifier("settings.spotify.signOut")
             }
         } header: {
             Text("Spotify")
         } footer: {
-            if !model.account.spotifyWeb {
-                Text("Create an app at developer.spotify.com with redirect URI http://127.0.0.1:8989/login and Web API enabled, then paste its Client ID. Playback needs Premium.")
+            if !a.spotifyWeb {
+                Text("Create an app at developer.spotify.com with redirect URI http://127.0.0.1:8989/login and the Web API enabled, then paste its Client ID. Signing in takes two approvals: your account, then playback. Playback needs Premium.")
             }
+        }
+    }
+
+    /// Two approvals and a connection, each marked as it goes.
+    @ViewBuilder
+    private func signInSteps(_ a: AccountState) -> some View {
+        let step: Int = switch a.signIn {
+        case let .approving(s): Int(s)
+        case .connecting: 3
+        default: 0
+        }
+        stepRow("Spotify account", done: a.spotifyWeb, active: step == 1, hint: "Approve in the Spotify sheet")
+        stepRow("Playback", done: a.spotifyPlayback, active: step == 2 || step == 3,
+                hint: step == 3 ? "Connecting to Spotify" : "Approve in the Spotify sheet")
+        if case let .failed(message) = a.signIn {
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+                .font(.callout)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(message)
+                .accessibilityIdentifier("settings.spotify.error")
+        }
+    }
+
+    private func stepRow(_ title: String, done: Bool, active: Bool, hint: String) -> some View {
+        HStack(spacing: 10) {
+            ZStack {
+                if done {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                } else if active {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: "circle").foregroundStyle(.tertiary)
+                }
+            }
+            .frame(width: 22)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                if active && !done {
+                    Text(hint).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .animation(.snappy, value: done)
+        .animation(.snappy, value: active)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(done ? "done" : active ? hint : "to do")
+        .accessibilityIdentifier("settings.spotify.step.\(title)")
+    }
+
+    @ViewBuilder
+    private func signInButton(_ a: AccountState) -> some View {
+        if model.signingIn {
+            Button("Cancel", role: .cancel) { model.core.cancelSignIn() }
+                .accessibilityIdentifier("settings.spotify.cancel")
+        } else {
+            let failed = if case .failed = a.signIn { true } else { false }
+            Button(failed ? "Try again" : a.spotifyWeb ? "Connect playback" : "Sign in with Spotify") {
+                if !a.spotifyWeb { model.core.setSpotifyClientId(clientId: clientId) }
+                model.signInToSpotify()
+            }
+            .disabled(!a.spotifyWeb && clientId.trimmingCharacters(in: .whitespaces).isEmpty)
+            .accessibilityIdentifier("settings.spotify.signIn")
         }
     }
 

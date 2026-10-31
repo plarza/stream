@@ -11,6 +11,7 @@ mod lyrics;
 mod player;
 mod queue;
 mod scan;
+mod signin;
 mod spotify;
 mod sync;
 mod types;
@@ -56,6 +57,9 @@ pub struct CoreConfig {
     /// iPhone: where synced music lives. Mac: unused (watched folders instead).
     pub music_dir: Option<String>,
     pub is_phone: bool,
+    /// UI tests only: a stand-in for Spotify's accounts service and Web API.
+    pub spotify_accounts_url: Option<String>,
+    pub spotify_api_url: Option<String>,
 }
 
 #[derive(uniffi::Record)]
@@ -94,6 +98,7 @@ pub struct StreamCore {
     last_library_sync: Mutex<Option<std::time::Instant>>,
     /// The browser sign-in in flight; a new one replaces it so its ports free up.
     sign_in_task: Mutex<Option<tokio::task::AbortHandle>>,
+    endpoints: auth::Endpoints,
 }
 
 fn err(e: impl std::fmt::Display) -> CoreError {
@@ -175,6 +180,7 @@ impl StreamCore {
                 spotify_premium: false,
                 lastfm_user: None,
                 spotify_client_id: None,
+                sign_in: SignInStep::Idle,
             }),
             settings: Mutex::new(settings),
             art_dir,
@@ -190,6 +196,10 @@ impl StreamCore {
             is_phone: config.is_phone,
             last_library_sync: Mutex::new(None),
             sign_in_task: Mutex::new(None),
+            endpoints: auth::Endpoints {
+                accounts: config.spotify_accounts_url.unwrap_or_else(|| auth::Endpoints::default().accounts),
+                api: config.spotify_api_url.unwrap_or_else(|| auth::Endpoints::default().api),
+            },
         });
         *slot.write() = Some(Arc::downgrade(&core));
         core.restore_accounts();
@@ -229,30 +239,6 @@ impl StreamCore {
         self.emit_account();
     }
 
-    /// Browser sign-in for the Web API, then for playback.
-    pub async fn spotify_sign_in(self: Arc<Self>) -> Result<(), CoreError> {
-        let me = self.clone();
-        self.run_sign_in(async move { me.sign_in_inner().await }).await
-    }
-
-    /// Only the playback grant, for when the Web API is already signed in.
-    pub async fn spotify_connect_playback(self: Arc<Self>) -> Result<(), CoreError> {
-        let me = self.clone();
-        self.run_sign_in(async move {
-            me.playback_grant().await?;
-            me.emit_account();
-            Ok(())
-        })
-        .await
-    }
-
-    /// Stops a sign-in that is waiting on the browser (the user closed the sheet).
-    pub fn cancel_sign_in(&self) {
-        if let Some(h) = self.sign_in_task.lock().take() {
-            h.abort();
-        }
-    }
-
     pub fn spotify_sign_out(&self) {
         *self.web.write() = None;
         if let Some(p) = self.playback.write().take() {
@@ -266,6 +252,7 @@ impl StreamCore {
             a.spotify_playback = false;
             a.spotify_user = None;
             a.spotify_premium = false;
+            a.sign_in = SignInStep::Idle;
         }
         self.emit_account();
     }
@@ -380,6 +367,8 @@ impl StreamCore {
         {
             return Ok(());
         }
+        // Coming back to the app is also when a dropped playback session reconnects.
+        self.clone().reconnect_playback();
         let me = self.clone();
         self.rt.spawn(async move { me.refresh_spotify_inner().await }).await.map_err(err)?
     }
@@ -824,119 +813,6 @@ impl StreamCore {
                 db.delete_scrobbles(&batch.iter().map(|b| b.0).collect::<Vec<_>>());
             }
         });
-    }
-
-    fn restore_accounts(self: &Arc<Self>) {
-        let client_id = self.db.get_kv("spotify_client_id").filter(|s| !s.is_empty());
-        self.account.lock().spotify_client_id = client_id.clone();
-        if let Some(api) = self.delegate.secret_get(SECRET_LASTFM_API.into())
-            && let Ok(v) = serde_json::from_str::<serde_json::Value>(&api)
-            && let (Some(k), Some(s)) = (v["key"].as_str(), v["secret"].as_str())
-        {
-            *self.lastfm.write() = Some(Arc::new(lastfm::LastFm::new(self.http.clone(), k.into(), s.into())));
-        }
-        if let Some(s) = self.delegate.secret_get(SECRET_LASTFM.into())
-            && let Ok(v) = serde_json::from_str::<serde_json::Value>(&s)
-        {
-            self.account.lock().lastfm_user = v["name"].as_str().map(str::to_string);
-        }
-        if let (Some(cid), Some(tokens)) = (
-            client_id,
-            self.delegate.secret_get(SECRET_WEB_TOKENS.into()).and_then(|s| serde_json::from_str::<Tokens>(&s).ok()),
-        ) {
-            self.install_web(cid, tokens);
-        }
-        let me = self.clone();
-        self.rt.spawn(async move {
-            if me.web.read().is_some() {
-                let _ = me.verify_web().await;
-            }
-            if let Some(creds) = me.delegate.secret_get(SECRET_PLAYBACK.into()).and_then(|s| sp_session::credentials_from_json(&s)) {
-                if let Err(e) = me.connect_playback(creds).await {
-                    log::warn!("playback reconnect failed: {e:#}");
-                }
-            }
-            me.emit_account();
-            if me.web.read().is_some() {
-                let _ = me.clone().refresh_spotify_inner().await;
-            }
-        });
-        self.clone().rescan();
-    }
-
-    fn install_web(&self, client_id: String, tokens: Tokens) {
-        let delegate = self.delegate.clone();
-        let on_refresh = Arc::new(move |t: &Tokens| {
-            delegate.secret_set(SECRET_WEB_TOKENS.into(), serde_json::to_string(t).ok());
-        });
-        *self.web.write() = Some(Arc::new(WebApi::new(self.http.clone(), client_id, tokens, on_refresh)));
-        self.account.lock().spotify_web = true;
-    }
-
-    async fn verify_web(&self) -> anyhow::Result<String> {
-        let web = self.web.read().clone().ok_or_else(|| anyhow::anyhow!("not signed in"))?;
-        let me = web.me().await?;
-        let id = me["id"].as_str().unwrap_or("").to_string();
-        let mut a = self.account.lock();
-        a.spotify_user = me["display_name"].as_str().or(me["id"].as_str()).map(str::to_string);
-        a.spotify_premium = me["product"].as_str() == Some("premium");
-        drop(a);
-        self.db.set_kv("spotify_user_id", &id);
-        Ok(id)
-    }
-
-    async fn connect_playback(&self, creds: librespot_core::authentication::Credentials) -> anyhow::Result<()> {
-        let normalization = self.settings.lock().normalization;
-        let (pb, reusable) =
-            Playback::connect(creds, &self.device_id, &self.audio_dir, normalization, tokio::runtime::Handle::current()).await?;
-        self.delegate.secret_set(SECRET_PLAYBACK.into(), Some(sp_session::credentials_to_json(&reusable)));
-        *self.playback.write() = Some(Arc::new(pb));
-        self.account.lock().spotify_playback = true;
-        Ok(())
-    }
-
-    async fn sign_in_inner(self: Arc<Self>) -> anyhow::Result<()> {
-        let client_id = self
-            .account
-            .lock()
-            .spotify_client_id
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("Enter your Spotify app's Client ID first"))?;
-        let delegate = self.delegate.clone();
-        let tokens = auth::authorize(&self.http, &client_id, auth::WEB_PORT, auth::WEB_SCOPES, |u| delegate.open_url(u)).await?;
-        self.delegate.secret_set(SECRET_WEB_TOKENS.into(), serde_json::to_string(&tokens).ok());
-        self.install_web(client_id, tokens);
-        self.verify_web().await?;
-        self.emit_account();
-        self.playback_grant().await?;
-        self.emit_account();
-        let _ = self.clone().refresh_spotify_inner().await;
-        Ok(())
-    }
-
-    async fn playback_grant(&self) -> anyhow::Result<()> {
-        let delegate = self.delegate.clone();
-        let playback = auth::authorize(&self.http, auth::PLAYBACK_CLIENT_ID, auth::PLAYBACK_PORT, auth::PLAYBACK_SCOPES, |u| {
-            delegate.open_url(u)
-        })
-        .await?;
-        self.connect_playback(sp_session::token_credentials(&playback.access_token)).await
-    }
-
-    /// Runs one browser sign-in at a time on the core's runtime.
-    async fn run_sign_in(
-        &self,
-        f: impl std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
-    ) -> Result<(), CoreError> {
-        let task = self.rt.spawn(f);
-        if let Some(old) = self.sign_in_task.lock().replace(task.abort_handle()) {
-            old.abort();
-        }
-        match task.await {
-            Ok(r) => r.map_err(Into::into),
-            Err(e) if e.is_cancelled() => Err(err("Sign-in cancelled")),
-            Err(e) => Err(err(e)),
-        }
     }
 
     async fn refresh_spotify_inner(self: Arc<Self>) -> Result<(), CoreError> {

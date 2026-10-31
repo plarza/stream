@@ -53,3 +53,5 @@ strip = "debuginfo"
 
 [patch.crates-io]
 sysinfo = { path = "vendor/sysinfo-shim" }
+# One change: iPhone presents itself to Spotify as macOS (see its src/config.rs, OS).
+librespot-core = { path = "vendor/librespot-core" }

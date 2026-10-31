@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use librespot_core::authentication::Credentials;
 use librespot_core::cache::Cache;
 use librespot_core::config::SessionConfig;
@@ -83,10 +83,12 @@ impl Playback {
         // The audio cache holds downloads for offline play; 20 GB ceiling.
         let cache = Cache::new(None::<&Path>, None, Some(audio_cache), Some(20 * 1024 * 1024 * 1024))?;
         let session = Session::new(config, Some(cache));
-        tokio::time::timeout(Duration::from_secs(60), session.connect(credentials, false))
+        // librespot's own reason ("Bad credentials", "Try another access point", ...)
+        // comes through as the message; sign-in turns it into words for people.
+        tokio::time::timeout(Duration::from_secs(30), session.connect(credentials, false))
             .await
-            .context("Spotify did not answer")?
-            .context("Spotify refused the playback sign-in")?;
+            .map_err(|_| anyhow::anyhow!("timed out"))?
+            .map_err(|e| anyhow::anyhow!("{e}"))?;
         let reusable = Credentials {
             username: Some(session.username()),
             auth_type: AuthenticationType::AUTHENTICATION_STORED_SPOTIFY_CREDENTIALS,

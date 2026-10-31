@@ -30,7 +30,9 @@ class StreamUITestCase: XCTestCase {
         }
         app = XCUIApplication()
         // Pairs only: AppKit reads `-key value`, and a bare flag before a pair hides the window.
-        app.launchArguments = ["-musicFolder", Self.library, "-uiTesting", "YES"]
+        let spotify = FakeSpotify.shared
+        app.launchArguments = ["-musicFolder", Self.library, "-uiTesting", "YES",
+                               "-spotifyAccounts", spotify.accountsURL, "-spotifyApi", spotify.apiURL]
         app.launch()
         Self.running = app
     }
