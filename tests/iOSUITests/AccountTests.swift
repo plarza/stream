@@ -14,7 +14,7 @@ final class AccountTests: XCTestCase {
     func testSignInShowsTheAccountThenSignOut() {
         wait(app.buttons["signIn"]).tap()
         wait(app.buttons["profile"]).tap()
-        wait(app.staticTexts["aiden"])
+        wait(app.staticTexts["Sample account"])
         app.buttons["account"].tap()
         wait(app.buttons["signOut"]).tap()
         wait(app.buttons["Sign out"]).tap()
