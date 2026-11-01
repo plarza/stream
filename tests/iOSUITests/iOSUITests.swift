@@ -75,6 +75,14 @@ final class iOSUITests: StreamUITestCase {
         wait(el("row.Singles"))
     }
 
+    func testAlbumCoverOpensFullScreen() {
+        openAlbum("Night Drive")
+        el("collection.cover").tap()
+        wait(el("cover.close")).tap()
+        waitGone(el("cover.close"))
+        wait(el("collection.play"))
+    }
+
     func testPinShowsOnHome() {
         openAlbum("Morning Light")
         el("collection.pin").tap()

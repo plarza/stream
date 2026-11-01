@@ -221,11 +221,16 @@ final class AppModel {
     /// Opens a page from anywhere, closing Now Playing first if it's up.
     func open(_ item: Item) {
         pendingNavigation = item
+        #if os(iOS)
+        // iPhone pushes the page straight away, under Now Playing as it closes.
+        openRequested &+= 1
+        #else
         if showNowPlaying {
             withAnimation(.player) { showNowPlaying = false }
         } else {
             openRequested &+= 1
         }
+        #endif
     }
 
     func openArtist(of track: Track) {

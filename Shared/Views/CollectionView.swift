@@ -11,6 +11,8 @@ struct CollectionView: View {
     @State private var error: String?
     @State private var pinned = false
     @State private var liked = false
+    @State private var showCover = false
+    @Namespace private var coverZoom
 
     init(item: Item) {
         self.item = item
@@ -59,6 +61,22 @@ struct CollectionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         #endif
+        #if os(iOS)
+        .fullScreenCover(isPresented: $showCover) {
+            CoverViewer(url: shown.art, palette: palette, circle: item.kind == .artist) { showCover = false }
+                .navigationTransition(.zoom(sourceID: "cover", in: coverZoom))
+        }
+        #else
+        .overlay {
+            if showCover {
+                CoverViewer(url: shown.art, palette: palette, circle: item.kind == .artist) {
+                    withAnimation(.player) { showCover = false }
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.92)))
+            }
+        }
+        .animation(.player, value: showCover)
+        #endif
         .onAppear { model.currentPage = item.id }
         .onDisappear { if model.currentPage == item.id { model.currentPage = nil } }
         .task(id: item.id) { await load() }
@@ -72,8 +90,16 @@ struct CollectionView: View {
 
     private var header: some View {
         HStack(alignment: .bottom, spacing: 16) {
-            ArtworkView(url: shown.art, size: 132, circle: item.kind == .artist)
-                .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
+            Button { showCover = true } label: {
+                ArtworkView(url: shown.art, size: 132, circle: item.kind == .artist)
+            }
+            .buttonStyle(.pressable)
+            #if os(iOS)
+            .matchedTransitionSource(id: "cover", in: coverZoom)
+            #endif
+            .shadow(color: .black.opacity(0.35), radius: 16, y: 8)
+            .accessibilityLabel("Show Cover")
+            .accessibilityIdentifier("collection.cover")
             VStack(alignment: .leading, spacing: 4) {
                 Text(shown.title).font(.title2.weight(.bold)).lineLimit(3)
                 if item.kind != .artist {
@@ -229,5 +255,43 @@ struct CollectionView: View {
     private func commonQuality(_ tracks: [Track]) -> String? {
         guard let first = tracks.first?.quality, !first.isEmpty else { return nil }
         return tracks.allSatisfy { $0.quality == first } ? first : nil
+    }
+}
+
+/// A cover filling the screen over its own blurred colors. Tap or swipe down to close.
+struct CoverViewer: View {
+    let url: String?
+    let palette: Palette
+    var circle = false
+    let close: () -> Void
+
+    var body: some View {
+        ZStack {
+            ImmersiveBackground(url: url, palette: palette)
+            FillArtwork(url: url)
+                .aspectRatio(1, contentMode: .fit)
+                .clipShape(circle ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 14, style: .continuous)))
+                .shadow(color: .black.opacity(0.45), radius: 30, y: 16)
+                .padding(Metrics.page)
+                .frame(maxWidth: 900, maxHeight: 900)
+                .accessibilityHidden(true)
+        }
+        .overlay(alignment: .topTrailing) {
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .glassEffect(.regular.interactive(), in: .circle)
+            }
+            .buttonStyle(.pressable)
+            .padding(.trailing, Metrics.page)
+            .padding(.top, 8)
+            .accessibilityLabel("Close")
+            .accessibilityIdentifier("cover.close")
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: close)
+        .environment(\.colorScheme, .dark)
+        .foregroundStyle(.white)
     }
 }

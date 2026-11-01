@@ -89,8 +89,10 @@ struct RootView: View {
             if let t = model.toast { Toast(text: t).padding(.top, 8) }
         }
         .onChange(of: model.openRequested) {
-            // Deep links and search results open in the tab you're on.
-            if model.showNowPlaying { model.showNowPlaying = false } else { openPending() }
+            // Deep links and search results open in the tab you're on, at once, while
+            // Now Playing (if it's up) closes over the page.
+            openPending()
+            model.showNowPlaying = false
         }
         .onChange(of: model.resetRequested) {
             model.showSettings = false

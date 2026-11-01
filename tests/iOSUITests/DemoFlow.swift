@@ -29,6 +29,11 @@ final class DemoFlow: StreamUITestCase {
         wait(el("collection.play")).tap()
         Thread.sleep(forTimeInterval: 1)
         shot("album")
+        el("collection.cover").tap()
+        wait(el("cover.close"))
+        shot("cover")
+        el("cover.close").tap()
+        waitGone(el("cover.close"))
 
         app.navigationBars.buttons.firstMatch.tap()
         wait(el("row.Night Drive")).tap()

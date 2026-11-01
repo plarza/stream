@@ -170,7 +170,8 @@ struct FillArtwork: View {
     init(url: String?, pixels: Int = 1400) {
         self.url = url
         self.pixels = pixels
-        _image = State(initialValue: ArtworkStore.cached(url, pixels: pixels))
+        // A smaller copy already in memory stands in until the full size is decoded.
+        _image = State(initialValue: [pixels, 700, 320].lazy.compactMap { ArtworkStore.cached(url, pixels: $0) }.first)
     }
 
     var body: some View {
@@ -190,8 +191,9 @@ struct FillArtwork: View {
             .clipped()
             .task(id: url) {
                 if let hit = ArtworkStore.cached(url, pixels: pixels) { image = hit; return }
+                let stand = image != nil
                 let loaded = await ArtworkStore.shared.cgImage(for: url, pixels: pixels)
-                withAnimation(.easeOut(duration: 0.35)) { image = loaded }
+                if stand { image = loaded ?? image } else { withAnimation(.easeOut(duration: 0.35)) { image = loaded } }
             }
     }
 }

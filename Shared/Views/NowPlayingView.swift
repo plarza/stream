@@ -8,8 +8,6 @@ struct NowPlayingView: View {
     @Environment(AppModel.self) private var model
     @Namespace private var art
     var compact = false
-    /// How far the cover has been pulled down (pulling far enough closes Now Playing).
-    @State private var pull: CGFloat = 0
 
     private var track: Track? { model.player.track }
     private var playing: Bool { model.player.status == .playing }
@@ -34,7 +32,6 @@ struct NowPlayingView: View {
                 .padding(.bottom, 12)
             }
         }
-        .offset(y: pull)
         .environment(\.colorScheme, .dark)
         .foregroundStyle(.white)
     }
@@ -95,16 +92,14 @@ struct NowPlayingView: View {
             // Tapping the cover opens its album; pulling it down closes Now Playing.
             .onTapGesture { if expanded, let t = track { model.openAlbum(of: t) } }
             #if os(iOS)
-            .gesture(
-                DragGesture(minimumDistance: 10)
-                    .onChanged { v in pull = max(0, v.translation.height) }
-                    .onEnded { v in
-                        if v.translation.height > 90 || v.predictedEndTranslation.height > 260 {
-                            model.showNowPlaying = false
-                        } else {
-                            withAnimation(.player) { pull = 0 }
-                        }
+            // The system's own swipe moves the card; this only makes sure a clear
+            // pull ends in closing rather than springing back.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10).onEnded { v in
+                    if v.translation.height > 90 || v.predictedEndTranslation.height > 260 {
+                        model.showNowPlaying = false
                     }
+                }
             )
             #endif
             .accessibilityElement()
