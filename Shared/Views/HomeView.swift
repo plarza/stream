@@ -1,3 +1,4 @@
+import StreamBindings
 import SwiftUI
 
 /// Pinned grid (albums, songs, artists, playlists) and recents.

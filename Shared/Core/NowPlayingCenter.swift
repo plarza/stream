@@ -1,3 +1,4 @@
+import StreamBindings
 import MediaPlayer
 
 #if os(iOS)
@@ -50,7 +51,7 @@ final class NowPlayingCenter {
             Task {
                 guard let image = await ArtworkStore.shared.image(for: t.art, pixels: 600) else { return }
                 guard self.artworkFor == id else { return }
-                let art = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                let art = Self.artwork(image)
                 var i = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
                 i[MPMediaItemPropertyArtwork] = art
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = i
@@ -58,5 +59,10 @@ final class NowPlayingCenter {
         }
         center.nowPlayingInfo = info
         center.playbackState = state.status == .playing ? .playing : .paused
+    }
+
+    /// MediaPlayer calls the image closure on its own queue, so it can't be made on the main actor.
+    nonisolated private static func artwork(_ image: PlatformImage) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: image.size) { _ in image }
     }
 }

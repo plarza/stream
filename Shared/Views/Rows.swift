@@ -1,7 +1,10 @@
+import StreamBindings
+import AzaUI
 import SwiftUI
 
 /// One song in a list.
 struct TrackRow: View {
+    @Environment(\.accent) private var accent
     let track: Track
     var showArt = true
     var number: Int?
@@ -16,7 +19,7 @@ struct TrackRow: View {
                 ZStack {
                     if isCurrent {
                         NowPlayingBars(playing: model.player.status == .playing)
-                            .foregroundStyle(model.tint)
+                            .foregroundStyle(accent)
                     } else {
                         Text("\(number)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
                     }
@@ -28,7 +31,7 @@ struct TrackRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(track.title)
                     .font(.body)
-                    .foregroundStyle(isCurrent ? model.tint : .primary)
+                    .foregroundStyle(isCurrent ? accent : .primary)
                     .lineLimit(1)
                 if showArtist {
                     HStack(spacing: 4) {
@@ -42,7 +45,7 @@ struct TrackRow: View {
             Spacer(minLength: 8)
             if !showArtist && track.downloaded && track.source == .spotify { DownloadedBadge() }
             if track.liked {
-                Image(systemName: "heart.fill").font(.caption).foregroundStyle(model.tint.opacity(0.9))
+                Image(systemName: "heart.fill").font(.caption).foregroundStyle(accent.opacity(0.9))
             }
             Text(Format.time(Double(track.durationMs) / 1000))
                 .font(.subheadline.monospacedDigit())

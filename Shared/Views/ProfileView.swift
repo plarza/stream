@@ -1,6 +1,9 @@
+import StreamBindings
+import AzaUI
 import SwiftUI
 
-struct SettingsView: View {
+/// Your account, Spotify, music from the Mac, Last.fm, playback, then Appearance.
+struct ProfileView: View {
     @Environment(AppModel.self) private var model
     @State private var clientId = ""
     @State private var lastfmKey = ""
@@ -14,35 +17,46 @@ struct SettingsView: View {
 
     var body: some View {
         @Bindable var model = model
-        Form {
-            spotify
-            #if os(macOS)
-            musicFolders
-            #else
-            syncSection
-            #endif
-            lastfm
-            Section("Playback") {
-                Toggle("Normalize loudness", isOn: $settings.normalization)
-                Toggle("Scrobble local files to Last.fm", isOn: $settings.scrobbling)
-            }
-            .onChange(of: settings) { model.core.setSettings(s: settings) }
-            Section("Appearance") {
-                Picker("Appearance", selection: $model.appearance) {
-                    ForEach(AppModel.Appearance.allCases) { Text($0.title).tag($0) }
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    AccountRow().padding(.top, 8)
+                    spotify
+                    #if os(macOS)
+                    musicFolders
+                    #else
+                    syncSection
+                    #endif
+                    lastfm
+                    SettingsCard("Playback") {
+                        Toggle("Normalize loudness", isOn: $settings.normalization)
+                        Toggle("Scrobble local files to Last.fm", isOn: $settings.scrobbling)
+                    }
+                    .onChange(of: settings) { model.core.setSettings(s: settings) }
+                    heading("Appearance")
+                    AppearanceSection()
+                    #if os(macOS)
+                    // iPhone's dark mode is already pure black.
+                    Toggle("Pure black in dark mode", isOn: $model.pureBlack)
+                        .padding(16)
+                        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                        .padding(.top, 12)
+                        .accessibilityIdentifier("settings.pureBlack")
+                    #endif
                 }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("settings.appearance")
-                #if os(macOS)
-                // iPhone's dark mode is already pure black.
-                Toggle("Pure black in dark mode", isOn: $model.pureBlack)
-                    .accessibilityIdentifier("settings.pureBlack")
-                #endif
+                .padding(.horizontal, 20)
+                .padding(.bottom, 30)
             }
+            .navigationTitle("Profile")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark") { model.showSettings = false }
+                }
+            }
+            #endif
         }
-        .formStyle(.grouped)
-        .navigationTitle("Settings")
-        .preferredColorScheme(model.colorScheme)
         .onAppear {
             clientId = model.account.spotifyClientId ?? ""
             settings = model.core.settings()
@@ -64,7 +78,7 @@ struct SettingsView: View {
     private var spotify: some View {
         let a = model.account
         let done = a.spotifyWeb && a.spotifyPlayback
-        return Section {
+        return SettingsCard("Spotify") {
             if a.spotifyWeb {
                 LabeledContent("Account", value: a.spotifyUser ?? "Signed in")
                     .accessibilityIdentifier("settings.spotify.account")
@@ -104,8 +118,6 @@ struct SettingsView: View {
                 Button("Sign out", role: .destructive) { model.core.spotifySignOut() }
                     .accessibilityIdentifier("settings.spotify.signOut")
             }
-        } header: {
-            Text("Spotify")
         } footer: {
             if !a.spotifyWeb {
                 Text("Create an app at developer.spotify.com with redirect URI http://127.0.0.1:8989/login and the Web API enabled, then paste its Client ID. Signing in takes two approvals: your account, then playback. Playback needs Premium.")
@@ -178,7 +190,7 @@ struct SettingsView: View {
     }
 
     private var lastfm: some View {
-        Section {
+        SettingsCard("Last.fm") {
             if let user = model.account.lastfmUser {
                 LabeledContent("Scrobbling as", value: user)
                 Button("Sign out", role: .destructive) { model.core.lastfmSignOut() }
@@ -195,8 +207,6 @@ struct SettingsView: View {
                 }
                 .disabled(!model.core.hasLastfmApi() && (lastfmKey.isEmpty || lastfmSecret.isEmpty))
             }
-        } header: {
-            Text("Last.fm")
         } footer: {
             Text("Only local files scrobble here. Spotify’s own Last.fm connection covers Spotify.")
         }
@@ -204,7 +214,7 @@ struct SettingsView: View {
 
     #if os(iOS)
     private var syncSection: some View {
-        Section {
+        SettingsCard("Library from Mac") {
             if let s = sync, s.running {
                 ProgressView(value: Double(s.bytesDone), total: Double(max(1, s.bytesTotal))) {
                     Text("Copying \(s.filesDone) of \(s.filesTotal)")
@@ -215,8 +225,6 @@ struct SettingsView: View {
                 Button("Sync now") { SyncClient.shared.syncNow() }
                 if let e = sync?.lastError { Text(e).font(.footnote).foregroundStyle(.red) }
             }
-        } header: {
-            Text("Library from Mac")
         } footer: {
             Text("Your Mac’s music copies here automatically whenever Stream is open on the same Wi-Fi.")
         }
@@ -225,7 +233,7 @@ struct SettingsView: View {
 
     #if os(macOS)
     private var musicFolders: some View {
-        Section("Music folders") {
+        SettingsCard("Music folders") {
             ForEach(folders, id: \.self) { f in
                 HStack {
                     Label(f, systemImage: "folder")
@@ -252,4 +260,50 @@ struct SettingsView: View {
         }
     }
     #endif
+
+    private func heading(_ text: String) -> some View {
+        Text(text)
+            .font(.title3.weight(.bold))
+            .padding(.leading, 4)
+            .padding(.top, 28)
+            .padding(.bottom, 8)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A titled glass card of settings, with an optional note below.
+private struct SettingsCard<Content: View, Footer: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    @ViewBuilder let footer: Footer
+
+    init(_ title: String, @ViewBuilder content: () -> Content, @ViewBuilder footer: () -> Footer) {
+        self.title = title
+        self.content = content()
+        self.footer = footer()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.title3.weight(.bold))
+                .padding(.leading, 4)
+                .padding(.top, 20)
+                .accessibilityAddTraits(.isHeader)
+            VStack(alignment: .leading, spacing: 14) { content }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: 24))
+            footer
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+        }
+    }
+}
+
+extension SettingsCard where Footer == EmptyView {
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.init(title, content: content) { EmptyView() }
+    }
 }

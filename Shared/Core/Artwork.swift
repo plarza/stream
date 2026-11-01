@@ -1,3 +1,4 @@
+import StreamBindings
 import CryptoKit
 import ImageIO
 import SwiftUI
@@ -101,7 +102,7 @@ actor ArtworkStore {
     }
 }
 
-final class CGImageBox: @unchecked Sendable {
+nonisolated final class CGImageBox: @unchecked Sendable {
     let image: CGImage
     init(_ image: CGImage) { self.image = image }
 }

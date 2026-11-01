@@ -101,8 +101,8 @@ final class iOSUITests: StreamUITestCase {
         waitLabel(el("mini.title"), "Tunnel")
     }
 
-    func testSettingsOpen() {
-        wait(el("account")).tap()
+    func testProfileOpens() {
+        wait(el("profile")).tap()
         wait(el("settings.spotify.signIn"))
         let normalize = text("Normalize loudness")
         for _ in 0..<4 where !normalize.isHittable { app.swipeUp() }

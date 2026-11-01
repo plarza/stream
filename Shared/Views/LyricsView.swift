@@ -1,9 +1,12 @@
+import StreamBindings
+import AzaUI
 import SwiftUI
 
 /// Synced lyrics: big left-aligned lines, the active one lit with a sweep
 /// across its words, the rest dimmed and blurred by distance. Tap a line to
 /// jump there.
 struct LyricsView: View {
+    @Environment(\.accent) private var accent
     let track: Track?
     @Environment(AppModel.self) private var model
     @State private var lyrics: Lyrics?
@@ -59,7 +62,7 @@ struct LyricsView: View {
                         ForEach(Array(lyrics.lines.enumerated()), id: \.offset) { i, line in
                             LyricLineView(line: line, next: i + 1 < lyrics.lines.count ? lyrics.lines[i + 1].startMs : nil,
                                           state: i == active ? .active(ms) : .inactive(distance: abs(i - (active ?? -1))),
-                                          accent: model.tint)
+                                          accent: accent)
                                 .id(i)
                                 .onTapGesture {
                                     if let s = line.startMs { model.seek(to: s); Haptics.tap() }

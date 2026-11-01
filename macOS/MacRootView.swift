@@ -1,3 +1,5 @@
+import StreamBindings
+import AzaUI
 import SwiftUI
 
 enum SidebarItem: Hashable {
@@ -9,6 +11,7 @@ enum SidebarItem: Hashable {
 /// capsule playing bar floating centered over the bottom of the page. Clicking
 /// the bar's art opens Now Playing across the whole window.
 struct MacRootView: View {
+    @Environment(\.accent) private var accent
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
     @Binding var showPalette: Bool
@@ -57,7 +60,7 @@ struct MacRootView: View {
                     .padding(.leading, pageLeading)
                     .padding(.bottom, 16)
             }
-            .tint(model.tint)
+            .tint(accent)
 
             GeometryReader { geo in
                 sidebar(maxHeight: geo.size.height - inset * 2 - 96)
@@ -86,7 +89,6 @@ struct MacRootView: View {
                     .zIndex(2)
             }
         }
-        .preferredColorScheme(model.colorScheme)
         .overlay(alignment: .top) {
             if let t = model.toast { Toast(text: t).padding(.top, 12).accessibilityIdentifier("toast") }
         }
@@ -266,7 +268,7 @@ struct MacRootView: View {
     private func row(_ item: SidebarItem, _ title: String, _ symbol: String) -> some View {
         SidebarRow(selected: selection == item) { pick(item) } label: {
             Image(systemName: symbol)
-                .foregroundStyle(selection == item ? model.tint : .secondary)
+                .foregroundStyle(selection == item ? accent : .secondary)
                 .frame(width: 20)
             Text(title)
         }
@@ -330,6 +332,7 @@ private struct SidebarRow<Label: View>: View {
 /// middle, extras on the right. The art sits far enough in that its rounded
 /// corners clear the capsule's curve.
 struct PlayerBar: View {
+    @Environment(\.accent) private var accent
     @Environment(AppModel.self) private var model
     private let height: CGFloat = 64
     private let art: CGFloat = 44
@@ -389,7 +392,7 @@ struct PlayerBar: View {
             if let t {
                 Button { model.setLiked(t, !t.liked) } label: {
                     Image(systemName: t.liked ? "heart.fill" : "heart")
-                        .foregroundStyle(t.liked ? model.tint : .secondary)
+                        .foregroundStyle(t.liked ? accent : .secondary)
                         .contentTransition(.symbolEffect(.replace))
                         .frame(width: target, height: target)
                         .contentShape(Rectangle())
@@ -436,7 +439,7 @@ struct PlayerBar: View {
     private func control(_ symbol: String, tint: Bool? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .foregroundStyle(tint == true ? AnyShapeStyle(model.tint) : tint == false ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                .foregroundStyle(tint == true ? AnyShapeStyle(accent) : tint == false ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
                 .frame(width: target, height: target)
                 .contentShape(Rectangle())
         }
@@ -478,7 +481,7 @@ struct PlayerBar: View {
             }
         } label: {
             Image(systemName: symbol)
-                .foregroundStyle(on ? model.tint : .primary)
+                .foregroundStyle(on ? accent : .primary)
                 .frame(width: target, height: target)
                 .contentShape(Rectangle())
         }
@@ -603,6 +606,7 @@ struct MenuBarCard: View {
 
 /// ⌘K: search everything and jump straight to it.
 struct CommandPalette: View {
+    @Environment(\.accent) private var accent
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var search = SearchModel()
@@ -633,7 +637,7 @@ struct CommandPalette: View {
                             ItemRow(item: item)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
-                                .background(RoundedRectangle(cornerRadius: 8).fill(i == selected ? model.tint.opacity(0.25) : .clear))
+                                .background(RoundedRectangle(cornerRadius: 8).fill(i == selected ? accent.opacity(0.25) : .clear))
                                 .id(i)
                                 .onTapGesture { selected = i; choose() }
                                 .accessibilityElement(children: .combine)

@@ -1,3 +1,4 @@
+import StreamBindings
 import AppIntents
 
 /// Siri and Shortcuts.

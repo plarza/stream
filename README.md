@@ -4,7 +4,7 @@
 
 <h1 align="center">Stream</h1>
 
-<p align="center">Spotify and your own music files in one player for iPhone and Mac · iOS 26 / macOS 26</p>
+<p align="center">Spotify and your own music files in one player for iPhone and Mac · iOS 27 / macOS 27</p>
 
 <p align="center">
   <img src="docs/screenshots/home.png" width="180" alt="Home: pins and recents">
@@ -23,14 +23,15 @@
 - Last.fm scrobbling for local files
 - iPhone mirrors the Mac's music folders over Wi-Fi
 - Mac: floating glass player, menu bar mini player, ⌘K to play or go to anything
+- Optional sign-in with aza on first launch, and your own theme and colour
 
 ## How it works
 
-A Rust core does the work: Spotify through [librespot](https://github.com/librespot-org/librespot), decoding with Symphonia and libopus, the library in SQLite, lyrics, scrobbling and Wi-Fi sync. SwiftUI apps for iPhone and Mac sit on top through UniFFI. Audio goes from the core's ring buffer straight into an `AVAudioSourceNode`, so every source shares one gapless pipeline. Decisions and scope are in [SPEC.md](SPEC.md).
+A Rust core does the work: Spotify through [librespot](https://github.com/librespot-org/librespot), decoding with Symphonia and libopus, the library in SQLite, lyrics, scrobbling and Wi-Fi sync. SwiftUI apps for iPhone and Mac sit on top through UniFFI, with the bindings in their own nonisolated module. Sign-in, the profile button and Appearance come from [AzaUI](https://github.com/plarza/ui). Audio goes from the core's ring buffer straight into an `AVAudioSourceNode`, so every source shares one gapless pipeline. Decisions and scope are in [SPEC.md](SPEC.md).
 
 ## Develop
 
-Needs Xcode 26, Rust and `brew install xcodegen cmake`.
+Needs Xcode 27, Rust and `brew install xcodegen cmake`.
 
 | Task | Command |
 |---|---|

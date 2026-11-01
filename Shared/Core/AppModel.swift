@@ -1,3 +1,4 @@
+import StreamBindings
 import Foundation
 import Observation
 import SwiftUI
@@ -43,7 +44,6 @@ final class AppModel {
         return a[i + 1]
     }
     /// The app's accent everywhere.
-    let tint = Color.appleMusicRed
     /// Text and icons drawn on the accent.
     let onTint = Color.white
     /// A page to open after Now Playing closes (Go to Album / Artist).
@@ -245,27 +245,9 @@ final class AppModel {
 
     // MARK: Appearance
 
-    enum Appearance: String, CaseIterable, Identifiable {
-        case system, light, dark
-        var id: Self { self }
-        var title: String { rawValue.capitalized }
-    }
-
-    var appearance: Appearance = Appearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system {
-        didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
-    }
-
     /// Pure black instead of dark grey in dark mode, for OLED screens.
     var pureBlack: Bool = UserDefaults.standard.bool(forKey: "pureBlack") {
         didSet { UserDefaults.standard.set(pureBlack, forKey: "pureBlack") }
-    }
-
-    var colorScheme: ColorScheme? {
-        switch appearance {
-        case .system: nil
-        case .light: .light
-        case .dark: .dark
-        }
     }
 
     func togglePin(_ item: Item) {

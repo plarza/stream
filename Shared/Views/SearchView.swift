@@ -1,3 +1,4 @@
+import StreamBindings
 import SwiftUI
 
 extension SearchFilter: Identifiable, CaseIterable {

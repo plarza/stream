@@ -1,6 +1,6 @@
 import XCTest
 
-/// Spotify sign-in from Settings, end to end against FakeSpotify: the browser sheet,
+/// Spotify sign-in from Profile, end to end against FakeSpotify: the browser sheet,
 /// the app's loopback listener, the token exchange and both approvals; then a real
 /// login to Spotify's streaming servers, which turn the stand-in's token away.
 final class SignInTests: StreamUITestCase {
@@ -14,7 +14,7 @@ final class SignInTests: StreamUITestCase {
 
     func testSpotifySignIn() {
         let approvals = FakeSpotify.shared.approvals
-        wait(el("account")).tap()
+        wait(el("profile")).tap()
         let clientId = wait(el("settings.spotify.clientId"))
         clientId.tap()
         clientId.typeText("test-client-id")

@@ -1,3 +1,4 @@
+import StreamBindings
 import SwiftUI
 
 /// "Playing Next" (songs you queued) above "Continue from …" (the rest of the

@@ -1,4 +1,6 @@
+import StreamBindings
 import AppKit
+import AzaUI
 import SwiftUI
 
 @main
@@ -11,6 +13,7 @@ struct StreamMacApp: App {
         Window("Stream", id: "main") {
             MacRootView(showPalette: $palette)
                 .environment(model)
+                .azaUI(name: "Stream", accent: "FF375F")
                 .frame(minWidth: 1000, minHeight: 600)
                 .onContinueUserActivity("network.aza.stream.playing") { model.continueActivity($0) }
                 .onOpenURL { model.handle(url: $0) }
@@ -41,11 +44,13 @@ struct StreamMacApp: App {
         }
 
         Settings {
-            SettingsView().environment(model).frame(width: 520, height: 560)
+            ProfileView().environment(model).frame(width: 520, height: 640)
+                .azaUI(name: "Stream", accent: "FF375F", showsSignIn: false)
         }
 
         MenuBarExtra {
             MenuBarCard().environment(model)
+                .azaUI(name: "Stream", accent: "FF375F", showsSignIn: false)
         } label: {
             MenuBarLabel()
         }

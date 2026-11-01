@@ -1,3 +1,5 @@
+import StreamBindings
+import AzaUI
 import SwiftUI
 
 @main
@@ -9,6 +11,7 @@ struct StreamApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                .azaUI(name: "Stream", accent: "FF375F")
                 .onContinueUserActivity("network.aza.stream.playing") { model.continueActivity($0) }
                 .onOpenURL { model.handle(url: $0) }
                 .onChange(of: phase) { _, p in
@@ -40,7 +43,7 @@ struct RootView: View {
                 NavigationStack(path: $homePath) {
                     HomeView()
                         .navigationTitle("Home")
-                        .accountButton { model.showSettings = true }
+                        .profileButton { model.showSettings = true }
                         .destinations()
                 }
             }
@@ -48,7 +51,7 @@ struct RootView: View {
                 NavigationStack(path: $libraryPath) {
                     LibraryView()
                         .navigationTitle("Library")
-                        .accountButton { model.showSettings = true }
+                        .profileButton { model.showSettings = true }
                         .destinations()
                 }
             }
@@ -56,7 +59,7 @@ struct RootView: View {
                 NavigationStack(path: $searchPath) {
                     SearchResultsView(search: search)
                         .navigationTitle("Search")
-                        .accountButton { model.showSettings = true }
+                        .profileButton { model.showSettings = true }
                         .destinations()
                 }
                 .searchable(text: $search.query, prompt: "Search your library")
@@ -71,20 +74,11 @@ struct RootView: View {
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("miniPlayer")
         }
-        .tint(model.tint)
-        .preferredColorScheme(model.colorScheme)
         .fullScreenCover(isPresented: $model.showNowPlaying, onDismiss: openPending) {
             NowPlayingView()
                 .navigationTransition(.zoom(sourceID: "nowplaying", in: zoom))
         }
-        .sheet(isPresented: $model.showSettings) {
-            NavigationStack {
-                SettingsView()
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) { Button("Done") { model.showSettings = false } }
-                    }
-            }
-        }
+        .sheet(isPresented: $model.showSettings) { ProfileView() }
         .overlay(alignment: .top) {
             if let t = model.toast { Toast(text: t).padding(.top, 8) }
         }
@@ -118,14 +112,12 @@ struct RootView: View {
 }
 
 extension View {
-    /// The account button level with each tab's large title (opens Settings).
-    func accountButton(_ open: @escaping () -> Void) -> some View {
+    /// The profile button level with each tab's large title.
+    func profileButton(_ open: @escaping () -> Void) -> some View {
         toolbarTitleDisplayMode(.inlineLarge)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: open) { AccountAvatar() }
-                        .accessibilityLabel("Account and Settings")
-                        .accessibilityIdentifier("account")
+                    ProfileButton(size: 36, action: open)
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
@@ -135,35 +127,6 @@ extension View {
     func destinations() -> some View {
         navigationDestination(for: Item.self) { CollectionView(item: $0) }
             .navigationDestination(for: LibrarySection.self) { SectionView(section: $0) }
-    }
-}
-
-/// Your Spotify initials on a tinted circle, or a person when signed out.
-struct AccountAvatar: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        let initials = Self.initials(model.account.spotifyUser)
-        ZStack {
-            Circle().fill(LinearGradient(colors: [model.tint.opacity(0.75), model.tint], startPoint: .top, endPoint: .bottom))
-            if initials.isEmpty {
-                Image(systemName: "person.fill").font(.system(size: 17, weight: .semibold))
-            } else {
-                Text(initials).font(.system(size: 15, weight: .semibold, design: .rounded))
-            }
-        }
-        .foregroundStyle(.white)
-        .frame(width: 36, height: 36)
-        // A ring of glass around the avatar, like the system's own account buttons.
-        .padding(3)
-        .glassEffect(.regular.interactive(), in: .circle)
-        .contentTransition(.opacity)
-        .animation(.smooth, value: initials)
-    }
-
-    static func initials(_ name: String?) -> String {
-        let words = (name ?? "").split(whereSeparator: { $0 == " " || $0 == "." || $0 == "_" }).filter { $0.first?.isLetter == true }
-        return String(words.prefix(2).compactMap(\.first)).uppercased()
     }
 }
 

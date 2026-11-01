@@ -1,8 +1,11 @@
+import StreamBindings
+import AzaUI
 import SwiftUI
 
 /// Album, playlist and artist pages: compact header (art + details side by
 /// side) on a page tinted from the artwork, an actions row, then the songs.
 struct CollectionView: View {
+    @Environment(\.accent) private var accent
     let item: Item
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
@@ -140,7 +143,7 @@ struct CollectionView: View {
                     .font(.title3)
                     .frame(width: 52, height: 52)
                     .foregroundStyle(model.onTint)
-                    .background(model.tint, in: .circle)
+                    .background(accent, in: .circle)
             }
             .buttonStyle(.pressable)
             .accessibilityLabel("Play")

@@ -1,3 +1,4 @@
+import UITestSupport
 import XCTest
 
 /// Launches Stream against the fixture library in test mode: isolated data,
@@ -34,7 +35,8 @@ class StreamUITestCase: XCTestCase {
         // Pairs only: AppKit reads `-key value`, and a bare flag before a pair hides the window.
         let spotify = FakeSpotify.shared
         app.launchArguments = ["-musicFolder", Self.library, "-uiTesting", "YES",
-                               "-spotifyAccounts", spotify.accountsURL, "-spotifyApi", spotify.apiURL]
+                               "-spotifyAccounts", spotify.accountsURL, "-spotifyApi", spotify.apiURL,
+                               "-signInAnswered", "YES"]
         app.launch()
         Self.running = app
     }
@@ -45,22 +47,6 @@ class StreamUITestCase: XCTestCase {
 
     func text(_ label: String) -> XCUIElement {
         app.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", label, label)).firstMatch
-    }
-
-    /// Checks every 0.1s. XCTest's own waits check about once a second, which made every step cost a second.
-    func poll(_ timeout: TimeInterval, _ done: () -> Bool) -> Bool {
-        let end = Date().addingTimeInterval(timeout)
-        while !done() {
-            if Date() > end { return false }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        }
-        return true
-    }
-
-    @discardableResult
-    func wait(_ e: XCUIElement, _ timeout: TimeInterval = 5, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
-        XCTAssertTrue(poll(timeout) { e.exists }, "\(e) never appeared", file: file, line: line)
-        return e
     }
 
     func waitGone(_ e: XCUIElement, _ timeout: TimeInterval = 5, file: StaticString = #filePath, line: UInt = #line) {

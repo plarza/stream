@@ -13,7 +13,7 @@ set -eu
 set -o pipefail
 cd "$(dirname "$0")/.."
 ROOT=$PWD
-SIM="${SIM:-BC845076-8DE4-4379-88C8-F0F002C9CA47}"
+SIM="${SIM:-D8A496FC-0088-4FBB-BC81-631CF30BD8A0}"
 T=$ROOT/build/tests
 START=$SECONDS
 mkdir -p $T

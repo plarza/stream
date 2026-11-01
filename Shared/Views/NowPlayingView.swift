@@ -1,3 +1,5 @@
+import StreamBindings
+import AzaUI
 import AVKit
 import SwiftUI
 
@@ -5,6 +7,7 @@ import SwiftUI
 /// the big cover (which shrinks to a header for lyrics and queue), then the
 /// scrubber and transport on the blurred art.
 struct NowPlayingView: View {
+    @Environment(\.accent) private var accent
     @Environment(AppModel.self) private var model
     @Namespace private var art
     var compact = false
@@ -167,7 +170,7 @@ struct NowPlayingView: View {
         } label: {
             Image(systemName: track?.liked == true ? "heart.fill" : "heart")
                 .font(.title3)
-                .foregroundStyle(track?.liked == true ? model.tint : .white)
+                .foregroundStyle(track?.liked == true ? accent : .white)
                 .contentTransition(.symbolEffect(.replace))
                 .frame(width: 38, height: 38)
                 .glassEffect(.regular.interactive(), in: .circle)
@@ -203,7 +206,7 @@ struct NowPlayingView: View {
             withAnimation(.player) { model.nowPlayingMode = on ? .artwork : mode }
         } label: {
             Image(systemName: on && symbol == "quote.bubble" ? "quote.bubble.fill" : symbol)
-                .foregroundStyle(on ? AnyShapeStyle(model.tint) : AnyShapeStyle(.white.opacity(0.7)))
+                .foregroundStyle(on ? AnyShapeStyle(accent) : AnyShapeStyle(.white.opacity(0.7)))
                 .contentTransition(.symbolEffect(.replace))
                 // The whole cell answers, not just the glyph.
                 .frame(width: 64, height: 48)
@@ -289,6 +292,7 @@ struct Scrubber: View {
 
 /// Shuffle · previous · play · next · repeat.
 struct Transport: View {
+    @Environment(\.accent) private var accent
     @Environment(AppModel.self) private var model
     var size: CGFloat = 1
 
@@ -343,7 +347,7 @@ struct Transport: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: NowPlayingMetrics.glyph * size, weight: on ? .semibold : .medium))
-                .foregroundStyle(on ? model.tint : .white.opacity(0.7))
+                .foregroundStyle(on ? accent : .white.opacity(0.7))
                 .frame(width: 48 * size, height: 64 * size)
                 .contentShape(Rectangle())
         }

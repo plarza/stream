@@ -1,8 +1,9 @@
+import StreamBindings
 import Foundation
 import Security
 
 /// Grants and session keys, kept in the Keychain (this device only).
-struct Keychain: Sendable {
+nonisolated struct Keychain: Sendable {
     let service: String
 
     private func query(_ key: String) -> [String: Any] {

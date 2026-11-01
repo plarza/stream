@@ -1,3 +1,4 @@
+import StreamBindings
 import AVFoundation
 #if canImport(stream_coreFFI)
 import stream_coreFFI
@@ -6,7 +7,8 @@ import stream_coreFFI
 /// The device end of the audio path. An AVAudioSourceNode pulls PCM straight
 /// out of the Rust core's ring buffer on the render thread. The engine is
 /// stopped whenever nothing plays, so a paused player costs no CPU.
-final class AudioOutput: @unchecked Sendable {
+/// Nonisolated: the render block runs on the audio thread, never the main actor.
+nonisolated final class AudioOutput: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private var source: AVAudioSourceNode?
     private var stopWork: DispatchWorkItem?
@@ -19,12 +21,10 @@ final class AudioOutput: @unchecked Sendable {
         NotificationCenter.default.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { note in
             guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+            let resume = (note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt)
+                .map { AVAudioSession.InterruptionOptions(rawValue: $0).contains(.shouldResume) } ?? false
             MainActor.assumeIsolated {
-                if type == .began { AppModel.shared.core.pause() }
-                else if let o = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt,
-                        AVAudioSession.InterruptionOptions(rawValue: o).contains(.shouldResume) {
-                    AppModel.shared.core.resume()
-                }
+                if type == .began { AppModel.shared.core.pause() } else if resume { AppModel.shared.core.resume() }
             }
         }
         NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { note in
