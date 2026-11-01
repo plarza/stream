@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var lastfmSecret = ""
     @State private var settings = Preferences(normalization: true, crossfadeSeconds: 0, autoplay: false, bitPerfect: false, scrobbling: true)
     @State private var sync: SyncStatus?
+    @State private var refreshing = false
     #if os(macOS)
     @State private var folders: [String] = []
     #endif
@@ -85,9 +86,21 @@ struct SettingsView: View {
             } else {
                 LabeledContent("Playback", value: "Connected")
                     .accessibilityIdentifier("settings.spotify.playback")
-                Button("Refresh library") {
-                    Task { try? await model.core.refreshSpotify(force: true) }
+                Button {
+                    refreshing = true
+                    Task {
+                        await model.refreshSpotify()
+                        refreshing = false
+                        model.show("Library up to date")
+                    }
+                } label: {
+                    HStack {
+                        Text("Refresh library")
+                        Spacer()
+                        if refreshing { ProgressView().controlSize(.small) }
+                    }
                 }
+                .disabled(refreshing)
                 Button("Sign out", role: .destructive) { model.core.spotifySignOut() }
                     .accessibilityIdentifier("settings.spotify.signOut")
             }

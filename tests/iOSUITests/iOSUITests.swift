@@ -23,6 +23,10 @@ final class iOSUITests: StreamUITestCase {
         el("collection.play").tap()
         waitLabel(el("mini.title"), "Neon Lights")
         waitLabel(el("mini.playPause"), "Pause")
+        // Scrolling the page leaves the playing bar full size, next button and all.
+        app.swipeUp()
+        app.swipeUp()
+        XCTAssertTrue(el("mini.next").isHittable, "the playing bar collapsed on scroll")
         el("mini.next").tap()
         waitLabel(el("mini.title"), "Tunnel")
         el("mini.playPause").tap()

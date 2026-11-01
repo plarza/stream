@@ -65,7 +65,7 @@ struct ItemRow: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let song = item.kind == .track ? model.core.track(id: item.id) : nil
+        let song = item.kind == .track ? model.track(item.id) : nil
         HStack(spacing: Metrics.artGap) {
             ArtworkView(url: item.art, size: 48, circle: item.kind == .artist)
             VStack(alignment: .leading, spacing: 2) {
@@ -107,7 +107,6 @@ struct ItemTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             ArtworkView(url: item.art, size: size, circle: item.kind == .artist)
-                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
             if showCaption {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.title).font(.footnote.weight(.medium)).lineLimit(1)
@@ -154,7 +153,7 @@ struct ItemMenu: ViewModifier {
                 .accessibilityIdentifier("menu.playNext")
             Button { Task { model.playLater(await resolve()) } } label: { Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward") }
                 .accessibilityIdentifier("menu.playLater")
-            if item.kind == .track, let t = model.core.track(id: item.id) {
+            if item.kind == .track, let t = model.track(item.id) {
                 Divider()
                 if t.artistId != nil {
                     Button { model.openArtist(of: t) } label: { Label("Go to Artist", systemImage: "music.mic") }
@@ -164,7 +163,7 @@ struct ItemMenu: ViewModifier {
                 }
             }
             Divider()
-            let pinned = model.core.isPinned(id: item.id)
+            let pinned = model.isPinned(item.id)
             Button { model.togglePin(item) } label: { Label(pinned ? "Unpin" : "Pin", systemImage: pinned ? "pin.slash" : "pin") }
                 .accessibilityIdentifier(pinned ? "menu.unpin" : "menu.pin")
         }
@@ -173,7 +172,7 @@ struct ItemMenu: ViewModifier {
     private func resolve() async -> [Track] {
         if let tracks { return await tracks() }
         if item.kind == .track {
-            return model.core.track(id: item.id).map { [$0] } ?? []
+            return model.track(item.id).map { [$0] } ?? []
         }
         return (try? await model.core.collection(id: item.id).tracks) ?? []
     }

@@ -33,19 +33,29 @@ extension LibrarySection: Identifiable {
     static let ordered: [LibrarySection] = [.playlists, .artists, .albums, .songs, .likedSongs, .downloaded]
 }
 
+/// The Library tab, laid out like Apple Music's: a glyph column, the name in
+/// title type, hairlines that start at the text, nothing above the first row.
 struct LibraryView: View {
-    @Environment(AppModel.self) private var model
-
     var body: some View {
         List {
             ForEach(LibrarySection.ordered) { s in
                 NavigationLink(value: s) {
-                    Label(s.title, systemImage: s.symbol)
-                        .font(.title3)
-                        .padding(.vertical, 4)
+                    HStack(spacing: 0) {
+                        Image(systemName: s.symbol)
+                            .font(.system(size: 22))
+                            .foregroundStyle(.primary)
+                            .frame(width: 30)
+                        Text(s.title)
+                            .font(.title3)
+                            .padding(.leading, 11)
+                            .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+                    }
+                    .frame(minHeight: 52)
                 }
+                .listRowInsets(EdgeInsets(top: 0, leading: Metrics.page, bottom: 0, trailing: Metrics.page))
                 .accessibilityIdentifier("library.\(s.title)")
             }
+            .listSectionSeparator(.hidden, edges: .top)
         }
         .listStyle(.plain)
     }
@@ -102,10 +112,11 @@ struct SectionView: View {
         .onAppear { if loadedVersion != model.libraryVersion { reload() } }
         .onChange(of: model.libraryVersion) { reload() }
         .onChange(of: query) { _, q in
-            if !q.isEmpty, everything == nil {
-                everything = model.core.section(section: section, offset: 0, limit: 1_000_000)
-            }
+            if !q.isEmpty, everything == nil { loadEverything() }
         }
+        #if os(iOS)
+        .refreshable { await model.refreshSpotify() }
+        #endif
     }
 
     #if os(macOS)
@@ -198,8 +209,19 @@ struct SectionView: View {
         items = model.sectionFirstPage(section, limit: pageSize)
         exhausted = items.count < Int(pageSize)
         everything = nil
-        if !query.isEmpty { everything = model.core.section(section: section, offset: 0, limit: 1_000_000) }
+        if !query.isEmpty { loadEverything() }
         loadedVersion = model.libraryVersion
+    }
+
+    /// The whole section, read off the main thread (a big library takes a moment).
+    private func loadEverything() {
+        let core = model.core, section = section
+        Task {
+            let all = await Task.detached(priority: .userInitiated) {
+                core.section(section: section, offset: 0, limit: 1_000_000)
+            }.value
+            everything = all
+        }
     }
 
     private func loadMore() {
@@ -211,12 +233,13 @@ struct SectionView: View {
 
     /// Plays the section (or what the search left of it) from this song on.
     private func play(_ item: Item) {
-        var tracks = model.core.sectionTracks(section: section)
-        if !query.isEmpty {
-            let ids = Set(shown.map(\.id))
-            tracks = tracks.filter { ids.contains($0.id) }
+        let core = model.core, section = section
+        let ids = query.isEmpty ? nil : Set(shown.map(\.id))
+        Task {
+            var tracks = await Task.detached(priority: .userInitiated) { core.sectionTracks(section: section) }.value
+            if let ids { tracks = tracks.filter { ids.contains($0.id) } }
+            model.play(tracks, at: tracks.firstIndex { $0.id == item.id } ?? 0)
         }
-        model.play(tracks, at: tracks.firstIndex { $0.id == item.id } ?? 0)
     }
 }
 
@@ -230,7 +253,6 @@ struct GridTile: View {
         VStack(alignment: artist ? .center : .leading, spacing: 8) {
             GeometryReader { geo in
                 ArtworkView(url: item.art, size: geo.size.width, circle: artist)
-                    .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
             }
             .aspectRatio(1, contentMode: .fit)
             VStack(alignment: artist ? .center : .leading, spacing: 1) {

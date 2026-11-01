@@ -44,8 +44,9 @@ actor ArtworkStore {
         let memory = Self.memory
         if let hit = memory.object(forKey: key) { return hit.image }
         if let t = inflight[key as String] { return await t.value }
+        let source = Self.sized(url, pixels: bucket)
         let task = Task<CGImage?, Never> { [dir, session] in
-            guard let file = await Self.localFile(for: url, dir: dir, session: session) else { return nil }
+            guard let file = await Self.localFile(for: source, dir: dir, session: session) else { return nil }
             return Self.downsample(file, pixels: bucket)
         }
         inflight[key as String] = task
@@ -62,6 +63,17 @@ actor ArtworkStore {
         #else
         return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
         #endif
+    }
+
+    /// Spotify's CDN serves every cover at 640, 300 and 64 px (artists at 640, 320 and
+    /// 160) under the same id; thumbnails fetch the 300 px file, a fifth of the bytes.
+    static func sized(_ url: String, pixels: Int) -> String {
+        guard pixels <= 320, url.hasPrefix("https://i.scdn.co/image/") else { return url }
+        let swaps = [("ab67616d0000b273", "ab67616d00001e02"), ("ab6761610000e5eb", "ab67616100005174")]
+        for (big, small) in swaps where url.contains(big) {
+            return url.replacingOccurrences(of: big, with: small)
+        }
+        return url
     }
 
     private static func localFile(for url: String, dir: URL, session: URLSession) async -> URL? {
@@ -138,7 +150,7 @@ struct ArtworkView: View {
         .clipShape(circle ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: cornerRadius ?? Metrics.radius(for: size), style: .continuous)))
         .overlay {
             (circle ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: cornerRadius ?? Metrics.radius(for: size), style: .continuous)))
-                .stroke(.white.opacity(0.08), lineWidth: 0.5)
+                .stroke(.primary.opacity(0.08), lineWidth: 0.5)
         }
         .task(id: url) {
             let px = Int(size * Display.scale)

@@ -393,6 +393,38 @@ impl StreamCore {
         self.rt.spawn(async move { me.collection_inner(&id).await }).await.map_err(err)?
     }
 
+    /// A page from disk alone, without waiting on the network, so albums and playlists
+    /// seen before open at once while `collection` refreshes them. None when nothing
+    /// complete is stored (a Spotify album only some of whose songs are saved).
+    pub fn cached_collection(&self, id: String) -> Option<CollectionPage> {
+        let pinned = self.db.is_pinned(&id);
+        if id.starts_with("local:album:") || id.starts_with("spotify:album:") {
+            let label = self.db.get_kv(&album_key(&id));
+            if id.starts_with("spotify:") && label.is_none() {
+                return None;
+            }
+            let (item, year, saved) = self.db.album_item(&id)?;
+            let tracks = self.db.album_tracks(&id);
+            let description = label.filter(|l| !l.is_empty()).map(|l| format!("℗ {l}"));
+            return (!tracks.is_empty())
+                .then(|| CollectionPage { detail: detail(year, &tracks), item, description, tracks, albums: vec![], liked: saved && id.starts_with("spotify:"), pinned });
+        }
+        if id.starts_with("spotify:playlist:") {
+            let (item, description) = self.db.playlist_item(&id)?;
+            let tracks = self.db.playlist_track_list(&id);
+            return (!tracks.is_empty())
+                .then(|| CollectionPage { detail: list_detail(&tracks), item, description, tracks, albums: vec![], liked: false, pinned });
+        }
+        if id.starts_with("local:artist:") {
+            let item = self.db.artist_item(&id)?;
+            let albums = self.db.artist_albums(&id);
+            let tracks = self.db.artist_tracks(&id, 500);
+            let n = albums.len();
+            return Some(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, albums, liked: false, pinned });
+        }
+        None
+    }
+
     pub fn search_library(&self, query: String, filter: SearchFilter) -> Vec<Item> {
         self.db.search(&query, filter, 40)
     }
@@ -915,11 +947,14 @@ impl StreamCore {
             return Ok(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, albums, liked: false, pinned });
         }
         if id.starts_with("spotify:album:") {
+            // An album fetched in full once doesn't change: serve it from disk.
+            if let Some(page) = self.cached_collection(id.to_string()) {
+                return Ok(page);
+            }
             let cached = self.db.album_tracks(id);
             let header = self.db.album_item(id);
             if let Some((item, year, saved)) = header.clone()
                 && !cached.is_empty()
-                && cached.len() >= 1
                 && self.web.read().is_none()
             {
                 return Ok(CollectionPage { detail: detail(year, &cached), item, description: None, tracks: cached, albums: vec![], liked: saved, pinned });
@@ -947,6 +982,7 @@ impl StreamCore {
             self.db.upsert_spotify_tracks(&rows, None).map_err(err)?;
             let saved = header.map(|h| h.2);
             self.db.upsert_album(&item, v["artists"][0]["uri"].as_str(), api::year_of(&v), saved);
+            self.db.set_kv(&album_key(id), v["label"].as_str().unwrap_or(""));
             let tracks = self.db.album_tracks(id);
             return Ok(CollectionPage {
                 detail: detail(api::year_of(&v), &tracks),
@@ -1189,6 +1225,11 @@ impl StreamCore {
 }
 
 /// "44 min", or "18 sec" for something shorter than a minute.
+/// Marks a Spotify album whose every song is stored; holds its label.
+fn album_key(id: &str) -> String {
+    format!("album_full:{id}")
+}
+
 fn total_length(tracks: &[Track]) -> String {
     let secs = tracks.iter().map(|t| t.duration_ms as u64).sum::<u64>() / 1000;
     if secs < 60 { format!("{secs} sec") } else { format!("{} min", secs / 60) }

@@ -14,8 +14,8 @@ struct CollectionView: View {
 
     init(item: Item) {
         self.item = item
-        // Open with what we had last time (page and colors), then refresh.
-        let cached = AppModel.shared.pages[item.id]
+        // Open with what we had last time or what's on disk (page and colors), then refresh.
+        let cached = AppModel.shared.cachedPage(item.id)
         _page = State(initialValue: cached)
         _liked = State(initialValue: cached?.liked ?? false)
         _pinned = State(initialValue: cached?.pinned ?? false)
@@ -198,7 +198,7 @@ struct CollectionView: View {
     }
 
     private func load() async {
-        pinned = model.core.isPinned(id: item.id)
+        pinned = model.isPinned(item.id)
         do {
             let p = try await model.core.collection(id: item.id)
             model.pages[item.id] = p

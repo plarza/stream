@@ -40,13 +40,15 @@ struct HomeView: View {
             .padding(.horizontal, Metrics.page)
             .padding(.bottom, 120)
         }
+        #if os(iOS)
+        .refreshable { await model.refreshSpotify() }
+        #endif
     }
 
     private func pinTile(_ item: Item) -> some View {
         link(item) {
             GeometryReader { geo in
                 ArtworkView(url: item.art, size: geo.size.width, circle: item.kind == .artist)
-                    .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
             }
             .aspectRatio(1, contentMode: .fit)
             .overlay(alignment: .bottomTrailing) {
@@ -80,6 +82,14 @@ struct HomeView: View {
             Label("Nothing pinned yet", systemImage: "pin")
         } description: {
             Text("Long-press an album, song, artist or playlist and choose Pin.")
+        } actions: {
+            #if os(iOS)
+            if !model.account.spotifyWeb {
+                Button("Connect Spotify") { model.showSettings = true }
+                    .buttonStyle(.glassProminent)
+                    .accessibilityIdentifier("home.connectSpotify")
+            }
+            #endif
         }
         .padding(.top, 80)
     }

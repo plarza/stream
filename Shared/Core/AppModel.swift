@@ -21,6 +21,8 @@ final class AppModel {
     var libraryVersion = 0
     var toast: String?
     var showNowPlaying = false
+    /// iPhone's Settings sheet (the account button, and prompts to connect Spotify).
+    var showSettings = false
     var nowPlayingMode: NowPlayingMode = .artwork
     /// Colors derived from the current artwork (backgrounds, Now Playing).
     var accent: Palette = .fallback
@@ -109,6 +111,7 @@ final class AppModel {
     func libraryChanged() {
         home = core.home()
         sections = [:]
+        tracks = [:]
         libraryVersion &+= 1
     }
 
@@ -118,6 +121,27 @@ final class AppModel {
     @ObservationIgnored var pages: [String: CollectionPage] = [:]
     /// The first page of each library section, for the current library version.
     @ObservationIgnored private var sections: [LibrarySection: [Item]] = [:]
+
+    /// Songs looked up by id (rows ask for lengths and albums), for this library version.
+    @ObservationIgnored private var tracks: [String: Track?] = [:]
+
+    func track(_ id: String) -> Track? {
+        if let hit = tracks[id] { return hit }
+        let t = core.track(id: id)
+        tracks[id] = t
+        return t
+    }
+
+    /// Pins are on Home already; no need to ask the core per row.
+    func isPinned(_ id: String) -> Bool { home.pins.contains { $0.id == id } }
+
+    /// A page to open with: this session's copy, else whatever the core has on disk.
+    func cachedPage(_ id: String) -> CollectionPage? {
+        if let hit = pages[id] { return hit }
+        let page = core.cachedCollection(id: id)
+        pages[id] = page
+        return page
+    }
 
     func sectionFirstPage(_ section: LibrarySection, limit: UInt32) -> [Item] {
         if let hit = sections[section] { return hit }
@@ -239,7 +263,7 @@ final class AppModel {
 
     func togglePin(_ item: Item) {
         Haptics.success()
-        if core.isPinned(id: item.id) { core.unpin(id: item.id) } else { core.pin(item: item) }
+        if isPinned(item.id) { core.unpin(id: item.id) } else { core.pin(item: item) }
     }
 
     func playNext(_ tracks: [Track]) { Haptics.tap(); core.playNext(tracks: tracks); show("Playing next") }
@@ -247,6 +271,12 @@ final class AppModel {
 
     /// Current position, cheap enough to call every frame.
     func position() -> Double { Double(core.positionMs()) / 1000 }
+
+    /// Pull to refresh: fetches the Spotify library now (no-op when signed out).
+    func refreshSpotify() async {
+        guard account.spotifyWeb else { return }
+        do { try await core.refreshSpotify(force: true) } catch { show(Self.message(error)) }
+    }
 
     /// True while a Spotify sign-in is under way (the core reports each step).
     var signingIn: Bool {
