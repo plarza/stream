@@ -1,31 +1,51 @@
 import XCTest
 
 /// Taps through the app for the README screenshots (scripts/demo.py --screenshots
-/// captures each SHOT_ mark). Not a test.
+/// builds the library, then captures each SHOT_ mark). Not a test.
 final class DemoFlow: StreamUITestCase {
+    /// demo.json next to the library: which albums and artists go where, written by scripts/demo.py.
+    struct Demo: Decodable {
+        struct Item: Decodable { let id: String; let title: String }
+        let pins: [Item]
+        let recents: [Item]
+        let album: Item
+        let playing: Item
+        let lyrics: Item
+        let lyricsTrack: String
+        let search: String
+        let result: String
+    }
+
+    private var demo: Demo {
+        let url = URL(fileURLWithPath: Self.library).deletingLastPathComponent().appendingPathComponent("demo.json")
+        return try! JSONDecoder().decode(Demo.self, from: Data(contentsOf: url))
+    }
+
     private func shot(_ name: String) {
         XCTContext.runActivity(named: "SHOT_\(name)") { _ in }
         Thread.sleep(forTimeInterval: 2.0)
     }
 
-    private func pin(_ album: String) {
-        app.tabBars.buttons["Library"].tap()
-        wait(el("library.Albums")).tap()
-        wait(el("row.\(album)")).tap()
-        wait(el("collection.pin")).tap()
-        app.navigationBars.buttons.firstMatch.tap()
-        app.navigationBars.buttons.firstMatch.tap()
+    private func link(_ action: String, _ item: Demo.Item) {
+        XCUIDevice.shared.system.open(URL(string: "network-aza-stream://\(action)?id=\(item.id)")!)
     }
 
     func testScreenshots() {
-        pin("Night Drive")
-        pin("Morning Light")
-        pin("Singles")
+        let demo = demo
+        for item in demo.pins {
+            link("pin", item)
+            Thread.sleep(forTimeInterval: 0.5)
+        }
+        // Oldest first: each play goes to the top of Recents.
+        for album in demo.recents {
+            link("play", album)
+            Thread.sleep(forTimeInterval: 1)
+        }
         app.tabBars.buttons["Library"].tap()
         wait(el("library.Albums"))
         shot("library")
-        el("library.Albums").tap()
-        wait(el("row.Morning Light")).tap()
+
+        link("open", demo.album)
         wait(el("collection.play")).tap()
         Thread.sleep(forTimeInterval: 1)
         shot("album")
@@ -35,11 +55,10 @@ final class DemoFlow: StreamUITestCase {
         el("cover.close").tap()
         waitGone(el("cover.close"))
 
-        app.navigationBars.buttons.firstMatch.tap()
-        wait(el("row.Night Drive")).tap()
-        wait(el("collection.play")).tap()
+        link("play", demo.playing)
         app.tabBars.buttons["Home"].tap()
-        wait(el("pin.Night Drive"))
+        wait(el("pin.\(demo.pins[0].title)"))
+        Thread.sleep(forTimeInterval: 1)
         shot("home")
 
         wait(el("mini.title")).tap()
@@ -50,9 +69,8 @@ final class DemoFlow: StreamUITestCase {
         el("nowPlaying.queue").tap()
         app.swipeDown(velocity: .fast)
 
-        app.tabBars.buttons["Home"].tap()
-        wait(el("pin.Singles")).tap()
-        wait(el("track.Loose Song")).tap()
+        link("open", demo.lyrics)
+        wait(el("track.\(demo.lyricsTrack)")).tap()
         wait(el("mini.title")).tap()
         el("nowPlaying.lyrics").tap()
         Thread.sleep(forTimeInterval: 1.5)
@@ -64,8 +82,8 @@ final class DemoFlow: StreamUITestCase {
         shot("search-open")
         let field = wait(app.searchFields.firstMatch)
         field.tap()
-        field.typeText("ne")
-        wait(el("result.Night Drive"))
+        field.typeText(demo.search)
+        wait(el("result.\(demo.result)"))
         shot("search")
     }
 }

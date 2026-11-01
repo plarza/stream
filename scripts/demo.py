@@ -1,14 +1,18 @@
 """README screenshots on a clean simulator (taps come from tests/iOSUITests/DemoFlow.swift), plus one of the Mac app.
 
   python3 -I scripts/demo.py --screenshots   docs/screenshots/*.png
+
+The library they show is built from scripts/demo-library.json: real albums with their
+covers and track lengths, silent audio, and synced lyrics from LRCLIB.
 """
-import os, pty, re, subprocess, sys, tempfile, time
+import json, os, pty, re, subprocess, sys, tempfile, time, urllib.parse, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SIM = os.environ.get("SIM", "4C675D57-6CF7-4DDA-ACF4-4075857B2010")
 BUNDLE = "network.aza.stream"
 DEST = f"platform=iOS Simulator,id={SIM}"
-FIXTURES = os.path.join(ROOT, "tests", "library", "Music")
+DATA = os.path.join(ROOT, "scripts", "demo-library.json")
+LIBRARY = os.path.join(ROOT, "build", "demo", "Music")
 OUT = os.path.join(ROOT, "docs", "screenshots")
 
 
@@ -19,6 +23,76 @@ def run(*cmd, check=True, env=None):
 
 def simctl(*args, check=True):
     return run("xcrun", "simctl", *args, check=check)
+
+
+def local_ids(names):
+    """The core's local ids (core/src/db.rs): blake3 of the artist key, then the album, lowercased.
+    names: [artist] or [artist, album]."""
+    code = ("import sys, json, blake3\n"
+            "out = []\n"
+            "for parts in json.loads(sys.argv[1]):\n"
+            "    h = blake3.blake3()\n"
+            "    for p in parts:\n"
+            "        h.update(p.lower().strip().encode()); h.update(b'\\0')\n"
+            "    out.append(('local:album:' if len(parts) == 2 else 'local:artist:') + h.hexdigest()[:16])\n"
+            "print(json.dumps(out))\n")
+    key = lambda a: "".join(c for c in a if c.isalnum()).lower() or a.strip().lower()
+    parts = [[key(n[0]), *n[1:]] for n in names]
+    return json.loads(run("uv", "run", "--quiet", "--with", "blake3", "python", "-I", "-c", code, json.dumps(parts)).stdout)
+
+
+def fetch(url):
+    req = urllib.request.Request(url, headers={"User-Agent": "Stream screenshots (network.aza.stream)"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read()
+
+
+def name(s):
+    """A file or folder name: the tags keep the real title, slashes and all."""
+    return s.replace("/", "∕")
+
+
+def library():
+    """Writes the albums in demo-library.json as silent FLACs at their real lengths, with
+    covers and a synced .lrc for the lyrics shot, plus demo.json for DemoFlow."""
+    data = json.load(open(DATA))
+    if os.path.isdir(LIBRARY):
+        subprocess.run(["rm", "-rf", LIBRARY], check=True)
+    os.makedirs(LIBRARY)
+    print(f"library: {len(data['albums'])} albums…", flush=True)
+    for a in data["albums"]:
+        folder = os.path.join(LIBRARY, name(f"{a['artist']} - {a['title']}"))
+        os.makedirs(folder)
+        open(os.path.join(folder, "cover.jpg"), "wb").write(fetch(a["cover"]))
+        for t in a["tracks"]:
+            m, sec = t["length"].split(":")
+            artist = a["artist"] + "".join(f" feat. {f}" if i == 0 else f" & {f}" for i, f in enumerate(t["feat"]))
+            path = os.path.join(folder, name(f"{t['disc']}-{t['n']:02d} {t['title']}.flac"))
+            run("ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+                "-t", str(int(m) * 60 + int(sec)), "-c:a", "flac", "-sample_fmt", "s16",
+                "-metadata", f"title={t['title']}", "-metadata", f"artist={artist}",
+                "-metadata", f"album={a['title']}", "-metadata", f"album_artist={a['artist']}",
+                "-metadata", f"track={t['n']}", "-metadata", f"disc={t['disc']}",
+                *(["-metadata", f"date={a['year']}"] if "year" in a else []), path)
+
+    # A shot names an album by its title, or an artist by name.
+    artists = sorted({a["artist"] for a in data["albums"]})
+    names = [[a["artist"], a["title"]] for a in data["albums"]] + [[a] for a in artists]
+    ids = dict(zip([n[-1] for n in names], local_ids(names)))
+    pick = lambda title: {"id": ids[title], "title": title}
+    shots = data["shots"]
+    lyrics_album = next(a for a in data["albums"] if a["title"] == shots["lyrics"][0])
+    track = next(t for t in lyrics_album["tracks"] if t["title"] == shots["lyrics"][1])
+    q = urllib.parse.urlencode({"artist_name": lyrics_album["artist"], "track_name": track["title"]})
+    lrc = json.loads(fetch("https://lrclib.net/api/get?" + q))["syncedLyrics"]
+    open(os.path.join(LIBRARY, name(f"{lyrics_album['artist']} - {lyrics_album['title']}"),
+                      name(f"{track['disc']}-{track['n']:02d} {track['title']}.lrc")), "w").write(lrc)
+
+    json.dump({"pins": [pick(t) for t in shots["pins"]], "recents": [pick(t) for t in shots["recents"]],
+               "album": pick(shots["album"]),
+               "playing": pick(shots["playing"]), "lyrics": pick(lyrics_album["title"]),
+               "lyricsTrack": track["title"], "search": shots["search"], "result": shots["result"]},
+              open(os.path.join(os.path.dirname(LIBRARY), "demo.json"), "w"), indent=2)
 
 
 def prepare():
@@ -41,10 +115,12 @@ def run_flow(method, on_line):
     """Runs one DemoFlow method, calling on_line for each output line as it happens."""
     # A pseudo-terminal keeps xcodebuild line-buffered, so marks arrive when they happen.
     master, slave = pty.openpty()
+    # TEST_RUNNER_ variables reach the test runner without the prefix.
     test = subprocess.Popen(["xcodebuild", "test-without-building", "-project", "Stream.xcodeproj", "-scheme", "Stream-iOS",
                              "-destination", DEST, "-derivedDataPath", "build",
                              f"-only-testing:StreamUITests-iOS/DemoFlow/{method}"],
-                            cwd=ROOT, stdout=slave, stderr=slave, text=True)
+                            cwd=ROOT, stdout=slave, stderr=slave, text=True,
+                            env={**os.environ, "TEST_RUNNER_STREAM_LIBRARY": LIBRARY})
     os.close(slave)
     log, buf = [], b""
     while True:
@@ -85,12 +161,13 @@ def frame(path, phone=True):
 
 
 def mac_window():
-    """Launches the Mac app in the background on the fixtures and captures its window, without taking focus."""
+    """Launches the Mac app in the background on the demo library and captures its window, without taking focus."""
     app = os.path.join(ROOT, "build/Build/Products/Debug/Stream.app")
     subprocess.run(["pkill", "-f", app + "/Contents/MacOS/Stream"], check=False)
-    album = "network-aza-stream://open?id=" + mac_album_id()
-    subprocess.run(["open", "-g", "-n", app, "--args", "-musicFolder", FIXTURES, "-uiTesting", "YES",
-                    "-url", "network-aza-stream://play?id=" + mac_album_id(), "-url", album], check=True)
+    demo = json.load(open(os.path.join(os.path.dirname(LIBRARY), "demo.json")))
+    subprocess.run(["open", "-g", "-n", app, "--args", "-musicFolder", LIBRARY, "-uiTesting", "YES",
+                    "-url", "network-aza-stream://play?id=" + demo["playing"]["id"],
+                    "-url", "network-aza-stream://open?id=" + demo["album"]["id"]], check=True)
     time.sleep(8)
     pid = subprocess.run(["pgrep", "-n", "-f", app + "/Contents/MacOS/Stream"], capture_output=True, text=True).stdout.split()[0]
     find = ("import CoreGraphics\n"
@@ -110,17 +187,9 @@ def mac_window():
     print("shot mac", flush=True)
 
 
-def mac_album_id():
-    """The fixtures' Night Drive album, by the same rule the core uses (blake3 of artist + album)."""
-    code = ("import sys, blake3\n"
-            "h = blake3.blake3()\n"
-            "for p in ['neon coast', 'night drive']:\n"
-            "    h.update(p.encode()); h.update(b'\\0')\n"
-            "print('local:album:' + h.hexdigest()[:16])\n")
-    return run("uv", "run", "--quiet", "--with", "blake3", "python", "-I", "-c", code).stdout.strip()
-
 
 def screenshots():
+    library()
     prepare()
     os.makedirs(OUT, exist_ok=True)
 

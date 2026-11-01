@@ -5,9 +5,11 @@ import XCTest
 class StreamUITestCase: XCTestCase {
     var app: XCUIApplication!
 
-    /// The small generated library from tests/make-fixtures.sh.
+    /// The small generated library from tests/make-fixtures.sh, or the one in
+    /// STREAM_LIBRARY (scripts/demo.py passes its screenshot library this way).
     static var library: String {
-        URL(fileURLWithPath: #filePath)
+        if let path = ProcessInfo.processInfo.environment["STREAM_LIBRARY"] { return path }
+        return URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("library/Music")

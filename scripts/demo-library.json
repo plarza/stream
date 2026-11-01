@@ -1,0 +1,3793 @@
+{
+ "source": "Last.fm user moon_man_m00n's 60 most played albums, keeping those with an albumoftheyear.org user score of 80 or more, and in them the songs AOTY users rate 80 or more (albums AOTY has no song ratings for keep every song). Fetched 2026-11-01.",
+ "shots": {
+  "pins": [
+   "I LAY DOWN MY LIFE FOR YOU",
+   "Kendrick Lamar",
+   "Imaginal Disk",
+   "Graduation",
+   "Luv(sic) hexalogy",
+   "Tyler, The Creator",
+   "DAMN.",
+   "Die Lit"
+  ],
+  "recents": [
+   "Mr. Morale & the Big Steppers",
+   "Heaven knows",
+   "OFFLINE!",
+   "Late Registration"
+  ],
+  "album": "Madvillainy",
+  "playing": "IGOR",
+  "lyrics": [
+   "DAMN.",
+   "DNA."
+  ],
+  "search": "kanye",
+  "result": "Graduation"
+ },
+ "albums": [
+  {
+   "artist": "JPEGMAFIA",
+   "title": "I LAY DOWN MY LIFE FOR YOU",
+   "plays": 546,
+   "aoty": 85,
+   "year": 2024,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/de0fbf0601a554a6e1c61226c22f7909.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "i scream this in the mirror before i interact with anyone",
+     "length": "1:48",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "SIN MIEDO",
+     "length": "2:46",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "I'll Be Right There",
+     "length": "2:48",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "it's dark and hell is hot",
+     "length": "2:30",
+     "feat": [],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "New Black History",
+     "length": "2:16",
+     "feat": [
+      "Vince Staples"
+     ],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "don't rely on other men",
+     "length": "2:51",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "vulgar display of power",
+     "length": "2:52",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Exmilitary",
+     "length": "5:01",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "JIHAD JOE",
+     "length": "2:15",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "JPEGULTRA!",
+     "length": "4:51",
+     "feat": [
+      "Denzel Curry"
+     ],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "either on or off the drugs",
+     "length": "2:20",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "loop it and leave it",
+     "length": "2:00",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Don't Put Anything On the Bible",
+     "length": "4:04",
+     "feat": [
+      "Buzzy Lee"
+     ],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "i recovered from this",
+     "length": "2:55",
+     "feat": [],
+     "aoty": 88
+    }
+   ]
+  },
+  {
+   "artist": "JPEGMAFIA",
+   "title": "OFFLINE!",
+   "plays": 461,
+   "aoty": 84,
+   "year": 2022,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/d1ad42128e367623348c96f9b0ce70e2.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "HAZARD DUTY PAY!",
+     "length": "2:37",
+     "feat": [],
+     "aoty": 97
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "DIKEMBE!",
+     "length": "3:02",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "GOD DON'T LIKE UGLY!",
+     "length": "1:19",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "UNTITLED",
+     "length": "2:44",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "💯",
+     "length": "2:34",
+     "feat": [],
+     "aoty": 84
+    }
+   ]
+  },
+  {
+   "artist": "JPEGMAFIA",
+   "title": "Veteran",
+   "plays": 285,
+   "aoty": 82,
+   "year": 2018,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/109adfe3cc11201e3fb97a246afc733d.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "1539 N. Calvert",
+     "length": "2:37",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Real Nega",
+     "length": "2:30",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Thug Tears",
+     "length": "3:18",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Baby I'm Bleeding",
+     "length": "2:32",
+     "feat": [],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Rock N Roll Is Dead",
+     "length": "3:08",
+     "feat": [],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "DD Form 214",
+     "length": "3:15",
+     "feat": [
+      "Bobbi Rush"
+     ],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "Panic Emoji",
+     "length": "3:00",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "Macaulay Culkin",
+     "length": "1:57",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "Williamsburg",
+     "length": "3:32",
+     "feat": [],
+     "aoty": 80
+    },
+    {
+     "disc": 1,
+     "n": 16,
+     "title": "I Cannot Fucking Wait Until Morrissey Dies",
+     "length": "1:26",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 17,
+     "title": "Rainbow Six",
+     "length": "4:42",
+     "feat": [
+      "Yung Midpack"
+     ],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 18,
+     "title": "1488",
+     "length": "2:28",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 19,
+     "title": "Curb Stomp",
+     "length": "2:15",
+     "feat": [],
+     "aoty": 87
+    }
+   ]
+  },
+  {
+   "artist": "Kendrick Lamar",
+   "title": "DAMN.",
+   "plays": 202,
+   "aoty": 85,
+   "year": 2017,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/8a59ed3a9c71cb5113325e2026889e4a.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "BLOOD.",
+     "length": "1:58",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "DNA.",
+     "length": "3:05",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "YAH.",
+     "length": "2:40",
+     "feat": [],
+     "aoty": 80
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "ELEMENT.",
+     "length": "3:28",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "FEEL.",
+     "length": "3:34",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "LOYALTY.",
+     "length": "3:47",
+     "feat": [
+      "Rihanna"
+     ],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "PRIDE.",
+     "length": "4:35",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "HUMBLE.",
+     "length": "2:57",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "LUST.",
+     "length": "5:07",
+     "feat": [],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "LOVE.",
+     "length": "3:33",
+     "feat": [
+      "Zacari"
+     ],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "XXX.",
+     "length": "4:14",
+     "feat": [
+      "U2"
+     ],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "FEAR.",
+     "length": "7:40",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "DUCKWORTH.",
+     "length": "4:08",
+     "feat": [],
+     "aoty": 96
+    }
+   ]
+  },
+  {
+   "artist": "JPEGMAFIA",
+   "title": "All My Heroes Are Cornballs",
+   "plays": 198,
+   "aoty": 84,
+   "year": 2019,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/ab73a2ef85ff757e616cdbd991301859.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Jesus Forgive Me, I Am a Thot",
+     "length": "2:36",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Kenan Vs. Kel",
+     "length": "3:01",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Beta Male Strategies",
+     "length": "3:18",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "JPEGMAFIA TYPE BEAT",
+     "length": "0:54",
+     "feat": [],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Grimy Waifu",
+     "length": "2:55",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "PTSD",
+     "length": "2:28",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Rap Grow Old & Die x No Child Left Behind",
+     "length": "2:47",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "All My Heroes Are Cornballs",
+     "length": "3:23",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "BBW",
+     "length": "1:36",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "PRONE!",
+     "length": "2:42",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Thot Tactics",
+     "length": "2:50",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Free The Frail",
+     "length": "3:30",
+     "feat": [
+      "Helena Deland"
+     ],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "Post Verified Lifestyle",
+     "length": "3:35",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "BasicBitchTearGas",
+     "length": "1:15",
+     "feat": [],
+     "aoty": 80
+    },
+    {
+     "disc": 1,
+     "n": 16,
+     "title": "DOTS FREESTYLE REMIX",
+     "length": "2:07",
+     "feat": [
+      "Buzzy Lee",
+      "Abdu Ali"
+     ],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 17,
+     "title": "BUTTERMILK JESUS TYPE BEAT",
+     "length": "1:09",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 18,
+     "title": "Papi I Missed U",
+     "length": "4:02",
+     "feat": [],
+     "aoty": 90
+    }
+   ]
+  },
+  {
+   "artist": "Playboi Carti",
+   "title": "Die Lit",
+   "plays": 192,
+   "aoty": 81,
+   "year": 2018,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/d1761236c12379d3e1dfce76023231f6.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Long Time (Intro)",
+     "length": "3:31",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "R.I.P.",
+     "length": "3:12",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Lean 4 Real",
+     "length": "2:57",
+     "feat": [
+      "Skepta"
+     ],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Love Hurts",
+     "length": "3:00",
+     "feat": [
+      "Travis Scott"
+     ],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Shoota",
+     "length": "2:33",
+     "feat": [
+      "Lil Uzi Vert"
+     ],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Right Now",
+     "length": "3:27",
+     "feat": [
+      "Pi'erre Bourne"
+     ],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Fell in Luv",
+     "length": "3:26",
+     "feat": [
+      "Bryson Tiller"
+     ],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "Foreign",
+     "length": "2:22",
+     "feat": [],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Mileage",
+     "length": "2:29",
+     "feat": [
+      "Chief Keef"
+     ],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "FlatBed Freestyle",
+     "length": "3:13",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "No Time",
+     "length": "3:39",
+     "feat": [
+      "Gunna"
+     ],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 17,
+     "title": "Choppa Won't Miss",
+     "length": "3:37",
+     "feat": [
+      "Young Thug"
+     ],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 18,
+     "title": "R.I.P. Fredo (Notice Me)",
+     "length": "2:41",
+     "feat": [
+      "Young Nudy"
+     ],
+     "aoty": 84
+    }
+   ]
+  },
+  {
+   "artist": "Nujabes",
+   "title": "Luv(sic) hexalogy",
+   "plays": 183,
+   "aoty": 93,
+   "year": 2015,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/232800a491fee346f5b95b50c5817539.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Luv(sic)",
+     "length": "4:46",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 97
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Luv(sic) Part 2",
+     "length": "4:33",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 98
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Luv(sic) Part 3",
+     "length": "6:14",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 98
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Luv(sic) Part 4",
+     "length": "5:10",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 97
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Luv(sic) Part 5",
+     "length": "5:49",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Luv(sic) Grand Finale",
+     "length": "5:16",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 98
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Luv(sic) (12\" Remix)",
+     "length": "4:57",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Luv(sic) Part 2 (Acoustica)",
+     "length": "6:33",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Luv(sic) Part 3 (Ta-ku Remix)",
+     "length": "4:56",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Luv(sic) Part 4 (LASTorder Remix)",
+     "length": "4:38",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "Luv(sic) Part 5 (Jumpster Remix)",
+     "length": "4:38",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Luv(sic) Part 6 (Uyama Hiroto Remix)",
+     "length": "4:38",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Perfect Circle",
+     "length": "4:00",
+     "feat": [
+      "Shing02"
+     ],
+     "aoty": 95
+    },
+    {
+     "disc": 2,
+     "n": 1,
+     "title": "Luv(sic) (Instrumental)",
+     "length": "4:46",
+     "feat": [],
+     "aoty": 97
+    },
+    {
+     "disc": 2,
+     "n": 2,
+     "title": "Luv(sic) Part 2 (Instrumental)",
+     "length": "4:33",
+     "feat": [],
+     "aoty": 97
+    },
+    {
+     "disc": 2,
+     "n": 3,
+     "title": "Luv(sic) Part 3 (Instrumental)",
+     "length": "6:14",
+     "feat": [],
+     "aoty": 97
+    },
+    {
+     "disc": 2,
+     "n": 4,
+     "title": "Luv(sic) Part 4 (Instrumental)",
+     "length": "5:10",
+     "feat": [],
+     "aoty": 97
+    },
+    {
+     "disc": 2,
+     "n": 5,
+     "title": "Luv(sic) Part 5 (Instrumental)",
+     "length": "5:49",
+     "feat": [],
+     "aoty": 97
+    },
+    {
+     "disc": 2,
+     "n": 6,
+     "title": "Luv(sic) Grand Finale (Instrumental)",
+     "length": "5:16",
+     "feat": [],
+     "aoty": 98
+    },
+    {
+     "disc": 2,
+     "n": 7,
+     "title": "Luv(sic) (12\" Remix Instrumental)",
+     "length": "4:57",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 2,
+     "n": 8,
+     "title": "Luv(sic) Part 2 (Acoustica Instrumental)",
+     "length": "6:31",
+     "feat": [],
+     "aoty": 96
+    },
+    {
+     "disc": 2,
+     "n": 9,
+     "title": "Luv(sic) Part 3 (Ta-ku Remix Instrumental)",
+     "length": "4:56",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 2,
+     "n": 10,
+     "title": "Luv(sic) Part 4 (LASTorder Remix Instrumental)",
+     "length": "4:38",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 2,
+     "n": 11,
+     "title": "Luv(sic) Part 5 (Jumpster Remix Instrumental)",
+     "length": "4:39",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 2,
+     "n": 12,
+     "title": "Luv(sic) Part 6 (Uyama Hiroto Remix Instrumental)",
+     "length": "4:38",
+     "feat": [],
+     "aoty": 96
+    },
+    {
+     "disc": 2,
+     "n": 13,
+     "title": "Perfect Circle (Instrumental)",
+     "length": "4:00",
+     "feat": [],
+     "aoty": 96
+    }
+   ]
+  },
+  {
+   "artist": "Kanye West",
+   "title": "Graduation",
+   "plays": 164,
+   "aoty": 87,
+   "year": 2007,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/8ddd1959a2bef460a5149b3e0cf5e18a.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Good Morning",
+     "length": "3:15",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Champion",
+     "length": "2:47",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Stronger",
+     "length": "5:11",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "I Wonder",
+     "length": "4:03",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Good Life",
+     "length": "3:27",
+     "feat": [
+      "T-Pain"
+     ],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Can't Tell Me Nothing",
+     "length": "4:31",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Flashing Lights",
+     "length": "3:57",
+     "feat": [
+      "Dwele"
+     ],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Everything I Am",
+     "length": "3:47",
+     "feat": [
+      "DJ Premier"
+     ],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "The Glory",
+     "length": "3:32",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Homecoming",
+     "length": "3:23",
+     "feat": [
+      "Chris Martin"
+     ],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Big Brother",
+     "length": "4:47",
+     "feat": [],
+     "aoty": 87
+    }
+   ]
+  },
+  {
+   "artist": "Madvillain",
+   "title": "Madvillainy",
+   "plays": 161,
+   "aoty": 92,
+   "year": 2004,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/893fce336634c600b2bab31de7bbc9bd.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "The Illest Villains",
+     "length": "1:55",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Accordion",
+     "length": "1:58",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Meat Grinder",
+     "length": "2:11",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Bistro",
+     "length": "1:07",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Raid",
+     "length": "2:30",
+     "feat": [
+      "MED"
+     ],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "America's Most Blunted",
+     "length": "3:54",
+     "feat": [
+      "Lord Quas"
+     ],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Sickfit (Instrumental)",
+     "length": "1:21",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Rainbows",
+     "length": "2:51",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Curls",
+     "length": "1:35",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Do Not Fire! (Instrumental)",
+     "length": "0:52",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "Money Folder",
+     "length": "3:02",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Shadows of Tomorrow",
+     "length": "2:36",
+     "feat": [
+      "Lord Quas"
+     ],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Operation Lifesaver AKA Mint Test",
+     "length": "1:30",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "Figaro",
+     "length": "2:25",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "Hardcore Hustle",
+     "length": "1:21",
+     "feat": [
+      "Wildchild"
+     ],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 16,
+     "title": "Strange Ways",
+     "length": "1:51",
+     "feat": [],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 17,
+     "title": "Fancy Clown",
+     "length": "1:55",
+     "feat": [
+      "Viktor Vaughn"
+     ],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 18,
+     "title": "Eye",
+     "length": "1:57",
+     "feat": [
+      "Stacy Epps"
+     ],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 19,
+     "title": "Supervillain Theme (Instrumental)",
+     "length": "0:52",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 20,
+     "title": "All Caps",
+     "length": "2:10",
+     "feat": [],
+     "aoty": 98
+    },
+    {
+     "disc": 1,
+     "n": 21,
+     "title": "Great Day",
+     "length": "2:16",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 22,
+     "title": "Rhinestone Cowboy",
+     "length": "3:59",
+     "feat": [],
+     "aoty": 95
+    }
+   ]
+  },
+  {
+   "artist": "Tyler, The Creator",
+   "title": "IGOR",
+   "plays": 115,
+   "aoty": 90,
+   "year": 2019,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/e150fa362c89b8f1d92d883ae828b7ef.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "IGOR'S THEME",
+     "length": "3:20",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "EARFQUAKE",
+     "length": "3:10",
+     "feat": [],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "I THINK",
+     "length": "3:32",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "RUNNING OUT OF TIME",
+     "length": "2:57",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "NEW MAGIC WAND",
+     "length": "3:15",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "A BOY IS A GUN*",
+     "length": "3:30",
+     "feat": [],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "PUPPET",
+     "length": "2:59",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "WHAT'S GOOD",
+     "length": "3:25",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "GONE, GONE / THANK YOU",
+     "length": "6:15",
+     "feat": [],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "I DON'T LOVE YOU ANYMORE",
+     "length": "2:41",
+     "feat": [],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "ARE WE STILL FRIENDS?",
+     "length": "4:25",
+     "feat": [],
+     "aoty": 95
+    }
+   ]
+  },
+  {
+   "artist": "Lucki",
+   "title": "Freewave 3",
+   "plays": 111,
+   "aoty": 81,
+   "year": 2019,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/c8532edf02dc68a171ad4be062686d84.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Politics",
+     "length": "2:06",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Out My Way",
+     "length": "1:20",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "More Than Ever",
+     "length": "2:41",
+     "feat": [
+      "CHASETHEMONEY"
+     ],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Of Course You Won't",
+     "length": "2:37",
+     "feat": [
+      "CHASETHEMONEY"
+     ],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Believe the Hype",
+     "length": "2:26",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Geek Monster",
+     "length": "1:58",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Interlude",
+     "length": "1:06",
+     "feat": [
+      "CHASETHEMONEY"
+     ],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Peach Dream",
+     "length": "2:07",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Glory Boy",
+     "length": "1:51",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Let's See",
+     "length": "2:03",
+     "feat": [],
+     "aoty": 80
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "2012 Summer",
+     "length": "1:37",
+     "feat": [],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "2 Easy - Give Up",
+     "length": "1:53",
+     "feat": [],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "All In",
+     "length": "1:45",
+     "feat": [
+      "Earl Sweatshirt"
+     ],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "4 - U - City Girl",
+     "length": "1:58",
+     "feat": [],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "3D Outro",
+     "length": "2:20",
+     "feat": [],
+     "aoty": 90
+    }
+   ]
+  },
+  {
+   "artist": "Tyler, The Creator",
+   "title": "Chromakopia",
+   "plays": 94,
+   "aoty": 82,
+   "year": 2024,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/8c0b389bb4cbf522bc5a2b58e15b6620.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "St. Chroma",
+     "length": "3:17",
+     "feat": [
+      "Daniel Caesar"
+     ],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Rah Tah Tah",
+     "length": "2:45",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Noid",
+     "length": "4:44",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Darling, I",
+     "length": "4:13",
+     "feat": [
+      "Teezo Touchdown"
+     ],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Hey Jane",
+     "length": "4:00",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "I Killed You",
+     "length": "2:48",
+     "feat": [],
+     "aoty": 80
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Sticky",
+     "length": "4:15",
+     "feat": [
+      "GloRilla",
+      "Sexyy Red",
+      "Lil Wayne"
+     ],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Take Your Mask Off",
+     "length": "4:13",
+     "feat": [
+      "Daniel Caesar",
+      "LaToiya Williams"
+     ],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Tomorrow",
+     "length": "3:02",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "Thought I Was Dead",
+     "length": "3:27",
+     "feat": [
+      "ScHoolboy Q",
+      "Santigold"
+     ],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Like Him",
+     "length": "4:38",
+     "feat": [
+      "Lola Young"
+     ],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Balloon",
+     "length": "2:34",
+     "feat": [
+      "Doechii"
+     ],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "I Hope You Find Your Way Home",
+     "length": "4:29",
+     "feat": [],
+     "aoty": 87
+    }
+   ]
+  },
+  {
+   "artist": "Kendrick Lamar",
+   "title": "Mr. Morale & the Big Steppers",
+   "plays": 89,
+   "aoty": 87,
+   "year": 2022,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/98050f67524ffee7af6edd314b767ac4.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "United in Grief",
+     "length": "4:15",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "N95",
+     "length": "3:15",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Worldwide Steppers",
+     "length": "3:23",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Die Hard",
+     "length": "3:59",
+     "feat": [
+      "Blxst",
+      "Amanda Reifer"
+     ],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Father Time",
+     "length": "3:42",
+     "feat": [
+      "Sampha"
+     ],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Rich Spirit",
+     "length": "3:22",
+     "feat": [],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "We Cry Together",
+     "length": "5:41",
+     "feat": [
+      "Taylour Paige"
+     ],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Purple Hearts",
+     "length": "5:29",
+     "feat": [
+      "Summer Walker",
+      "Ghostface Killah"
+     ],
+     "aoty": 84
+    },
+    {
+     "disc": 2,
+     "n": 1,
+     "title": "Count Me Out",
+     "length": "4:43",
+     "feat": [],
+     "aoty": 94
+    },
+    {
+     "disc": 2,
+     "n": 2,
+     "title": "Crown",
+     "length": "4:24",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 2,
+     "n": 3,
+     "title": "Silent Hill",
+     "length": "3:40",
+     "feat": [
+      "Kodak Black"
+     ],
+     "aoty": 83
+    },
+    {
+     "disc": 2,
+     "n": 4,
+     "title": "Savior",
+     "length": "2:32",
+     "feat": [],
+     "aoty": 83
+    },
+    {
+     "disc": 2,
+     "n": 5,
+     "title": "Savior",
+     "length": "3:44",
+     "feat": [
+      "Baby Keem",
+      "Sam Dew"
+     ],
+     "aoty": 90
+    },
+    {
+     "disc": 2,
+     "n": 6,
+     "title": "Auntie Diaries",
+     "length": "4:41",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 2,
+     "n": 7,
+     "title": "Mr. Morale",
+     "length": "3:30",
+     "feat": [
+      "Tanna Leone"
+     ],
+     "aoty": 88
+    },
+    {
+     "disc": 2,
+     "n": 8,
+     "title": "Mother I Sober",
+     "length": "6:46",
+     "feat": [
+      "Beth Gibbons"
+     ],
+     "aoty": 95
+    },
+    {
+     "disc": 2,
+     "n": 9,
+     "title": "Mirror",
+     "length": "4:16",
+     "feat": [],
+     "aoty": 93
+    }
+   ]
+  },
+  {
+   "artist": "Riovaz",
+   "title": "I Feel Fantastic",
+   "plays": 86,
+   "aoty": 91,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/295a6e0e3a3e35094745956d60864f46.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "I Feel Fantastic",
+     "length": "2:26",
+     "feat": []
+    }
+   ]
+  },
+  {
+   "artist": "Kanye West",
+   "title": "The College Dropout",
+   "plays": 85,
+   "aoty": 91,
+   "year": 2004,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/61d5e94c9aa712b29e283325bc5ae87f.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "We Don't Care",
+     "length": "3:59",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Graduation Day",
+     "length": "1:21",
+     "feat": [],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "All Falls Down",
+     "length": "3:43",
+     "feat": [
+      "Syleena Johnson"
+     ],
+     "aoty": 97
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "I'll Fly Away",
+     "length": "1:09",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Spaceship",
+     "length": "5:24",
+     "feat": [
+      "GLC",
+      "Consequence"
+     ],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Jesus Walks",
+     "length": "3:13",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Never Let Me Down",
+     "length": "5:24",
+     "feat": [
+      "JAY-Z",
+      "J. Ivy"
+     ],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Get Em High",
+     "length": "4:49",
+     "feat": [
+      "Talib Kweli",
+      "Common"
+     ],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "The New Workout Plan",
+     "length": "5:22",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Slow Jamz",
+     "length": "5:16",
+     "feat": [
+      "Twista",
+      "Jamie Foxx"
+     ],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Breathe In Breathe Out",
+     "length": "4:06",
+     "feat": [
+      "Ludacris"
+     ],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "School Spirit",
+     "length": "3:02",
+     "feat": [],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 17,
+     "title": "Lil Jimmy Skit",
+     "length": "0:53",
+     "feat": [],
+     "aoty": 80
+    },
+    {
+     "disc": 1,
+     "n": 18,
+     "title": "Two Words",
+     "length": "4:26",
+     "feat": [
+      "Mos Def",
+      "Freeway",
+      "The Boys Choir of Harlem"
+     ],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 19,
+     "title": "Through the Wire",
+     "length": "3:41",
+     "feat": [],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 20,
+     "title": "Family Business",
+     "length": "4:38",
+     "feat": [],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 21,
+     "title": "Last Call",
+     "length": "12:40",
+     "feat": [],
+     "aoty": 94
+    }
+   ]
+  },
+  {
+   "artist": "JPEGMAFIA",
+   "title": "LP!",
+   "plays": 84,
+   "aoty": 84,
+   "year": 2021,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/037b23a0412996806a14d24ff1fcf763.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "TRUST!",
+     "length": "2:14",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "DIRTY!",
+     "length": "2:00",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "NEMO!",
+     "length": "2:07",
+     "feat": [],
+     "aoty": 80
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "END CREDITS!",
+     "length": "1:55",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "WHAT KIND OF RAPPIN' IS THIS?",
+     "length": "1:52",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "THOT'S PRAYER!",
+     "length": "3:07",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "ARE U HAPPY?",
+     "length": "3:05",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "REBOUND!",
+     "length": "3:44",
+     "feat": [],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "OG!",
+     "length": "1:35",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "DAM! DAM! DAM!",
+     "length": "3:29",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "SICK, NERVOUS & BROKE!",
+     "length": "5:24",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "KISSY, FACE EMOJI!",
+     "length": "3:25",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "BMT!",
+     "length": "2:22",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "THE GHOST OF RANKING DREAD!",
+     "length": "3:27",
+     "feat": [
+      "Tkay Maidza"
+     ],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 16,
+     "title": "CUTIE PIE!",
+     "length": "2:26",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 17,
+     "title": "BALD!",
+     "length": "2:32",
+     "feat": [],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 18,
+     "title": "BALD! REMIX",
+     "length": "2:33",
+     "feat": [
+      "Denzel Curry"
+     ],
+     "aoty": 91
+    }
+   ]
+  },
+  {
+   "artist": "J. Cole",
+   "title": "The Fall-Off",
+   "plays": 83,
+   "aoty": 80,
+   "year": 2026,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/db70d3647925a0feb1987d213374f959.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Two Six",
+     "length": "3:16",
+     "feat": [],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "SAFETY",
+     "length": "5:18",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Run A Train",
+     "length": "4:03",
+     "feat": [
+      "Future"
+     ],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Poor Thang",
+     "length": "4:50",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Legacy",
+     "length": "3:55",
+     "feat": [
+      "PJ"
+     ],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Bunce Road Blues",
+     "length": "5:10",
+     "feat": [
+      "Future",
+      "Tems"
+     ],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "WHO TF IZ U",
+     "length": "4:37",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Drum n Bass",
+     "length": "4:15",
+     "feat": [],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Lonely at the Top",
+     "length": "3:24",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 2,
+     "n": 1,
+     "title": "39 Intro",
+     "length": "6:06",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 2,
+     "n": 2,
+     "title": "The Fall-Off Is Inevitable",
+     "length": "2:56",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 2,
+     "n": 3,
+     "title": "The Villest",
+     "length": "4:30",
+     "feat": [
+      "Erykah Badu"
+     ],
+     "aoty": 87
+    },
+    {
+     "disc": 2,
+     "n": 4,
+     "title": "Old Dog",
+     "length": "3:22",
+     "feat": [
+      "Petey Pablo"
+     ],
+     "aoty": 81
+    },
+    {
+     "disc": 2,
+     "n": 7,
+     "title": "Man Up Above",
+     "length": "4:58",
+     "feat": [],
+     "aoty": 81
+    },
+    {
+     "disc": 2,
+     "n": 8,
+     "title": "I Love Her Again",
+     "length": "5:32",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 2,
+     "n": 9,
+     "title": "What If",
+     "length": "5:19",
+     "feat": [
+      "Morray"
+     ],
+     "aoty": 84
+    },
+    {
+     "disc": 2,
+     "n": 10,
+     "title": "Quik Stop",
+     "length": "4:24",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 2,
+     "n": 11,
+     "title": "and the whole world is the Ville",
+     "length": "4:35",
+     "feat": [],
+     "aoty": 80
+    },
+    {
+     "disc": 2,
+     "n": 12,
+     "title": "Ocean Way",
+     "length": "2:34",
+     "feat": [],
+     "aoty": 81
+    }
+   ]
+  },
+  {
+   "artist": "Tyler, The Creator",
+   "title": "CALL ME IF YOU GET LOST",
+   "plays": 82,
+   "aoty": 84,
+   "year": 2021,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/8bed6cc4a2f68d3bb2228fbe6654b887.gif",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "SIR BAUDELAIRE",
+     "length": "1:28",
+     "feat": [
+      "DJ Drama"
+     ],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "CORSO",
+     "length": "2:26",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "LEMONHEAD",
+     "length": "2:10",
+     "feat": [
+      "42 Dugg"
+     ],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "WUSYANAME",
+     "length": "2:01",
+     "feat": [
+      "YoungBoy Never Broke Again",
+      "Ty Dolla $ign"
+     ],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "LUMBERJACK",
+     "length": "2:18",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "HOT WIND BLOWS",
+     "length": "2:35",
+     "feat": [
+      "Lil Wayne"
+     ],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "MASSA",
+     "length": "3:43",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "RUNITUP",
+     "length": "3:49",
+     "feat": [
+      "Teezo Touchdown"
+     ],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "MANIFESTO",
+     "length": "2:55",
+     "feat": [
+      "Domo Genesis"
+     ],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "SWEET / I THOUGHT YOU WANTED TO DANCE",
+     "length": "9:48",
+     "feat": [
+      "Brent Faiyaz",
+      "Fana Hues"
+     ],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "RISE!",
+     "length": "3:23",
+     "feat": [
+      "DAISY WORLD"
+     ],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "JUGGERNAUT",
+     "length": "2:26",
+     "feat": [
+      "Lil Uzi Vert",
+      "Pharrell Williams"
+     ],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "WILSHIRE",
+     "length": "8:35",
+     "feat": [],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 16,
+     "title": "SAFARI",
+     "length": "2:57",
+     "feat": [],
+     "aoty": 86
+    }
+   ]
+  },
+  {
+   "artist": "Kanye West",
+   "title": "My Beautiful Dark Twisted Fantasy",
+   "plays": 80,
+   "aoty": 89,
+   "year": 2010,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/8a071c4b073625018de5f0ac58727511.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Dark Fantasy",
+     "length": "4:40",
+     "feat": [],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Gorgeous",
+     "length": "5:57",
+     "feat": [
+      "Kid Cudi",
+      "Raekwon"
+     ],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "POWER",
+     "length": "4:52",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "All of the Lights (Interlude)",
+     "length": "1:02",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "All of the Lights",
+     "length": "4:59",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Monster",
+     "length": "6:18",
+     "feat": [
+      "JAY-Z",
+      "Rick Ross",
+      "Nicki Minaj",
+      "Bon Iver"
+     ],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "So Appalled",
+     "length": "6:38",
+     "feat": [
+      "JAY-Z",
+      "Pusha T",
+      "Prince Cy Hi",
+      "Swizz Beatz",
+      "The RZA"
+     ],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Devil in a New Dress",
+     "length": "5:52",
+     "feat": [
+      "Rick Ross"
+     ],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Runaway",
+     "length": "9:08",
+     "feat": [
+      "Pusha T"
+     ],
+     "aoty": 97
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Hell of a Life",
+     "length": "5:27",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Lost in the World",
+     "length": "4:16",
+     "feat": [
+      "Bon Iver"
+     ],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Who Will Survive in America",
+     "length": "1:38",
+     "feat": [],
+     "aoty": 80
+    }
+   ]
+  },
+  {
+   "artist": "Kendrick Lamar",
+   "title": "To Pimp a Butterfly",
+   "plays": 77,
+   "aoty": 95,
+   "year": 2015,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/86b35c4eb3c479da49c915d8771bbd1a.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Wesley's Theory",
+     "length": "4:47",
+     "feat": [
+      "George Clinton",
+      "Thundercat"
+     ],
+     "aoty": 98
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "For Free?",
+     "length": "2:10",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "King Kunta",
+     "length": "3:54",
+     "feat": [],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Institutionalized",
+     "length": "4:31",
+     "feat": [
+      "Bilal",
+      "Anna Wise",
+      "Snoop Dogg"
+     ],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "These Walls",
+     "length": "5:00",
+     "feat": [
+      "Bilal",
+      "Anna Wise",
+      "Thundercat"
+     ],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "u",
+     "length": "4:28",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Alright",
+     "length": "3:39",
+     "feat": [],
+     "aoty": 97
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "For Sale?",
+     "length": "4:51",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Momma",
+     "length": "4:43",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Hood Politics",
+     "length": "4:52",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "How Much a Dollar Cost",
+     "length": "4:21",
+     "feat": [
+      "James Fauntleroy",
+      "Ronald Isley"
+     ],
+     "aoty": 97
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Complexion (A Zulu Love)",
+     "length": "4:23",
+     "feat": [
+      "Rapsody"
+     ],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "The Blacker the Berry",
+     "length": "5:28",
+     "feat": [],
+     "aoty": 97
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "You Ain't Gotta Lie (Momma Said)",
+     "length": "4:01",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "i",
+     "length": "5:36",
+     "feat": [],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 16,
+     "title": "Mortal Man",
+     "length": "12:07",
+     "feat": [],
+     "aoty": 95
+    }
+   ]
+  },
+  {
+   "artist": "Slayyyter",
+   "title": "WOR$T GIRL IN AMERICA",
+   "plays": 76,
+   "aoty": 83,
+   "year": 2026,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/d60a52a2d3e8eec7d9df29dc18d16ec2.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "DANCE...",
+     "length": "4:47",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "BEAT UP CHANEL$",
+     "length": "3:18",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "CANNIBALISM!",
+     "length": "2:47",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "OLD TECHNOLOGY",
+     "length": "2:39",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "CRANK",
+     "length": "2:55",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "GAS STATION",
+     "length": "3:38",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "YES GODDD",
+     "length": "2:39",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "UNKNOWN LOVERZ",
+     "length": "3:19",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "OLD FLING$",
+     "length": "3:37",
+     "feat": [],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "I'M ACTUALLY KINDA FAMOUS",
+     "length": "2:36",
+     "feat": [],
+     "aoty": 80
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "$T. LOSER",
+     "length": "3:35",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "WHAT IS IT LIKE, TO BE LIKED?",
+     "length": "2:18",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "BRITTANY MURPHY.",
+     "length": "3:44",
+     "feat": [],
+     "aoty": 88
+    }
+   ]
+  },
+  {
+   "artist": "PinkPantheress",
+   "title": "Attracted to you",
+   "plays": 72,
+   "aoty": 85,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/11695ed0b453ddae38418e45d5441470.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Attracted to You",
+     "length": "1:08",
+     "feat": []
+    }
+   ]
+  },
+  {
+   "artist": "Magdalena Bay",
+   "title": "Imaginal Disk",
+   "plays": 69,
+   "aoty": 90,
+   "year": 2024,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/0787b4f6e2086c763482254d375b17f0.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "She Looked Like Me!",
+     "length": "3:13",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Killing Time",
+     "length": "3:53",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "True Blue Interlude",
+     "length": "1:49",
+     "feat": [],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Image",
+     "length": "3:32",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Death & Romance",
+     "length": "5:14",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Fear, Sex",
+     "length": "2:32",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Vampire in the Corner",
+     "length": "3:22",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Watching T.V.",
+     "length": "4:05",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Tunnel Vision",
+     "length": "5:05",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Love Is Everywhere",
+     "length": "3:14",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "Feeling DiskInserted?",
+     "length": "0:58",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "That's My Floor",
+     "length": "3:29",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Cry for Me",
+     "length": "5:07",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "Angel on a Satellite",
+     "length": "4:03",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "The Ballad of Matt & Mica",
+     "length": "4:00",
+     "feat": [],
+     "aoty": 94
+    }
+   ]
+  },
+  {
+   "artist": "Kanye West",
+   "title": "Late Registration",
+   "plays": 67,
+   "aoty": 90,
+   "year": 2005,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/9c0e7886d750a519c9ec63c30434b483.png",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Wake Up Mr. West",
+     "length": "0:41",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Heard 'Em Say",
+     "length": "3:23",
+     "feat": [
+      "Adam Levine"
+     ],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Touch the Sky",
+     "length": "3:56",
+     "feat": [
+      "Lupe Fiasco"
+     ],
+     "aoty": 97
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Gold Digger",
+     "length": "3:27",
+     "feat": [
+      "Jamie Foxx"
+     ],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Drive Slow",
+     "length": "4:32",
+     "feat": [
+      "Paul Wall",
+      "GLC"
+     ],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "My Way Home",
+     "length": "1:43",
+     "feat": [
+      "Common"
+     ],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Crack Music",
+     "length": "4:30",
+     "feat": [
+      "The Game"
+     ],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Roses",
+     "length": "4:05",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Bring Me Down",
+     "length": "3:18",
+     "feat": [
+      "Brandy"
+     ],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "Addiction",
+     "length": "4:27",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Diamonds from Sierra Leone (Remix)",
+     "length": "3:53",
+     "feat": [
+      "JAY-Z"
+     ],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "We Major",
+     "length": "7:28",
+     "feat": [
+      "Nas",
+      "Really Doe"
+     ],
+     "aoty": 96
+    },
+    {
+     "disc": 1,
+     "n": 16,
+     "title": "Hey Mama",
+     "length": "5:05",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 17,
+     "title": "Celebration",
+     "length": "3:18",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 18,
+     "title": "Skit #4",
+     "length": "1:18",
+     "feat": [],
+     "aoty": 80
+    },
+    {
+     "disc": 1,
+     "n": 19,
+     "title": "Gone",
+     "length": "5:33",
+     "feat": [
+      "Consequence",
+      "Cam'ron"
+     ],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 20,
+     "title": "Diamonds from Sierra Leone",
+     "length": "3:58",
+     "feat": [],
+     "aoty": 94
+    },
+    {
+     "disc": 1,
+     "n": 21,
+     "title": "Late",
+     "length": "3:50",
+     "feat": [],
+     "aoty": 92
+    }
+   ]
+  },
+  {
+   "artist": "Kanye West",
+   "title": "The Life of Pablo",
+   "plays": 65,
+   "aoty": 84,
+   "year": 2016,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/8c6af1315c66631bad022085c7992b34.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Ultralight Beam",
+     "length": "5:20",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Father Stretch My Hands Pt. 1",
+     "length": "2:15",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Famous",
+     "length": "3:16",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Feedback",
+     "length": "2:27",
+     "feat": [],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "I Love Kanye",
+     "length": "0:44",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Waves",
+     "length": "3:01",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "FML",
+     "length": "3:56",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Real Friends",
+     "length": "4:11",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Wolves",
+     "length": "5:01",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 16,
+     "title": "30 Hours",
+     "length": "5:23",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 17,
+     "title": "No More Parties in LA",
+     "length": "6:14",
+     "feat": [],
+     "aoty": 97
+    },
+    {
+     "disc": 1,
+     "n": 18,
+     "title": "Facts (Charlie Heat Version)",
+     "length": "3:20",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 19,
+     "title": "Fade",
+     "length": "3:13",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 20,
+     "title": "Saint Pablo",
+     "length": "6:12",
+     "feat": [],
+     "aoty": 97
+    }
+   ]
+  },
+  {
+   "artist": "Black Country, New Road",
+   "title": "Ants From Up There",
+   "plays": 61,
+   "aoty": 90,
+   "year": 2022,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/3332b3cee5de8598dbd080f8e2783f93.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Intro",
+     "length": "0:54",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "Chaos Space Marine",
+     "length": "3:36",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Concorde",
+     "length": "6:03",
+     "feat": [],
+     "aoty": 95
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "Bread Song",
+     "length": "6:21",
+     "feat": [],
+     "aoty": 91
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Good Will Hunting",
+     "length": "4:57",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Haldern",
+     "length": "5:05",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Mark’s Theme",
+     "length": "2:47",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "The Place Where He Inserted the Blade",
+     "length": "7:13",
+     "feat": [],
+     "aoty": 98
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Snow Globes",
+     "length": "9:13",
+     "feat": [],
+     "aoty": 93
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Basketball Shoes",
+     "length": "12:37",
+     "feat": [],
+     "aoty": 96
+    }
+   ]
+  },
+  {
+   "artist": "Portraits Of Tracy",
+   "title": "Drive Home: Parting Gifts",
+   "plays": 61,
+   "aoty": 87,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/6923defcef7a7ee84ca9705d299cf9c6.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "LOST!",
+     "length": "3:01",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "8 Minutes",
+     "length": "1:09",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Aeternum",
+     "length": "4:59",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "En Garde",
+     "length": "3:54",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "The Party",
+     "length": "2:49",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Drunk*",
+     "length": "7:39",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "The Afterparty",
+     "length": "4:00",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Parking Lot",
+     "length": "1:09",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Home",
+     "length": "3:34",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "W. McKinley",
+     "length": "2:31",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "Ten Years",
+     "length": "3:16",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Child's Play",
+     "length": "3:07",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Signals",
+     "length": "1:14",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "FORBIDDEN FRUIT",
+     "length": "4:45",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "...",
+     "length": "2:02",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 16,
+     "title": "Found!",
+     "length": "5:05",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 17,
+     "title": "... (Continued)",
+     "length": "0:45",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 18,
+     "title": "Graceland",
+     "length": "7:57",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 19,
+     "title": "Lost! (Flip)",
+     "length": "3:20",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 20,
+     "title": "The Afterparty (Disco Version)",
+     "length": "3:34",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 21,
+     "title": "Drunk (French House Flip)",
+     "length": "5:20",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 22,
+     "title": "Found But Dilla (feat. Duckwrth)",
+     "length": "3:28",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 23,
+     "title": "The Afterparty (French House Instrumental)",
+     "length": "3:06",
+     "feat": []
+    },
+    {
+     "disc": 1,
+     "n": 24,
+     "title": "Graceland (2chill Flip) [feat. 2chill]",
+     "length": "3:33",
+     "feat": []
+    }
+   ]
+  },
+  {
+   "artist": "Lucy Bedroque",
+   "title": "unmusique",
+   "plays": 59,
+   "aoty": 81,
+   "year": 2025,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/a4d4343e730ea2902a90058284ffe0da.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Speakers Never Learn",
+     "length": "2:15",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "G6 Anthem",
+     "length": "3:15",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Ultraviolet",
+     "length": "3:07",
+     "feat": [
+      "prettifun"
+     ],
+     "aoty": 86
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "2010 Justin Bieber",
+     "length": "1:52",
+     "feat": [],
+     "aoty": 90
+    },
+    {
+     "disc": 1,
+     "n": 5,
+     "title": "Smackdown",
+     "length": "2:18",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 6,
+     "title": "Fenty Face",
+     "length": "2:14",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 7,
+     "title": "Made In Italy",
+     "length": "2:06",
+     "feat": [],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Tout Naturel",
+     "length": "2:31",
+     "feat": [],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Ouija",
+     "length": "2:08",
+     "feat": [],
+     "aoty": 88
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "I Am Impossible",
+     "length": "1:58",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Ignorant",
+     "length": "2:13",
+     "feat": [],
+     "aoty": 82
+    },
+    {
+     "disc": 1,
+     "n": 14,
+     "title": "One Of Us Is Lying",
+     "length": "3:19",
+     "feat": [],
+     "aoty": 89
+    },
+    {
+     "disc": 1,
+     "n": 15,
+     "title": "Unmusique",
+     "length": "2:30",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 16,
+     "title": "Cat's Eye",
+     "length": "1:59",
+     "feat": [],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 17,
+     "title": "Yes, You May",
+     "length": "1:53",
+     "feat": [],
+     "aoty": 84
+    }
+   ]
+  },
+  {
+   "artist": "PinkPantheress",
+   "title": "Heaven knows",
+   "plays": 59,
+   "aoty": 80,
+   "year": 2023,
+   "cover": "https://lastfm-img.freetls.fastly.net/i/u/600x600/16cc8263e16931610bd9506c4be95859.jpg",
+   "tracks": [
+    {
+     "disc": 1,
+     "n": 1,
+     "title": "Another life",
+     "length": "2:52",
+     "feat": [
+      "Rema"
+     ],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 2,
+     "title": "True romance",
+     "length": "2:16",
+     "feat": [],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 3,
+     "title": "Mosquito",
+     "length": "2:27",
+     "feat": [],
+     "aoty": 87
+    },
+    {
+     "disc": 1,
+     "n": 4,
+     "title": "The aisle",
+     "length": "2:45",
+     "feat": [],
+     "aoty": 85
+    },
+    {
+     "disc": 1,
+     "n": 8,
+     "title": "Ophelia",
+     "length": "2:35",
+     "feat": [],
+     "aoty": 84
+    },
+    {
+     "disc": 1,
+     "n": 9,
+     "title": "Feel complete",
+     "length": "2:43",
+     "feat": [],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 10,
+     "title": "Blue",
+     "length": "3:01",
+     "feat": [],
+     "aoty": 83
+    },
+    {
+     "disc": 1,
+     "n": 11,
+     "title": "Feelings",
+     "length": "2:40",
+     "feat": [],
+     "aoty": 81
+    },
+    {
+     "disc": 1,
+     "n": 12,
+     "title": "Capable of love",
+     "length": "3:43",
+     "feat": [],
+     "aoty": 92
+    },
+    {
+     "disc": 1,
+     "n": 13,
+     "title": "Boy's a liar Pt. 2",
+     "length": "2:11",
+     "feat": [
+      "Ice Spice"
+     ],
+     "aoty": 84
+    }
+   ]
+  }
+ ]
+}
