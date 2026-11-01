@@ -1,17 +1,14 @@
 {
   "fill": {
-    "linear-gradient": [
-      "srgb:0.98824,0.40784,0.47059,1.00000",
-      "srgb:0.98039,0.13725,0.23137,1.00000"
-    ]
+    "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
   },
   "groups": [
     {
       "layers": [
         {
-          "glass": true,
-          "image-name": "note.svg",
-          "name": "note"
+          "image-name": "record.png",
+          "name": "record",
+          "glass": false
         }
       ],
       "shadow": {
@@ -21,7 +18,8 @@
       "translucency": {
         "enabled": false,
         "value": 0
-      }
+      },
+      "specular": true
     }
   ],
   "supported-platforms": {
