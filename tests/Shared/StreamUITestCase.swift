@@ -37,6 +37,8 @@ class StreamUITestCase: XCTestCase {
         app.launchArguments = ["-musicFolder", Self.library, "-uiTesting", "YES",
                                "-spotifyAccounts", spotify.accountsURL, "-spotifyApi", spotify.apiURL,
                                "-signInAnswered", "YES"]
+        // Signed in to the sample profile, so the profile button shows a picture in screenshots.
+        app.launchEnvironment["SAMPLE_ACCOUNT"] = "1"
         app.launch()
         Self.running = app
     }

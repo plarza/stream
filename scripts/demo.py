@@ -165,7 +165,8 @@ def mac_window():
     app = os.path.join(ROOT, "build/Build/Products/Debug/Stream.app")
     subprocess.run(["pkill", "-f", app + "/Contents/MacOS/Stream"], check=False)
     demo = json.load(open(os.path.join(os.path.dirname(LIBRARY), "demo.json")))
-    subprocess.run(["open", "-g", "-n", app, "--args", "-musicFolder", LIBRARY, "-uiTesting", "YES",
+    subprocess.run(["open", "-g", "-n", "--env", "SAMPLE_ACCOUNT=1", app, "--args", "-musicFolder", LIBRARY, "-uiTesting", "YES",
+                    "-signInAnswered", "YES",
                     "-url", "network-aza-stream://play?id=" + demo["playing"]["id"],
                     "-url", "network-aza-stream://open?id=" + demo["album"]["id"]], check=True)
     time.sleep(8)
