@@ -7,7 +7,8 @@ options:
   createIntermediateGroups: true
 packages:
   AzaUI:
-    path: /Users/aiden/.t3/worktrees/ui/t3-473e953f
+    url: https://github.com/plarza/ui
+    from: 0.1.0
 settings:
   base:
     DEVELOPMENT_TEAM: H5A6B4L9W8
