@@ -98,7 +98,8 @@ struct SectionView: View {
         }
         .navigationTitle(section.title)
         #if os(iOS)
-        .searchable(text: $typed, prompt: "Search \(section.title)")
+        // Always showing, not tucked away until you pull the list down.
+        .searchable(text: $typed, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search \(section.title)")
         #endif
         .overlay {
             if shown.isEmpty && (exhausted || !query.isEmpty) {

@@ -57,10 +57,22 @@ final class iOSUITests: StreamUITestCase {
         wait(app.staticTexts["Nothing up next"])
         el("nowPlaying.queue").tap()
         wait(el("nowPlaying.title"))
-        // Pull down from the grabber, like a person would.
-        let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
+        // Pull the cover down, like a person would.
+        let top = el("nowPlaying.cover").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         top.press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)), withVelocity: .fast, thenHoldForDuration: 0)
         waitGone(el("nowPlaying.title"))
+    }
+
+    func testCoverOpensItsAlbumOnce() {
+        openAlbum("Singles")
+        wait(el("track.Loose Song")).tap()
+        el("miniPlayer").tap()
+        wait(el("nowPlaying.cover")).tap()
+        waitGone(el("nowPlaying.title"))
+        // Already on Singles: no second copy, so Back goes straight to Albums.
+        wait(el("track.Loose Song"))
+        app.navigationBars.buttons.firstMatch.tap()
+        wait(el("row.Singles"))
     }
 
     func testPinShowsOnHome() {

@@ -59,6 +59,8 @@ struct CollectionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         #endif
+        .onAppear { model.currentPage = item.id }
+        .onDisappear { if model.currentPage == item.id { model.currentPage = nil } }
         .task(id: item.id) { await load() }
         .task(id: page?.item.art ?? item.art) {
             let p = await Palette.extract(from: page?.item.art ?? item.art)

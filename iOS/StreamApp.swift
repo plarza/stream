@@ -105,6 +105,8 @@ struct RootView: View {
     private func openPending() {
         guard let item = model.pendingNavigation else { return }
         model.pendingNavigation = nil
+        // Already there: going to the same page again adds nothing to Back.
+        guard item.id != model.currentPage else { return }
         switch tab {
         case .home: homePath.append(item)
         case .library: libraryPath.append(item)
@@ -175,10 +177,10 @@ struct MiniPlayer: View {
             art(t)
             VStack(alignment: .leading, spacing: 0) {
                 MarqueeText(text: t?.title ?? "Not Playing")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                     .accessibilityIdentifier("mini.title")
                 if let a = t?.artist {
-                    Text(a).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                    Text(a).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             .padding(.leading, 10)
@@ -209,8 +211,9 @@ struct MiniPlayer: View {
             .accessibilityLabel("Next")
             .accessibilityIdentifier("mini.next")
         }
-        .padding(.leading, 14)
+        .padding(.leading, 12)
         .padding(.trailing, 6)
+        .frame(minHeight: 56)
         .contentShape(Rectangle())
         .animation(.smooth, value: t?.id)
     }
@@ -218,14 +221,14 @@ struct MiniPlayer: View {
     @ViewBuilder
     private func art(_ t: Track?) -> some View {
         if let t {
-            ArtworkView(url: t.art, size: 32, cornerRadius: 6)
+            ArtworkView(url: t.art, size: 38, cornerRadius: 7)
         } else {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .fill(.quaternary)
-                .frame(width: 32, height: 32)
+                .frame(width: 38, height: 38)
                 .overlay {
                     Image(systemName: "music.note")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
         }

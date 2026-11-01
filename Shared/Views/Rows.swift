@@ -34,9 +34,6 @@ struct TrackRow: View {
                     HStack(spacing: 4) {
                         if track.downloaded && track.source == .spotify { DownloadedBadge() }
                         Text(track.artist).lineLimit(1)
-                            // The name opens the artist; the rest of the row plays the song.
-                            .onTapGesture { model.openArtist(of: track) }
-                            .allowsHitTesting(track.artistId != nil)
                     }
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

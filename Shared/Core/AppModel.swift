@@ -48,6 +48,8 @@ final class AppModel {
     let onTint = Color.white
     /// A page to open after Now Playing closes (Go to Album / Artist).
     var pendingNavigation: Item?
+    /// The album, artist or playlist page on screen, so opening it again doesn't stack a copy.
+    @ObservationIgnored var currentPage: String?
     var handoff: NSUserActivity?
 
     enum NowPlayingMode: Hashable { case artwork, lyrics, queue }
