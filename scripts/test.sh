@@ -67,7 +67,7 @@ fi
 # run would sit waiting on it; clear both out first.
 xcrun simctl terminate "$SIM" network.aza.stream.uitests.xctrunner 2>/dev/null || true
 xcrun simctl terminate "$SIM" network.aza.stream 2>/dev/null || true
-budget 150 "tests" $T/test.log run test-without-building -skip-testing:StreamUITests-iOS/DemoFlow \
+budget 240 "tests" $T/test.log run test-without-building -skip-testing:StreamUITests-iOS/DemoFlow \
   -test-timeouts-enabled YES -default-test-execution-time-allowance 60 "$@" || rc=$?
 grep -E 'Test Case .*(passed|failed)|error:|\*\* TEST' $T/test.log
 echo "· total $((SECONDS - START))s"

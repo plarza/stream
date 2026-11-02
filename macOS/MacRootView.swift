@@ -378,14 +378,24 @@ struct PlayerBar: View {
                 MarqueeText(text: t?.title ?? "Not Playing")
                     .font(.callout.weight(.semibold))
                     .accessibilityIdentifier("player.title")
-                Button { if let t { model.openArtist(of: t) } } label: {
-                    MarqueeText(text: t?.artist ?? "")
+                if let t, t.artists.count > 1 {
+                    // Several artists: each name opens its own page.
+                    ArtistLinks(track: t)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .tint(.secondary)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("player.artist")
+                } else {
+                    Button { if let t { model.openArtist(of: t) } } label: {
+                        MarqueeText(text: t?.artist ?? "")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.textLink)
+                    .disabled(t?.artistId == nil)
+                    .accessibilityIdentifier("player.artist")
                 }
-                .buttonStyle(.textLink)
-                .disabled(t?.artistId == nil)
-                .accessibilityIdentifier("player.artist")
             }
             .id(t?.id)
             .transition(.blurReplace)

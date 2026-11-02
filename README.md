@@ -22,6 +22,8 @@
 - Library is Playlists, Artists, Albums, Songs and Downloaded. Made For You, Discover Weekly and Daily Mixes sit in Playlists.
 - One search across your library and Spotify, ranked together, with type chips and recent searches.
 - Download a Spotify album or playlist to play offline; one ⬇ badge marks anything playable offline.
+- Artist pages as on Spotify: header photo, top songs, every album, single and EP with filter pills, bio, listeners and top cities.
+- Sort a playlist by title, artist, album or length; a song by several artists opens any one of them.
 
 ### Playing
 
@@ -38,7 +40,7 @@
 
 ### You
 
-- Last.fm scrobbling for local files, theme, colour and your aza account, all in Profile.
+- Last.fm scrobbling for Spotify and your own files, theme, colour and your aza account, all in Profile.
 
 ## Rules
 
@@ -48,7 +50,7 @@
 | Audio | One pipeline for every source: Rust decodes into a ring buffer that an `AVAudioSourceNode` pulls from. Gapless always; crossfade off by default |
 | Loudness | One toggle, on by default: ReplayGain tags for files, Spotify's own normalization for Spotify |
 | Lyrics | Spotify's, the file's own tags and LRCLIB; the best sync wins (word over line over plain) and is cached |
-| Scrobbling | Local files only, since Spotify's own Last.fm link covers Spotify. A track counts past half or 4 minutes if it's over 30 seconds; scrobbles queue offline and go out 50 at a time |
+| Scrobbling | Spotify and local files alike: Spotify's own Last.fm link never hears of plays through librespot. A track counts past half or 4 minutes if it's over 30 seconds; scrobbles queue offline and go out 50 at a time |
 | Sync | The Mac advertises over Bonjour; the iPhone copies everything while open on the same Wi-Fi. Originals, never transcoded, resumable and checked by hash |
 | Library | Spotify and local copies of the same song stay separate items |
 | Likes and toggles | Change on screen at once, and roll back if the core or Spotify refuses |

@@ -22,7 +22,7 @@ Rust core  (static lib, packed as StreamCore.xcframework)
   ├─ library   SQLite (FTS5) index of local files + cached Spotify library
   ├─ engine    decoding (symphonia / librespot), queue, gapless, crossfade, normalization
   ├─ lyrics    Spotify synced lyrics + embedded lyrics + LRCLIB, "best sync wins"
-  ├─ scrobble  Last.fm (local files only), offline queue
+  ├─ scrobble  Last.fm (Spotify and local files), offline queue
   └─ sync      Mac → iPhone file sync over the LAN (Bonjour + TCP)
   │  C ABI render callback (lock-free ring buffer)
   ▼
@@ -111,7 +111,8 @@ Rules:
 
 ## Scrobbling
 
-- Last.fm, **local files only** (Spotify's own Last.fm link already scrobbles Spotify).
+- Last.fm, **Spotify and local files alike**. Spotify's own Last.fm link only scrobbles plays
+  Spotify hears about, and librespot never reports any.
 - Standard rules: a track scrobbles once it's past 50% or 4 minutes, and only if it's longer
   than 30 s. "Now playing" updates are sent. Scrobbles queue offline and go out in batches of
   50.
@@ -128,7 +129,7 @@ bottom accessory.
 | Home | `02` **D Pinned grid + recents**, without the floating search pill. You can pin albums, songs, artists and playlists |
 | Library | Category list: Playlists, Artists, Albums, Songs, Downloaded |
 | Lyrics | `04` **A**: left-aligned, word fill on the active line, distance blur on the others, tap a line to seek |
-| Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, like, pin) |
+| Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, like, pin). Playlists sort from the toolbar (playlist order, title, artist, album, length, reversed), the same for every playlist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |
 | Queue | `06` **A** without the toggle row: "Playing Next" + "Continue from …" |
 | Search | `07` **C**: one relevance-ranked list across library + Spotify, type chips (All, Songs, Albums, Artists, Playlists); the empty state shows recent searches |
 

@@ -155,7 +155,13 @@ struct ItemMenu: ViewModifier {
                 .accessibilityIdentifier("menu.playLater")
             if item.kind == .track, let t = model.track(item.id) {
                 Divider()
-                if t.artistId != nil {
+                if t.artists.count > 1 {
+                    Menu {
+                        ForEach(t.artists, id: \.id) { a in
+                            Button(a.name) { model.openArtist(a, source: t.source) }
+                        }
+                    } label: { Label("Go to Artist", systemImage: "music.mic") }
+                } else if t.artistId != nil {
                     Button { model.openArtist(of: t) } label: { Label("Go to Artist", systemImage: "music.mic") }
                 }
                 if t.albumId != nil {
@@ -185,5 +191,37 @@ extension View {
 
     func trackMenu(_ track: Track) -> some View {
         modifier(ItemMenu(item: track.item, tracks: { [track] }))
+    }
+}
+
+/// A song's artists, each name opening its own page ("A, B & C" stays one line of text).
+struct ArtistLinks: View {
+    let track: Track
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Text(text)
+            .environment(\.openURL, OpenURLAction { url in
+                guard let a = track.artists.first(where: { Self.url($0) == url }) else { return .discarded }
+                model.openArtist(a, source: track.source)
+                return .handled
+            })
+    }
+
+    private var text: AttributedString {
+        // No artist pages (a local file with no match): the plain credit.
+        guard !track.artists.isEmpty else { return AttributedString(track.artist) }
+        var out = AttributedString()
+        for (i, a) in track.artists.enumerated() {
+            if i > 0 { out += AttributedString(i == track.artists.count - 1 ? " & " : ", ") }
+            var name = AttributedString(a.name)
+            name.link = Self.url(a)
+            out += name
+        }
+        return out
+    }
+
+    private static func url(_ a: ArtistCredit) -> URL? {
+        URL(string: "network-aza-stream://open?id=\(a.id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? a.id)")
     }
 }

@@ -145,16 +145,16 @@ struct NowPlayingView: View {
         .animation(.smooth, value: track?.id)
     }
 
-    /// The artist's name, which opens their page.
+    /// The artists' names, each opening its own page.
+    @ViewBuilder
     private var artistLink: some View {
-        Button { if let t = track { model.openArtist(of: t) } } label: {
-            Text(track?.artist ?? "")
+        if let track {
+            ArtistLinks(track: track)
+                .tint(.white.opacity(0.65))
                 .foregroundStyle(.white.opacity(0.65))
                 .lineLimit(1)
+                .accessibilityIdentifier("nowPlaying.artist")
         }
-        .buttonStyle(.textLink)
-        .disabled(track?.artistId == nil)
-        .accessibilityIdentifier("nowPlaying.artist")
     }
 
     @ViewBuilder

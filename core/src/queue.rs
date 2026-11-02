@@ -33,7 +33,51 @@ impl Default for RepeatMode {
     }
 }
 
+/// The queue as written to disk, so the app opens on the song it closed on.
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct SavedQueue {
+    entries: Vec<(Track, bool, usize)>,
+    current: usize,
+    shuffle: bool,
+    repeat: RepeatMode,
+    context_title: Option<String>,
+    context_id: Option<String>,
+}
+
+/// Songs kept either side of the current one, so a huge playlist stays a small write.
+const SAVED_AROUND: usize = 1000;
+
 impl Queue {
+    pub fn save(&self) -> SavedQueue {
+        let from = self.current.saturating_sub(SAVED_AROUND);
+        let to = (self.current + SAVED_AROUND).min(self.entries.len());
+        SavedQueue {
+            entries: self.entries[from..to].iter().map(|e| (e.track.clone(), e.user, e.order)).collect(),
+            current: self.current - from,
+            shuffle: self.shuffle,
+            repeat: self.repeat,
+            context_title: self.context_title.clone(),
+            context_id: self.context_id.clone(),
+        }
+    }
+
+    pub fn restore(&mut self, saved: SavedQueue) {
+        self.entries = saved
+            .entries
+            .into_iter()
+            .map(|(track, user, order)| {
+                self.next_key += 1;
+                Entry { key: self.next_key, track, user, order }
+            })
+            .collect();
+        self.current = saved.current.min(self.entries.len().saturating_sub(1));
+        self.shuffle = saved.shuffle;
+        self.repeat = saved.repeat;
+        self.context_title = saved.context_title;
+        self.context_id = saved.context_id;
+        self.version += 1;
+    }
+
     fn key(&mut self) -> u64 {
         self.next_key += 1;
         self.next_key

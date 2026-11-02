@@ -8,14 +8,14 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use parking_lot::{Mutex, RwLock};
 
 use crate::audio::Output;
 use crate::db::Db;
 use crate::local::{self, Outcome};
-use crate::queue::Queue;
+use crate::queue::{Queue, SavedQueue};
 use crate::spotify::session::Playback;
 use crate::types::*;
 
@@ -52,7 +52,13 @@ pub struct Engine {
     heard: Mutex<(u64, bool, i64)>,
     /// Where playback stands when nothing is buffered (after a jump, at the end).
     idle_position: AtomicU64,
+    /// Queue version last written to disk, and when the position last was.
+    saved_version: AtomicU64,
+    position_saved_at: Mutex<Instant>,
 }
+
+const SAVED_QUEUE: &str = "queue";
+const SAVED_POSITION: &str = "queue.position";
 
 impl Engine {
     pub fn new(db: Arc<Db>, spotify: Arc<RwLock<Option<Arc<Playback>>>>, notify: Arc<dyn Fn(EngineEvent) + Send + Sync>) -> Arc<Self> {
@@ -69,7 +75,10 @@ impl Engine {
             audible: Mutex::new(None),
             heard: Mutex::new((0, false, 0)),
             idle_position: AtomicU64::new(0),
+            saved_version: AtomicU64::new(0),
+            position_saved_at: Mutex::new(Instant::now()),
         });
+        engine.restore();
         let weak = Arc::downgrade(&engine);
         std::thread::Builder::new()
             .name("stream-monitor".into())
@@ -82,6 +91,43 @@ impl Engine {
             })
             .expect("spawn monitor");
         engine
+    }
+
+    /// Opens on the song the app closed on, paused where it was.
+    fn restore(&self) {
+        let Some(saved) = self.db.get_kv(SAVED_QUEUE).and_then(|s| serde_json::from_str::<SavedQueue>(&s).ok()) else { return };
+        let mut q = self.queue.lock();
+        q.restore(saved);
+        if q.entries.is_empty() {
+            return;
+        }
+        self.saved_version.store(q.version, Ordering::Relaxed);
+        drop(q);
+        let ms = self.db.get_kv(SAVED_POSITION).and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+        self.idle_position.store(ms, Ordering::Relaxed);
+        *self.status.lock() = PlaybackStatus::Paused;
+        // Nothing is buffered, so Play starts the song afresh at that position.
+        self.feeder_done.store(self.out.generation(), Ordering::Release);
+    }
+
+    /// Writes the queue when it changed, and the position.
+    pub fn persist(&self) {
+        let q = self.queue.lock();
+        if self.saved_version.swap(q.version, Ordering::Relaxed) != q.version {
+            let saved = serde_json::to_string(&q.save());
+            drop(q);
+            if let Ok(json) = saved {
+                self.db.set_kv(SAVED_QUEUE, &json);
+            }
+        } else {
+            drop(q);
+        }
+        self.save_position();
+    }
+
+    fn save_position(&self) {
+        *self.position_saved_at.lock() = Instant::now();
+        self.db.set_kv(SAVED_POSITION, &self.position_ms().to_string());
     }
 
     pub fn output(&self) -> &Arc<Output> {
@@ -199,6 +245,9 @@ impl Engine {
                 }
             }
         }
+        if self.position_saved_at.lock().elapsed() > Duration::from_secs(10) {
+            self.save_position();
+        }
         // The queue ran out and everything buffered has been heard.
         let generation = self.out.generation();
         if self.feeder_done.load(Ordering::Acquire) == generation && self.out.pending_frames() == 0 {
@@ -269,7 +318,7 @@ impl Engine {
                     }
                     None => Err(anyhow::anyhow!("the file for “{}” is missing", entry.track.title)),
                 },
-                Source::Spotify => match self.spotify.read().clone() {
+                Source::Spotify => match self.spotify_soon(generation) {
                     Some(sp) => sp.play(&entry.track.id, ms, self.out.clone(), generation, next_uri.as_deref()),
                     None => Err(anyhow::anyhow!("sign in to Spotify to play “{}”", entry.track.title)),
                 },
@@ -277,6 +326,7 @@ impl Engine {
             match result {
                 Ok(Outcome::Cancelled) => return,
                 Ok(Outcome::Finished) => failures = 0,
+                Err(_) if self.out.generation() != generation => return,
                 Err(e) => {
                     log::warn!("{e:#}");
                     (self.notify)(EngineEvent::Error(format!("{e:#}")));
@@ -300,6 +350,21 @@ impl Engine {
             }
         }
         self.feeder_done.store(generation, Ordering::Release);
+    }
+
+    /// The Spotify session, waiting a little for one still connecting at launch
+    /// (pressing Play on the song restored from last time can beat it).
+    fn spotify_soon(&self, generation: u64) -> Option<Arc<Playback>> {
+        for _ in 0..75 {
+            if let Some(sp) = self.spotify.read().clone() {
+                return Some(sp);
+            }
+            if self.out.generation() != generation {
+                return None;
+            }
+            std::thread::sleep(Duration::from_millis(200));
+        }
+        self.spotify.read().clone()
     }
 
     pub fn play_tracks(self: &Arc<Self>, tracks: Vec<Track>, start: usize, title: Option<String>, id: Option<String>, shuffle: bool) {

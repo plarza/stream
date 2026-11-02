@@ -11,7 +11,7 @@ use tokio::sync::Mutex;
 
 use super::auth::{self, Tokens};
 use crate::db::SpotifyTrackRow;
-use crate::types::{Item, ItemKind, Source, Track};
+use crate::types::{Item, ItemKind, Release, ReleaseKind, Source, Track};
 
 
 pub struct WebApi {
@@ -132,6 +132,18 @@ pub fn artists_text(v: &Value) -> String {
         .unwrap_or_default()
 }
 
+/// A Web API object's `artists`, those with a page.
+pub fn artist_credits(v: &Value) -> Vec<crate::types::ArtistCredit> {
+    v["artists"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| Some(crate::types::ArtistCredit { id: x["uri"].as_str()?.to_string(), name: x["name"].as_str()?.to_string() }))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub fn track_row(v: &Value, album_fallback: Option<&Value>) -> Option<SpotifyTrackRow> {
     let id = v["uri"].as_str()?;
     if !id.starts_with("spotify:track:") {
@@ -143,6 +155,7 @@ pub fn track_row(v: &Value, album_fallback: Option<&Value>) -> Option<SpotifyTra
         title: v["name"].as_str().unwrap_or("").to_string(),
         artist: artists_text(v),
         artist_id: v["artists"][0]["uri"].as_str().map(str::to_string),
+        artists: artist_credits(v),
         album: album["name"].as_str().unwrap_or("").to_string(),
         album_id: album["uri"].as_str().map(str::to_string),
         art: best_image(album),
@@ -159,6 +172,7 @@ pub fn row_to_track(r: &SpotifyTrackRow) -> Track {
         title: r.title.clone(),
         artist: r.artist.clone(),
         artist_id: r.artist_id.clone(),
+        artists: r.artists.clone(),
         album: r.album.clone(),
         album_id: r.album_id.clone(),
         art: r.art.clone(),
@@ -238,10 +252,35 @@ fn best_source(v: &Value) -> Option<String> {
 
 pub struct ArtistOverview {
     pub item: Item,
-    pub monthly_listeners: u64,
+    pub info: crate::types::ArtistInfo,
     pub top: Vec<SpotifyTrackRow>,
-    /// Albums, then singles and EPs, newest first; subtitle is the year.
-    pub releases: Vec<Item>,
+    /// The releases the overview lists (the first few of each kind), newest first.
+    pub releases: Vec<Release>,
+}
+
+pub fn release_subtitle(date: &str, kind: ReleaseKind) -> String {
+    let year = date.get(..4).unwrap_or("").to_string();
+    let kind = match kind {
+        ReleaseKind::Album => return year,
+        ReleaseKind::Single => "Single",
+        ReleaseKind::Ep => "EP",
+        ReleaseKind::Compilation => "Compilation",
+    };
+    if year.is_empty() { kind.to_string() } else { format!("{year} · {kind}") }
+}
+
+/// GraphQL release dates: `isoString` cut to the precision Spotify knows.
+fn graph_date(d: &Value) -> String {
+    let iso = d["isoString"].as_str().unwrap_or("");
+    let len = match d["precision"].as_str() {
+        Some("DAY") => 10,
+        Some("MONTH") => 7,
+        _ => 4,
+    };
+    match iso.get(..len) {
+        Some(s) => s.to_string(),
+        None => d["year"].as_u64().map(|y| y.to_string()).unwrap_or_default(),
+    }
 }
 
 pub fn artist_overview(v: &Value) -> Option<ArtistOverview> {
@@ -254,6 +293,28 @@ pub fn artist_overview(v: &Value) -> Option<ArtistOverview> {
         subtitle: "Artist".into(),
         art: best_source(&a["visuals"]["avatarImage"]),
         downloaded: false,
+    };
+    let stats = &a["stats"];
+    let info = crate::types::ArtistInfo {
+        biography: a["profile"]["biography"]["text"].as_str().map(str::to_string).filter(|b| !b.trim().is_empty()),
+        header: best_source(&a["visuals"]["headerImage"]),
+        monthly_listeners: stats["monthlyListeners"].as_u64().unwrap_or(0),
+        followers: stats["followers"].as_u64().unwrap_or(0),
+        world_rank: stats["worldRank"].as_u64().filter(|r| *r > 0).map(|r| r as u32),
+        top_cities: stats["topCities"]["items"]
+            .as_array()
+            .map(|c| {
+                c.iter()
+                    .filter_map(|c| {
+                        Some(crate::types::TopCity {
+                            city: c["city"].as_str()?.to_string(),
+                            country: c["country"].as_str().unwrap_or("").to_string(),
+                            listeners: c["numberOfListeners"].as_u64().unwrap_or(0),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
     };
     let top = a["discography"]["topTracks"]["items"]
         .as_array()
@@ -269,6 +330,10 @@ pub fn artist_overview(v: &Value) -> Option<ArtistOverview> {
                         title: t["name"].as_str().unwrap_or("").to_string(),
                         artist: artists.iter().filter_map(|x| x["profile"]["name"].as_str()).collect::<Vec<_>>().join(", "),
                         artist_id: artists.first().and_then(|x| x["uri"].as_str()).map(str::to_string),
+                        artists: artists
+                            .iter()
+                            .filter_map(|x| Some(crate::types::ArtistCredit { id: x["uri"].as_str()?.to_string(), name: x["profile"]["name"].as_str()?.to_string() }))
+                            .collect(),
                         album: album["name"].as_str().unwrap_or("").to_string(),
                         album_id: album["uri"].as_str().map(str::to_string),
                         art: best_source(&album["coverArt"]),
@@ -280,40 +345,49 @@ pub fn artist_overview(v: &Value) -> Option<ArtistOverview> {
                 .collect()
         })
         .unwrap_or_default();
-    let releases_of = |group: &str| -> Vec<Item> {
-        a["discography"][group]["items"]
-            .as_array()
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(|i| {
-                        let r = &i["releases"]["items"][0];
-                        let year = r["date"]["year"].as_u64().map(|y| y.to_string()).unwrap_or_default();
-                        let kind = match r["type"].as_str() {
-                            Some("SINGLE") => "Single",
-                            Some("EP") => "EP",
-                            _ => "",
-                        };
-                        Some(Item {
-                            id: r["uri"].as_str()?.to_string(),
-                            kind: ItemKind::Album,
-                            source: Source::Spotify,
-                            title: r["name"].as_str().unwrap_or("").to_string(),
-                            subtitle: if kind.is_empty() { year } else { format!("{year} · {kind}") },
-                            art: best_source(&r["coverArt"]),
-                            downloaded: false,
-                        })
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
+    let mut releases: Vec<Release> = Vec::new();
+    for group in ["albums", "singles", "compilations"] {
+        for i in a["discography"][group]["items"].as_array().into_iter().flatten() {
+            let r = &i["releases"]["items"][0];
+            let Some(id) = r["uri"].as_str() else { continue };
+            let kind = match r["type"].as_str() {
+                Some("SINGLE") => ReleaseKind::Single,
+                Some("EP") => ReleaseKind::Ep,
+                Some("COMPILATION") => ReleaseKind::Compilation,
+                _ => ReleaseKind::Album,
+            };
+            let date = graph_date(&r["date"]);
+            releases.push(Release {
+                item: Item {
+                    id: id.to_string(),
+                    kind: ItemKind::Album,
+                    source: Source::Spotify,
+                    title: r["name"].as_str().unwrap_or("").to_string(),
+                    subtitle: release_subtitle(&date, kind),
+                    art: best_source(&r["coverArt"]),
+                    downloaded: false,
+                },
+                kind,
+                date,
+            });
+        }
+    }
+    releases.sort_by(|a, b| b.date.cmp(&a.date));
+    Some(ArtistOverview { item, info, top, releases })
+}
+
+/// A release from the Web API's artist albums. Spotify calls EPs singles there;
+/// by Spotify's own rule a "single" of four or more songs is an EP.
+pub fn web_release(v: &Value) -> Option<Release> {
+    let kind = match v["album_group"].as_str().or(v["album_type"].as_str()) {
+        Some("single") if v["total_tracks"].as_u64().unwrap_or(0) >= 4 => ReleaseKind::Ep,
+        Some("single") => ReleaseKind::Single,
+        Some("compilation") => ReleaseKind::Compilation,
+        Some("album") => ReleaseKind::Album,
+        _ => return None,
     };
-    let mut releases = releases_of("albums");
-    releases.extend(releases_of("singles"));
-    Some(ArtistOverview {
-        item,
-        monthly_listeners: a["stats"]["monthlyListeners"].as_u64().unwrap_or(0),
-        top,
-        releases,
-    })
+    let date = v["release_date"].as_str().unwrap_or("").to_string();
+    let mut item = album_item(v)?;
+    item.subtitle = release_subtitle(&date, kind);
+    Some(Release { item, kind, date })
 }

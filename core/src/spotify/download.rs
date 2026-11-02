@@ -59,6 +59,7 @@ pub async fn session_playlist(session: &Session, id: &str, db: &Db) -> Result<Co
             title: t.name.clone(),
             artist: t.artists.iter().map(|a| a.name.clone()).collect::<Vec<_>>().join(", "),
             artist_id: t.artists.first().and_then(|a| a.id.to_uri().ok()),
+            artists: t.artists.iter().filter_map(|a| Some(crate::types::ArtistCredit { id: a.id.to_uri().ok()?, name: a.name.clone() })).collect(),
             album: t.album.name.clone(),
             album_id: t.album.id.to_uri().ok(),
             art: cover_url(&t.album),
@@ -86,7 +87,7 @@ pub async fn session_playlist(session: &Session, id: &str, db: &Db) -> Result<Co
         description: header.and_then(|h| h.1),
         item,
         tracks,
-        albums: vec![],
+        releases: vec![], artist: None,
         liked: false,
         pinned: false,
     })

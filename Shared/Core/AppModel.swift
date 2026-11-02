@@ -234,8 +234,13 @@ final class AppModel {
     }
 
     func openArtist(of track: Track) {
+        if let first = track.artists.first { return openArtist(first, source: track.source) }
         guard let id = track.artistId else { return }
         open(Item(id: id, kind: .artist, source: track.source, title: track.artist, subtitle: "Artist", art: nil, downloaded: false))
+    }
+
+    func openArtist(_ artist: ArtistCredit, source: Source) {
+        open(Item(id: artist.id, kind: .artist, source: source, title: artist.name, subtitle: "Artist", art: nil, downloaded: false))
     }
 
     func openAlbum(of track: Track) {

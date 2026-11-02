@@ -15,6 +15,12 @@ struct CollectionView: View {
     @State private var pinned = false
     @State private var liked = false
     @State private var showCover = false
+    /// Artist pages: the release kind picked, or nil for all of them.
+    @State private var releaseFilter: ReleaseKind?
+    @State private var bioExpanded = false
+    /// Playlist pages: how the songs are sorted, the same for every playlist.
+    @AppStorage("playlistSort") private var sort: TrackSort = .playlist
+    @AppStorage("playlistSortReversed") private var reversed = false
     @Namespace private var coverZoom
 
     init(item: Item) {
@@ -38,7 +44,8 @@ struct CollectionView: View {
                     .padding(.vertical, 16)
                 if let page {
                     tracks(page)
-                    if !page.albums.isEmpty { albums(page) }
+                    if !page.releases.isEmpty { releases(page) }
+                    if let info = page.artist { about(info) }
                     if let d = page.description, item.kind != .artist {
                         Text(d).font(.footnote).foregroundStyle(.secondary).padding(Metrics.page)
                     }
@@ -52,14 +59,32 @@ struct CollectionView: View {
             .padding(.bottom, 120)
         }
         .background(alignment: .top) {
-            // The art's colors are dark; in light mode they only wash the top.
-            LinearGradient(colors: [palette.top, palette.top.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom)
-                .opacity(scheme == .dark ? 1 : 0.35)
-                .frame(height: 520)
-                .ignoresSafeArea()
-                .animation(.smooth(duration: 0.6), value: palette)
+            ZStack(alignment: .top) {
+                // The art's colors are dark; in light mode they only wash the top.
+                LinearGradient(colors: [palette.top, palette.top.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom)
+                    .opacity(scheme == .dark ? 1 : 0.35)
+                    .frame(height: 520)
+                    .animation(.smooth(duration: 0.6), value: palette)
+                // An artist's own header photo, as on their Spotify page, fading into the page.
+                if let header = page?.artist?.header {
+                    FillArtwork(url: header, pixels: 1400)
+                        .frame(height: 340)
+                        .frame(maxWidth: .infinity)
+                        .clipped()
+                        .mask(LinearGradient(colors: [.black, .black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom))
+                        .opacity(scheme == .dark ? 0.85 : 0.6)
+                        .transition(.opacity)
+                        .accessibilityHidden(true)
+                }
+            }
+            .ignoresSafeArea()
         }
         .navigationTitle(page?.item.title ?? item.title)
+        .toolbar {
+            if item.kind == .playlist {
+                ToolbarItem(placement: .primaryAction) { sortMenu }
+            }
+        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -137,7 +162,7 @@ struct CollectionView: View {
     private var actions: some View {
         HStack(spacing: 18) {
             Button {
-                if let page { model.play(page.tracks, from: page.item) }
+                if let page { model.play(ordered(page), from: page.item) }
             } label: {
                 Image(systemName: "play.fill")
                     .font(.title3)
@@ -149,7 +174,7 @@ struct CollectionView: View {
             .accessibilityLabel("Play")
             .accessibilityIdentifier("collection.play")
             Button {
-                if let page { model.play(page.tracks, from: page.item, shuffle: true) }
+                if let page { model.play(ordered(page), from: page.item, shuffle: true) }
             } label: { Image(systemName: "shuffle").font(.title3) }
                 .buttonStyle(.pressable)
                 .accessibilityLabel("Shuffle")
@@ -195,8 +220,9 @@ struct CollectionView: View {
             Text("Popular").font(.title3.weight(.bold)).padding(.horizontal, Metrics.page).padding(.bottom, 4)
         }
         LazyVStack(spacing: 0) {
-            ForEach(Array(page.tracks.prefix(item.kind == .artist ? 10 : .max).enumerated()), id: \.element.id) { i, t in
-                Button { model.play(page.tracks, at: i, from: page.item) } label: {
+            let tracks = ordered(page)
+            ForEach(Array(tracks.prefix(item.kind == .artist ? 10 : .max).enumerated()), id: \.element.id) { i, t in
+                Button { model.play(tracks, at: i, from: page.item) } label: {
                     TrackRow(track: t, showArt: item.kind != .album, number: item.kind == .album ? Int(t.trackNumber == 0 ? UInt32(i + 1) : t.trackNumber) : nil,
                              isCurrent: model.player.track?.id == t.id,
                              showArtist: item.kind != .album || t.artist != page.item.subtitle)
@@ -211,21 +237,122 @@ struct CollectionView: View {
         }
     }
 
-    private func albums(_ page: CollectionPage) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Albums").font(.title3.weight(.bold)).padding(.horizontal, Metrics.page)
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 14) {
-                    ForEach(page.albums) { a in
-                        NavigationLink(value: a) { ItemTile(item: a, size: 140) }
-                            .buttonStyle(.pressable)
-                            .itemMenu(a)
-                    }
-                }
-                .padding(.horizontal, Metrics.page)
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort By", selection: $sort.animation(.smooth)) {
+                ForEach(TrackSort.allCases, id: \.self) { Text($0.title).tag($0) }
             }
+            Divider()
+            Toggle("Reverse", isOn: $reversed.animation(.smooth))
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
+        }
+        .accessibilityIdentifier("playlist.sort")
+    }
+
+    /// The page's songs, sorted as picked when it's a playlist.
+    private func ordered(_ page: CollectionPage) -> [Track] {
+        guard item.kind == .playlist else { return page.tracks }
+        let less: (Track, Track) -> Bool = switch sort {
+        case .playlist: { _, _ in false }
+        case .title: { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        case .artist: { ($0.artist, $0.album, $0.discNumber, $0.trackNumber) < ($1.artist, $1.album, $1.discNumber, $1.trackNumber) }
+        case .album: { ($0.album, $0.discNumber, $0.trackNumber) < ($1.album, $1.discNumber, $1.trackNumber) }
+        case .length: { $0.durationMs < $1.durationMs }
+        }
+        let sorted = sort == .playlist ? page.tracks : page.tracks.sorted(by: less)
+        return reversed ? sorted.reversed() : sorted
+    }
+
+    /// Every release, newest first, with pills for each kind there is. No pill picked shows them all.
+    private func releases(_ page: CollectionPage) -> some View {
+        let kinds = Self.pillOrder.filter { k in page.releases.contains { Self.pill(for: $0.kind) == k } }
+        let shown = page.releases.filter { releaseFilter == nil || Self.pill(for: $0.kind) == releaseFilter }
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(page.artist == nil ? "Albums" : "Discography").font(.title3.weight(.bold)).padding(.horizontal, Metrics.page)
+            if kinds.count > 1 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(kinds, id: \.self) { k in
+                            ReleasePill(title: Self.title(k), selected: releaseFilter == k) {
+                                withAnimation(.snappy) { releaseFilter = releaseFilter == k ? nil : k }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, Metrics.page)
+                }
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: 14, alignment: .top)], alignment: .leading, spacing: 18) {
+                ForEach(shown, id: \.item.id) { r in
+                    NavigationLink(value: r.item) { ReleaseTile(item: r.item) }
+                        .buttonStyle(.pressable)
+                        .itemMenu(r.item)
+                        .accessibilityIdentifier("release.\(r.item.title)")
+                }
+            }
+            .padding(.horizontal, Metrics.page)
         }
         .padding(.top, 24)
+    }
+
+    /// Compilations sit with albums: the pills are Albums, Singles and EPs.
+    private static let pillOrder: [ReleaseKind] = [.album, .single, .ep]
+    private static func pill(for kind: ReleaseKind) -> ReleaseKind { kind == .compilation ? .album : kind }
+    private static func title(_ kind: ReleaseKind) -> String {
+        switch kind {
+        case .album, .compilation: "Albums"
+        case .single: "Singles"
+        case .ep: "EPs"
+        }
+    }
+
+    /// The bio and Spotify's numbers for the artist.
+    private func about(_ info: ArtistInfo) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("About").font(.title3.weight(.bold))
+            if let bio = info.biography {
+                Text(bio)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(bioExpanded ? nil : 4)
+                    .onTapGesture { withAnimation(.smooth) { bioExpanded.toggle() } }
+                    .accessibilityIdentifier("artist.bio")
+                if !bioExpanded {
+                    Button("More") { withAnimation(.smooth) { bioExpanded = true } }
+                        .font(.callout.weight(.semibold))
+                        .buttonStyle(.plain)
+                }
+            }
+            HStack(alignment: .top, spacing: 28) {
+                if info.monthlyListeners > 0 { stat(info.monthlyListeners.formatted(), "Monthly listeners") }
+                if info.followers > 0 { stat(info.followers.formatted(), "Followers") }
+                if let rank = info.worldRank { stat("#\(rank)", "In the world") }
+            }
+            .padding(.top, 4)
+            if !info.topCities.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Top cities").font(.subheadline.weight(.semibold))
+                    ForEach(Array(info.topCities.prefix(5).enumerated()), id: \.offset) { _, c in
+                        HStack {
+                            Text(c.country.isEmpty ? c.city : "\(c.city), \(c.country)")
+                            Spacer()
+                            Text(c.listeners.formatted()).monospacedDigit().foregroundStyle(.secondary)
+                        }
+                        .font(.callout)
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, Metrics.page)
+        .padding(.top, 32)
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value).font(.headline.monospacedDigit())
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
     }
 
     private func load() async {
@@ -258,6 +385,62 @@ struct CollectionView: View {
     private func commonQuality(_ tracks: [Track]) -> String? {
         guard let first = tracks.first?.quality, !first.isEmpty else { return nil }
         return tracks.allSatisfy { $0.quality == first } ? first : nil
+    }
+}
+
+/// How a playlist's songs are sorted.
+enum TrackSort: String, CaseIterable {
+    case playlist, title, artist, album, length
+
+    var title: String {
+        switch self {
+        case .playlist: "Playlist Order"
+        case .title: "Title"
+        case .artist: "Artist"
+        case .album: "Album"
+        case .length: "Length"
+        }
+    }
+}
+
+/// One release in an artist's discography grid: its cover filling the column.
+private struct ReleaseTile: View {
+    let item: Item
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            FillArtwork(url: item.art, pixels: 640)
+                .aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(item.title).font(.footnote.weight(.medium)).lineLimit(1)
+                Text(item.subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .foregroundStyle(.primary)
+    }
+}
+
+/// A filter pill: filled when picked.
+struct ReleasePill: View {
+    let title: String
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(selected ? .semibold : .regular))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 7)
+                .foregroundStyle(selected ? AnyShapeStyle(.background) : AnyShapeStyle(.primary))
+                .background {
+                    if selected { Capsule().fill(.primary) } else { Capsule().fill(.quaternary) }
+                }
+        }
+        .buttonStyle(.pressable)
+        .accessibilityIdentifier("pill.\(title)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 

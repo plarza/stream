@@ -30,7 +30,7 @@ struct ProfileView: View {
                     lastfm
                     SettingsCard("Playback") {
                         Toggle("Normalize loudness", isOn: $settings.normalization)
-                        Toggle("Scrobble local files to Last.fm", isOn: $settings.scrobbling)
+                        Toggle("Scrobble to Last.fm", isOn: $settings.scrobbling)
                     }
                     .onChange(of: settings) { model.core.setSettings(s: settings) }
                     heading("Appearance")
@@ -208,7 +208,7 @@ struct ProfileView: View {
                 .disabled(!model.core.hasLastfmApi() && (lastfmKey.isEmpty || lastfmSecret.isEmpty))
             }
         } footer: {
-            Text("Only local files scrobble here. Spotify’s own Last.fm connection covers Spotify.")
+            Text("Spotify songs and your own files both scrobble from here. Spotify’s own Last.fm connection never sees what Stream plays.")
         }
     }
 

@@ -183,6 +183,7 @@ pub struct SpotifyTrackRow {
     pub title: String,
     pub artist: String,
     pub artist_id: Option<String>,
+    pub artists: Vec<ArtistCredit>,
     pub album: String,
     pub album_id: Option<String>,
     pub art: Option<String>,
@@ -195,6 +196,8 @@ impl Db {
     pub fn open(path: &Path, art_dir: PathBuf) -> anyhow::Result<Self> {
         let conn = Connection::open(path)?;
         conn.execute_batch(SCHEMA)?;
+        // Added later: every credited artist, as JSON. Fails harmlessly once it exists.
+        let _ = conn.execute("ALTER TABLE tracks ADD COLUMN artists TEXT", []);
         Ok(Self { conn: Mutex::new(conn), art_dir })
     }
 
@@ -409,16 +412,18 @@ impl Db {
         for t in tracks {
             tx.execute(
                 "INSERT INTO tracks(id, source, title, artist, artist_id, album, album_id, track_no, disc_no,
-                    duration_ms, quality, art, added_at, saved)
-                 VALUES(?1, 1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'OGG 320', ?10, ?11, COALESCE(?12, 0))
+                    duration_ms, quality, art, added_at, saved, artists)
+                 VALUES(?1, 1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'OGG 320', ?10, ?11, COALESCE(?12, 0), ?13)
                  ON CONFLICT(id) DO UPDATE SET title=excluded.title, artist=excluded.artist, artist_id=excluded.artist_id,
+                    artists=COALESCE(excluded.artists, tracks.artists),
                     album=COALESCE(NULLIF(excluded.album, ''), tracks.album), album_id=COALESCE(excluded.album_id, tracks.album_id),
                     track_no=CASE excluded.track_no WHEN 0 THEN tracks.track_no ELSE excluded.track_no END,
                     disc_no=excluded.disc_no, duration_ms=excluded.duration_ms, art=COALESCE(excluded.art, tracks.art),
                     saved = COALESCE(?12, tracks.saved)",
                 params![
                     t.id, t.title, t.artist, t.artist_id, t.album, t.album_id, t.track_no, t.disc_no,
-                    t.duration_ms, t.art, now, saved.map(|s| s as i64)
+                    t.duration_ms, t.art, now, saved.map(|s| s as i64),
+                    (t.artists.len() > 1).then(|| serde_json::to_string(&t.artists).ok()).flatten()
                 ],
             )?;
         }
@@ -552,12 +557,20 @@ impl Db {
         let source = source_of(r.get(1)?);
         let saved: i64 = r.get(13)?;
         let liked: i64 = r.get(12)?;
+        let artist: String = r.get(3)?;
+        let artist_id: Option<String> = r.get(4)?;
+        // Only songs with several artists store the list; one artist is just artist and artist_id.
+        let artists = r
+            .get::<_, Option<String>>(15)?
+            .and_then(|s| serde_json::from_str::<Vec<ArtistCredit>>(&s).ok())
+            .unwrap_or_else(|| artist_id.clone().map(|id| vec![ArtistCredit { id, name: artist.clone() }]).unwrap_or_default());
         Ok(Track {
             id: r.get(0)?,
             source,
             title: r.get(2)?,
-            artist: r.get(3)?,
-            artist_id: r.get(4)?,
+            artist,
+            artist_id,
+            artists,
             album: r.get(5)?,
             album_id: r.get(6)?,
             art: self.art_url(r.get(7)?),
@@ -571,7 +584,7 @@ impl Db {
     }
 
     const TRACK_COLS: &'static str =
-        "t.id, t.source, t.title, t.artist, t.artist_id, t.album, t.album_id, t.art, t.duration_ms, t.track_no, t.disc_no, t.quality, t.liked, t.saved, t.downloaded";
+        "t.id, t.source, t.title, t.artist, t.artist_id, t.album, t.album_id, t.art, t.duration_ms, t.track_no, t.disc_no, t.quality, t.liked, t.saved, t.downloaded, t.artists";
 
     pub fn track(&self, id: &str) -> Option<Track> {
         let conn = self.conn.lock();

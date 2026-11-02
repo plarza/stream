@@ -84,10 +84,47 @@ final class FakeSpotify: @unchecked Sendable {
             send(c, json: #"{"access_token":"test-token","token_type":"Bearer","expires_in":3600,"refresh_token":"test-refresh"}"#)
         case "/v1/me":
             send(c, json: #"{"id":"tester","display_name":"\#(Self.listener)","product":"premium"}"#)
+        case "/v1/me/tracks":
+            send(c, json: Self.page([#"{"track":\#(Self.duet)}"#]))
+        case "/v1/me/playlists":
+            send(c, json: Self.page([Self.mix]))
+        case "/v1/playlists/mix":
+            send(c, json: Self.mix)
+        case "/v1/playlists/mix/items":
+            let songs = [("zebra", "Zebra", 1), ("apple", "Apple", 2), ("mango", "Mango", 3)]
+            send(c, json: Self.page(songs.map { #"{"item":\#(Self.track($0.0, $0.1, number: $0.2))}"# }))
+        case "/v1/artists/otto":
+            send(c, json: Self.otto)
+        case "/v1/artists/otto/albums":
+            send(c, json: Self.page([
+                Self.release("big", "Big Album", type: "album", tracks: 12, date: "2024-05-01"),
+                Self.release("one", "One Song", type: "single", tracks: 1, date: "2025-01-10"),
+                Self.release("short", "Short Set", type: "single", tracks: 5, date: "2023-02-02"),
+            ]))
         default:
             // The library is empty: every paged list has no items.
             send(c, json: #"{"items":[],"next":null,"artists":{"items":[],"next":null}}"#)
         }
+    }
+
+    // MARK: The library: one liked song by two artists, a playlist, and the second
+    // artist's album, single and EP.
+
+    static let mira = #"{"uri":"spotify:artist:mira","name":"Mira Vale"}"#
+    static let otto = #"{"uri":"spotify:artist:otto","name":"Otto Rhee","images":[]}"#
+    static let duet = track("duet", "Duet", number: 1, artists: "\(mira),\(otto)")
+    static let mix = #"{"uri":"spotify:playlist:mix","name":"Test Mix","description":"","images":[],"owner":{"id":"tester","display_name":"Test Listener"},"items":{"total":3},"snapshot_id":"s1"}"#
+
+    static func track(_ id: String, _ name: String, number: Int, artists: String = mira) -> String {
+        #"{"uri":"spotify:track:\#(id)","name":"\#(name)","artists":[\#(artists)],"album":{"uri":"spotify:album:duets","name":"Duets","images":[],"artists":[\#(mira)]},"duration_ms":200000,"track_number":\#(number),"disc_number":1}"#
+    }
+
+    static func release(_ id: String, _ name: String, type: String, tracks: Int, date: String) -> String {
+        #"{"uri":"spotify:album:\#(id)","name":"\#(name)","album_type":"\#(type)","album_group":"\#(type)","total_tracks":\#(tracks),"release_date":"\#(date)","images":[],"artists":[\#(otto)]}"#
+    }
+
+    static func page(_ items: [String]) -> String {
+        #"{"items":[\#(items.joined(separator: ","))],"next":null}"#
     }
 
     private func send(_ c: NWConnection, json: String) {

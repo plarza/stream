@@ -1,4 +1,4 @@
-//! Last.fm scrobbling for local files.
+//! Last.fm scrobbling, for local files and Spotify alike.
 
 use std::collections::BTreeMap;
 

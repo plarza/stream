@@ -50,6 +50,13 @@ pub struct Item {
     pub downloaded: bool,
 }
 
+/// One of a song's credited artists.
+#[derive(Debug, Clone, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize)]
+pub struct ArtistCredit {
+    pub id: String,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, PartialEq, uniffi::Record, serde::Serialize, serde::Deserialize)]
 pub struct Track {
     pub id: String,
@@ -57,6 +64,9 @@ pub struct Track {
     pub title: String,
     pub artist: String,
     pub artist_id: Option<String>,
+    /// Every credited artist with a page, in credit order (`artist` is their names joined).
+    #[serde(default)]
+    pub artists: Vec<ArtistCredit>,
     pub album: String,
     pub album_id: Option<String>,
     pub art: Option<String>,
@@ -91,10 +101,48 @@ pub struct CollectionPage {
     pub detail: String,
     pub description: Option<String>,
     pub tracks: Vec<Track>,
-    /// Artist pages: their albums.
-    pub albums: Vec<Item>,
+    /// Artist pages: every release, newest first.
+    pub releases: Vec<Release>,
+    /// Artist pages from Spotify: bio, photos and stats.
+    pub artist: Option<ArtistInfo>,
     pub liked: bool,
     pub pinned: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
+pub enum ReleaseKind {
+    Album,
+    Single,
+    Ep,
+    Compilation,
+}
+
+/// One of an artist's releases. `item.subtitle` is "2019 · EP".
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct Release {
+    pub item: Item,
+    pub kind: ReleaseKind,
+    /// "2019-05-17", or as much of it as is known ("2019").
+    pub date: String,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct TopCity {
+    pub city: String,
+    pub country: String,
+    pub listeners: u64,
+}
+
+/// What Spotify's own artist page shows about an artist.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ArtistInfo {
+    pub biography: Option<String>,
+    /// The wide photo across the top of their page.
+    pub header: Option<String>,
+    pub monthly_listeners: u64,
+    pub followers: u64,
+    pub world_rank: Option<u32>,
+    pub top_cities: Vec<TopCity>,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]

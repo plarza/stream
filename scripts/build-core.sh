@@ -27,20 +27,23 @@ for t in $TARGETS; do
 done
 
 rm -rf $OUT/StreamCore.xcframework $OUT/headers
-mkdir -p $OUT/headers
+# Headers in their own folder: other prebuilt libraries (AzaKit, through AzaUI) put a
+# module.modulemap at the top of theirs, and Xcode copies both to the same include path.
+H=$OUT/headers/stream_coreFFI
+mkdir -p $H
 
 HOST_LIB=target/aarch64-apple-darwin/$PROFILE/libstream_core.dylib
 # The bindings are generated from the Mac library, so it has to be current even when
 # only other targets were asked for (cargo makes this a no-op when nothing changed).
 cargo build $FLAG --lib --target aarch64-apple-darwin
 cargo run -q --bin uniffi-bindgen -- generate --library $HOST_LIB --language swift --out-dir $OUT/bindings
-mv $OUT/bindings/stream_coreFFI.h $OUT/headers/
-cat > $OUT/headers/StreamCoreRender.h <<'H'
+mv $OUT/bindings/stream_coreFFI.h $H/
+cat > $H/StreamCoreRender.h <<'H'
 #include <stdint.h>
 /// Pulls `frames` of audio into the two channel buffers; returns frames of real audio.
 uint32_t stream_core_render(float *left, float *right, uint32_t frames);
 H
-cat > $OUT/headers/module.modulemap <<'M'
+cat > $H/module.modulemap <<'M'
 module stream_coreFFI {
     header "stream_coreFFI.h"
     header "StreamCoreRender.h"

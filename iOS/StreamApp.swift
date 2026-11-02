@@ -62,7 +62,9 @@ struct RootView: View {
                         .profileButton { model.showSettings = true }
                         .destinations()
                 }
-                .searchable(text: $search.query, prompt: "Search your library")
+                // Always showing: by default it's a drawer under the title that scrolls
+                // away and comes back collapsed. (On the TabView it shows on every tab.)
+                .searchable(text: $search.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search your library")
             }
         }
         // The playing bar stays full size while lists scroll.

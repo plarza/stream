@@ -34,7 +34,9 @@ final class NowPlayingCenter {
         let center = MPNowPlayingInfoCenter.default()
         guard let t = state.track else {
             center.nowPlayingInfo = nil
+            #if os(macOS)
             center.playbackState = .stopped
+            #endif
             return
         }
         var info = center.nowPlayingInfo ?? [:]
@@ -58,7 +60,11 @@ final class NowPlayingCenter {
             }
         }
         center.nowPlayingInfo = info
+        // The Mac's only: iOS takes play/pause from the audio session and the playback
+        // rate, and logs an entitlement error when an app sets this.
+        #if os(macOS)
         center.playbackState = state.status == .playing ? .playing : .paused
+        #endif
     }
 
     /// MediaPlayer calls the image closure on its own queue, so it can't be made on the main actor.
