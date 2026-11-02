@@ -72,7 +72,8 @@ struct CollectionView: View {
                         .frame(maxWidth: .infinity)
                         .clipped()
                         .mask(LinearGradient(colors: [.black, .black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom))
-                        .opacity(scheme == .dark ? 0.85 : 0.6)
+                        // Light mode's dark text sits on it: faint enough to read over.
+                        .opacity(scheme == .dark ? 0.85 : 0.3)
                         .transition(.opacity)
                         .accessibilityHidden(true)
                 }
@@ -80,11 +81,6 @@ struct CollectionView: View {
             .ignoresSafeArea()
         }
         .navigationTitle(page?.item.title ?? item.title)
-        .toolbar {
-            if item.kind == .playlist {
-                ToolbarItem(placement: .primaryAction) { sortMenu }
-            }
-        }
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -210,6 +206,8 @@ struct CollectionView: View {
             }
             #endif
             Spacer()
+            // In the page, not the toolbar: the Mac window has none to show it in.
+            if item.kind == .playlist { sortMenu }
         }
         .foregroundStyle(.primary)
     }
@@ -245,8 +243,13 @@ struct CollectionView: View {
             Divider()
             Toggle("Reverse", isOn: $reversed.animation(.smooth))
         } label: {
-            Label("Sort", systemImage: "arrow.up.arrow.down")
+            Image(systemName: "arrow.up.arrow.down").font(.title3)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Sort")
         .accessibilityIdentifier("playlist.sort")
     }
 

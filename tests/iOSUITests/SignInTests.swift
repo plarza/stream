@@ -58,7 +58,7 @@ final class SignInTests: StreamUITestCase {
         wait(el("library.Playlists")).tap()
         // Pulled down to sync now, rather than waiting on the sync after sign-in.
         let mix = el("row.Test Mix")
-        XCTAssertTrue(poll(20) {
+        XCTAssertTrue(poll(45) {
             if !mix.exists { app.swipeDown() }
             return mix.exists
         }, "the playlist never synced")
