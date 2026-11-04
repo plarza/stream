@@ -177,6 +177,27 @@ pub struct LocalTrack {
     pub size: i64,
 }
 
+/// Where a local song's audio is.
+pub enum LocalSource {
+    File { path: String, gain: Option<f32>, peak: Option<f32> },
+    Remote { hash: String, rel_path: String, size: u64, gain: Option<f32>, peak: Option<f32> },
+}
+
+/// A file on this device, for uploading to the node.
+pub struct OwnFile {
+    pub id: String,
+    pub path: String,
+    pub hash: String,
+    pub size: u64,
+    pub art: Option<String>,
+    pub uploaded: bool,
+}
+
+/// A song from the node's track ID.
+pub fn remote_id(hash: &str) -> String {
+    format!("local:track:{}", &hash[..16.min(hash.len())])
+}
+
 /// A Spotify track as cached from the Web API.
 pub struct SpotifyTrackRow {
     pub id: String,
@@ -198,11 +219,31 @@ impl Db {
         conn.execute_batch(SCHEMA)?;
         // Added later: every credited artist, as JSON. Fails harmlessly once it exists.
         let _ = conn.execute("ALTER TABLE tracks ADD COLUMN artists TEXT", []);
+        // Added with the Stream node: a local file's SHA-256, whether it's a song from the node
+        // rather than a file on this device, and whether this device's file is on the node.
+        let _ = conn.execute("ALTER TABLE tracks ADD COLUMN hash TEXT", []);
+        let _ = conn.execute("ALTER TABLE tracks ADD COLUMN remote INTEGER NOT NULL DEFAULT 0", []);
+        let _ = conn.execute("ALTER TABLE tracks ADD COLUMN uploaded INTEGER NOT NULL DEFAULT 0", []);
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS tracks_hash ON tracks(hash);
+             -- aza sync items as last read or written: the version, and for songs whether this
+             -- device wrote it (it may delete it when its file goes) and what it wrote.
+             CREATE TABLE IF NOT EXISTS sync_items (
+                 name    TEXT PRIMARY KEY,
+                 version INTEGER NOT NULL,
+                 mine    INTEGER NOT NULL DEFAULT 0,
+                 data    BLOB
+             );",
+        )?;
         Ok(Self { conn: Mutex::new(conn), art_dir })
     }
 
     pub fn art_url(&self, art: Option<String>) -> Option<String> {
         let art = art?;
+        // Art of a song from the node that hasn't arrived yet.
+        if art.starts_with("node:") {
+            return None;
+        }
         if art.starts_with("http") || art.starts_with("file:") {
             return Some(art);
         }
@@ -232,7 +273,7 @@ impl Db {
     /// path → (mtime, size) for every indexed local file, to skip unchanged ones.
     pub fn local_index(&self) -> std::collections::HashMap<String, (i64, i64)> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare("SELECT path, mtime, size FROM tracks WHERE source = 0").unwrap();
+        let mut stmt = conn.prepare("SELECT path, mtime, size FROM tracks WHERE source = 0 AND remote = 0 AND path IS NOT NULL").unwrap();
         stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, (r.get(1)?, r.get(2)?))))
             .unwrap()
             .filter_map(Result::ok)
@@ -244,21 +285,11 @@ impl Db {
         let tx = conn.transaction()?;
         let now = now();
         for t in tracks {
-            // Group by the main credited artist so features and collaborations
-            // don't split albums or artists.
-            let owner = (!t.album_artist.is_empty()).then(|| crate::scan::primary_artist(&t.album_artist));
-            let primary = crate::scan::credited_artist(&t.artist, owner.as_deref());
-            let album_artist = owner.unwrap_or_else(|| primary.clone());
-            let artist_name = &album_artist;
-            let key = crate::scan::artist_key;
-            let album_id = format!("local:album:{}", hash_id(&[&key(artist_name), &t.album]));
-            let artist_id = format!("local:artist:{}", hash_id(&[&key(&primary)]));
-            let album_artist_id = format!("local:artist:{}", hash_id(&[&key(artist_name)]));
-            let existing: Option<String> = tx
-                .query_row("SELECT id FROM tracks WHERE path = ?1", [&t.path], |r| r.get(0))
+            let existing: Option<(String, Option<i64>, Option<i64>)> = tx
+                .query_row("SELECT id, mtime, size FROM tracks WHERE path = ?1", [&t.path], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
                 .optional()?;
-            let id = match existing {
-                Some(id) => id,
+            let id = match &existing {
+                Some((id, ..)) => id.clone(),
                 None => {
                     let n: i64 = tx.query_row(
                         "SELECT COALESCE(MAX(CAST(substr(id, 13) AS INTEGER)), 0) + 1 FROM tracks WHERE source = 0",
@@ -268,39 +299,99 @@ impl Db {
                     format!("local:track:{n}")
                 }
             };
-            tx.execute(
-                "INSERT INTO tracks(id, source, path, rel_path, title, artist, artist_id, album, album_id,
-                    track_no, disc_no, year, duration_ms, quality, rg_gain, rg_peak, art, mtime, size, added_at, downloaded)
-                 VALUES(?1, 0, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
-                 ON CONFLICT(id) DO UPDATE SET rel_path=excluded.rel_path, title=excluded.title, artist=excluded.artist,
-                    artist_id=excluded.artist_id, album=excluded.album, album_id=excluded.album_id,
-                    track_no=excluded.track_no, disc_no=excluded.disc_no, year=excluded.year,
-                    duration_ms=excluded.duration_ms, quality=excluded.quality, rg_gain=excluded.rg_gain,
-                    rg_peak=excluded.rg_peak, art=excluded.art, mtime=excluded.mtime, size=excluded.size,
-                    downloaded=excluded.downloaded",
-                params![
-                    id, t.path, t.rel_path, t.title, t.artist, artist_id, t.album, album_id,
-                    t.track_no, t.disc_no, t.year, t.duration_ms, t.quality, t.rg_gain, t.rg_peak,
-                    t.art_key, t.mtime, t.size, now, downloaded as i64
-                ],
-            )?;
-            tx.execute(
-                "INSERT INTO albums(id, source, title, artist, artist_id, year, art, added_at, saved)
-                 VALUES(?1, 0, ?2, ?3, ?4, ?5, ?6, ?7, 1)
-                 ON CONFLICT(id) DO UPDATE SET year = COALESCE(excluded.year, albums.year),
-                    art = COALESCE(albums.art, excluded.art)",
-                params![album_id, t.album, artist_name, album_artist_id, t.year, t.art_key, now],
-            )?;
-            for (aid, name) in [(&artist_id, &primary), (&album_artist_id, artist_name)] {
-                tx.execute(
-                    "INSERT INTO artists(id, source, name, art, saved) VALUES(?1, 0, ?2, ?3, 1)
-                     ON CONFLICT(id) DO UPDATE SET art = COALESCE(artists.art, excluded.art)",
-                    params![aid, name, t.art_key],
-                )?;
+            Self::write_track(&tx, &id, t, Some(&t.path), false, downloaded, now)?;
+            // A changed file has a new hash, to work out and upload again.
+            if existing.is_some_and(|(_, m, z)| m != Some(t.mtime) || z != Some(t.size)) {
+                tx.execute("UPDATE tracks SET hash = NULL, uploaded = 0 WHERE id = ?1", [&id])?;
             }
+            // A song from the node that's now a file here too: the file wins.
+            tx.execute("DELETE FROM tracks WHERE remote = 1 AND hash = (SELECT hash FROM tracks WHERE id = ?1)", [&id])?;
         }
         Self::prune_local(&tx)?;
         tx.commit()?;
+        Ok(())
+    }
+
+    /// Songs from the node (aza sync data), by SHA-256. One that's also a file on this device
+    /// is left out: the file is the same song.
+    pub fn upsert_remote(&self, songs: &[(String, LocalTrack)], downloaded: &dyn Fn(&str, &str) -> bool) -> anyhow::Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let now = now();
+        for (hash, t) in songs {
+            let own: i64 = tx.query_row("SELECT COUNT(*) FROM tracks WHERE remote = 0 AND hash = ?1", [hash], |r| r.get(0))?;
+            if own > 0 {
+                continue;
+            }
+            let id = remote_id(hash);
+            Self::write_track(&tx, &id, t, None, true, downloaded(hash, &t.rel_path), now)?;
+            tx.execute("UPDATE tracks SET hash = ?2 WHERE id = ?1", params![id, hash])?;
+        }
+        Self::prune_local(&tx)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn remove_remote(&self, hashes: &[String]) -> anyhow::Result<()> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        for h in hashes {
+            tx.execute("DELETE FROM tracks WHERE remote = 1 AND hash = ?1", [h])?;
+        }
+        Self::prune_local(&tx)?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    fn write_track(
+        tx: &rusqlite::Transaction,
+        id: &str,
+        t: &LocalTrack,
+        path: Option<&str>,
+        remote: bool,
+        downloaded: bool,
+        now: i64,
+    ) -> anyhow::Result<()> {
+        // Group by the main credited artist so features and collaborations
+        // don't split albums or artists.
+        let owner = (!t.album_artist.is_empty()).then(|| crate::scan::primary_artist(&t.album_artist));
+        let primary = crate::scan::credited_artist(&t.artist, owner.as_deref());
+        let album_artist = owner.unwrap_or_else(|| primary.clone());
+        let artist_name = &album_artist;
+        let key = crate::scan::artist_key;
+        let album_id = format!("local:album:{}", hash_id(&[&key(artist_name), &t.album]));
+        let artist_id = format!("local:artist:{}", hash_id(&[&key(&primary)]));
+        let album_artist_id = format!("local:artist:{}", hash_id(&[&key(artist_name)]));
+        tx.execute(
+            "INSERT INTO tracks(id, source, path, rel_path, title, artist, artist_id, album, album_id,
+                track_no, disc_no, year, duration_ms, quality, rg_gain, rg_peak, art, mtime, size, added_at, downloaded, remote)
+             VALUES(?1, 0, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)
+             ON CONFLICT(id) DO UPDATE SET rel_path=excluded.rel_path, title=excluded.title, artist=excluded.artist,
+                artist_id=excluded.artist_id, album=excluded.album, album_id=excluded.album_id,
+                track_no=excluded.track_no, disc_no=excluded.disc_no, year=excluded.year,
+                duration_ms=excluded.duration_ms, quality=excluded.quality, rg_gain=excluded.rg_gain,
+                rg_peak=excluded.rg_peak, art=COALESCE(excluded.art, tracks.art), mtime=excluded.mtime, size=excluded.size,
+                downloaded=excluded.downloaded",
+            params![
+                id, path, t.rel_path, t.title, t.artist, artist_id, t.album, album_id,
+                t.track_no, t.disc_no, t.year, t.duration_ms, t.quality, t.rg_gain, t.rg_peak,
+                t.art_key, t.mtime, t.size, now, downloaded as i64, remote as i64
+            ],
+        )?;
+        tx.execute(
+            "INSERT INTO albums(id, source, title, artist, artist_id, year, art, added_at, saved)
+             VALUES(?1, 0, ?2, ?3, ?4, ?5, ?6, ?7, 1)
+             ON CONFLICT(id) DO UPDATE SET year = COALESCE(excluded.year, albums.year),
+                art = COALESCE(albums.art, excluded.art)",
+            params![album_id, t.album, artist_name, album_artist_id, t.year, t.art_key, now],
+        )?;
+        for (aid, name) in [(&artist_id, &primary), (&album_artist_id, artist_name)] {
+            tx.execute(
+                "INSERT INTO artists(id, source, name, art, saved) VALUES(?1, 0, ?2, ?3, 1)
+                 ON CONFLICT(id) DO UPDATE SET art = COALESCE(artists.art, excluded.art)",
+                params![aid, name, t.art_key],
+            )?;
+        }
         Ok(())
     }
 
@@ -364,27 +455,192 @@ impl Db {
         Ok(())
     }
 
-    pub fn local_path(&self, track_id: &str) -> Option<(String, Option<f32>, Option<f32>)> {
+    /// Where a local song's audio is: a file on this device, or a file on the node.
+    pub fn local_source(&self, track_id: &str) -> Option<LocalSource> {
         self.conn
             .lock()
-            .query_row("SELECT path, rg_gain, rg_peak FROM tracks WHERE id = ?1", [track_id], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+            .query_row(
+                "SELECT path, rg_gain, rg_peak, remote, hash, rel_path, size FROM tracks WHERE id = ?1",
+                [track_id],
+                |r| {
+                    let (gain, peak) = (r.get(1)?, r.get(2)?);
+                    Ok(if r.get::<_, i64>(3)? != 0 {
+                        LocalSource::Remote {
+                            hash: r.get(4)?,
+                            rel_path: r.get::<_, Option<String>>(5)?.unwrap_or_default(),
+                            size: r.get::<_, Option<i64>>(6)?.unwrap_or(0).max(0) as u64,
+                            gain,
+                            peak,
+                        }
+                    } else {
+                        LocalSource::File { path: r.get(0)?, gain, peak }
+                    })
+                },
+            )
+            .optional()
+            .ok()
+            .flatten()
+    }
+
+    // ---- the Stream node and aza sync ----------------------------------------------
+
+    /// This device's files without a hash yet: (id, path).
+    pub fn unhashed(&self) -> Vec<(String, String)> {
+        let conn = self.conn.lock();
+        let mut stmt = conn
+            .prepare("SELECT id, path FROM tracks WHERE source = 0 AND remote = 0 AND hash IS NULL AND path IS NOT NULL")
+            .unwrap();
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap().filter_map(Result::ok).collect()
+    }
+
+    pub fn set_hash(&self, id: &str, hash: &str) {
+        let conn = self.conn.lock();
+        let _ = conn.execute("UPDATE tracks SET hash = ?2, uploaded = 0 WHERE id = ?1", params![id, hash]);
+        let _ = conn.execute("DELETE FROM tracks WHERE remote = 1 AND hash = ?1", [hash]);
+    }
+
+    /// This device's files with a hash, smallest albums first so whole albums arrive early:
+    /// (id, path, hash, size, art key, uploaded).
+    pub fn own_files(&self) -> Vec<OwnFile> {
+        let conn = self.conn.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, path, hash, size, art, uploaded FROM tracks
+                 WHERE source = 0 AND remote = 0 AND hash IS NOT NULL AND path IS NOT NULL
+                 ORDER BY album_id, disc_no, track_no",
+            )
+            .unwrap();
+        stmt.query_map([], |r| {
+            Ok(OwnFile {
+                id: r.get(0)?,
+                path: r.get(1)?,
+                hash: r.get(2)?,
+                size: r.get::<_, Option<i64>>(3)?.unwrap_or(0).max(0) as u64,
+                art: r.get(4)?,
+                uploaded: r.get::<_, i64>(5)? != 0,
+            })
+        })
+        .unwrap()
+        .filter_map(Result::ok)
+        .collect()
+    }
+
+    pub fn set_uploaded(&self, id: &str) {
+        let _ = self.conn.lock().execute("UPDATE tracks SET uploaded = 1 WHERE id = ?1", [id]);
+    }
+
+    /// What an own, uploaded file's aza sync item says, for every one: (hash, track).
+    pub fn uploaded_songs(&self) -> Vec<(String, LocalTrack)> {
+        let conn = self.conn.lock();
+        let mut stmt = conn
+            .prepare(
+                "SELECT hash, rel_path, title, artist, album, track_no, disc_no, year, duration_ms, quality,
+                    rg_gain, rg_peak, art, size, mtime, path, (SELECT artist FROM albums WHERE id = tracks.album_id)
+                 FROM tracks WHERE source = 0 AND remote = 0 AND uploaded = 1 AND hash IS NOT NULL",
+            )
+            .unwrap();
+        stmt.query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                LocalTrack {
+                    rel_path: r.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                    title: r.get(2)?,
+                    artist: r.get(3)?,
+                    album_artist: r.get::<_, Option<String>>(16)?.unwrap_or_default(),
+                    album: r.get(4)?,
+                    track_no: r.get::<_, i64>(5)? as u32,
+                    disc_no: r.get::<_, i64>(6)? as u32,
+                    year: r.get::<_, Option<i64>>(7)?.map(|y| y as u32),
+                    duration_ms: r.get::<_, i64>(8)? as u32,
+                    quality: r.get(9)?,
+                    rg_gain: r.get(10)?,
+                    rg_peak: r.get(11)?,
+                    art_key: r.get(12)?,
+                    size: r.get::<_, Option<i64>>(13)?.unwrap_or(0),
+                    mtime: r.get::<_, Option<i64>>(14)?.unwrap_or(0),
+                    path: r.get(15)?,
+                },
+            ))
+        })
+        .unwrap()
+        .filter_map(Result::ok)
+        .collect()
+    }
+
+    /// Hashes of this device's files.
+    pub fn own_hashes(&self) -> std::collections::HashSet<String> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare("SELECT hash FROM tracks WHERE remote = 0 AND hash IS NOT NULL").unwrap();
+        stmt.query_map([], |r| r.get(0)).unwrap().filter_map(Result::ok).collect()
+    }
+
+    /// Songs from the node: (id, hash, rel_path, downloaded).
+    pub fn remote_songs(&self, ids: Option<&[String]>) -> Vec<(String, String, String, bool)> {
+        let conn = self.conn.lock();
+        let mut stmt = conn
+            .prepare("SELECT id, hash, COALESCE(rel_path, ''), downloaded FROM tracks WHERE remote = 1 AND hash IS NOT NULL")
+            .unwrap();
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get::<_, i64>(3)? != 0)))
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|(id, ..): &(String, String, String, bool)| ids.is_none_or(|ids| ids.contains(id)))
+            .collect()
+    }
+
+    /// Remote songs whose art hasn't arrived: (hash of the art, every track id using it).
+    pub fn set_art_for(&self, art_hash: &str, key: &str) {
+        let mut conn = self.conn.lock();
+        let Ok(tx) = conn.transaction() else { return };
+        let _ = tx.execute("UPDATE tracks SET art = ?2 WHERE remote = 1 AND art = ?1", params![format!("node:{art_hash}"), key]);
+        let _ = tx.execute(
+            "UPDATE albums SET art = ?2 WHERE source = 0 AND (art IS NULL OR art = ?1)",
+            params![format!("node:{art_hash}"), key],
+        );
+        let _ = tx.execute("UPDATE artists SET art = ?2 WHERE art = ?1", params![format!("node:{art_hash}"), key]);
+        let _ = tx.commit();
+    }
+
+    /// Art of songs from the node that's still only on the node.
+    pub fn missing_art(&self) -> Vec<String> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare("SELECT DISTINCT substr(art, 6) FROM tracks WHERE art LIKE 'node:%'").unwrap();
+        stmt.query_map([], |r| r.get(0)).unwrap().filter_map(Result::ok).collect()
+    }
+
+    pub fn sync_item(&self, name: &str) -> Option<(u64, bool, Option<Vec<u8>>)> {
+        self.conn
+            .lock()
+            .query_row("SELECT version, mine, data FROM sync_items WHERE name = ?1", [name], |r| {
+                Ok((r.get::<_, i64>(0)? as u64, r.get::<_, i64>(1)? != 0, r.get(2)?))
             })
             .optional()
             .ok()
             .flatten()
     }
 
-    /// Local files keyed by their path inside the music folder, for sync.
-    pub fn local_manifest(&self) -> Vec<(String, String, i64, i64)> {
+    pub fn set_sync_item(&self, name: &str, version: u64, mine: bool, data: Option<&[u8]>) {
+        let _ = self.conn.lock().execute(
+            "INSERT INTO sync_items(name, version, mine, data) VALUES(?1, ?2, ?3, ?4)
+             ON CONFLICT(name) DO UPDATE SET version = excluded.version, mine = excluded.mine, data = excluded.data",
+            params![name, version as i64, mine as i64, data],
+        );
+    }
+
+    /// Song items this device wrote and hasn't deleted: (name, version, data).
+    pub fn my_song_items(&self) -> Vec<(String, u64)> {
         let conn = self.conn.lock();
         let mut stmt = conn
-            .prepare("SELECT rel_path, path, size, mtime FROM tracks WHERE source = 0 AND rel_path IS NOT NULL")
+            .prepare("SELECT name, version FROM sync_items WHERE mine = 1 AND name LIKE 'songs/%' AND length(data) > 0")
             .unwrap();
-        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
-            .unwrap()
-            .filter_map(Result::ok)
-            .collect()
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u64))).unwrap().filter_map(Result::ok).collect()
+    }
+
+    /// Forgets every item, for a different aza account.
+    pub fn clear_sync(&self) {
+        let conn = self.conn.lock();
+        let _ = conn.execute("DELETE FROM sync_items", []);
+        let _ = conn.execute("DELETE FROM tracks WHERE remote = 1", []);
+        let _ = conn.execute("UPDATE tracks SET uploaded = 0", []);
     }
 
     /// `spotify:local:artist:album:title:duration` → our local track.
@@ -580,11 +836,12 @@ impl Db {
             quality: r.get(11)?,
             liked: liked != 0 || saved != 0,
             downloaded: r.get::<_, i64>(14)? != 0,
+            remote: r.get::<_, i64>(16)? != 0,
         })
     }
 
     const TRACK_COLS: &'static str =
-        "t.id, t.source, t.title, t.artist, t.artist_id, t.album, t.album_id, t.art, t.duration_ms, t.track_no, t.disc_no, t.quality, t.liked, t.saved, t.downloaded, t.artists";
+        "t.id, t.source, t.title, t.artist, t.artist_id, t.album, t.album_id, t.art, t.duration_ms, t.track_no, t.disc_no, t.quality, t.liked, t.saved, t.downloaded, t.artists, t.remote";
 
     pub fn track(&self, id: &str) -> Option<Track> {
         let conn = self.conn.lock();
@@ -627,8 +884,8 @@ impl Db {
         let conn = self.conn.lock();
         conn.query_row(
             "SELECT id, source, title, artist, art, year, saved,
-                (SELECT COUNT(*) FROM tracks WHERE album_id = albums.id) AS n,
-                (SELECT COUNT(*) FROM tracks WHERE album_id = albums.id AND downloaded = 1) AS d
+                (SELECT COUNT(*) FROM tracks WHERE album_id = albums.id AND (albums.source = 1 OR remote = 1)) AS n,
+                (SELECT COUNT(*) FROM tracks WHERE album_id = albums.id AND (albums.source = 1 OR remote = 1) AND downloaded = 1) AS d
              FROM albums WHERE id = ?1",
             [id],
             |r| {
@@ -745,22 +1002,23 @@ impl Db {
             ),
             LibrarySection::Albums => self.items(
                 "SELECT a.id, 'album', a.source, a.title, a.artist, a.art,
-                    (a.source = 0 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.downloaded = 1))
+                    (a.source = 0 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.remote = 1)
+                      AND NOT EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.remote = 1 AND t.downloaded = 0))
                  FROM albums a WHERE a.saved = 1 ORDER BY a.added_at DESC, a.title COLLATE NOCASE LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
             LibrarySection::Songs => self.items(
-                "SELECT id, 'track', source, title, artist, art, downloaded FROM tracks
+                "SELECT id, 'track', source, title, artist, art, (downloaded = 1 AND (source = 1 OR remote = 1)) FROM tracks
                  WHERE source = 0 OR saved = 1 ORDER BY title COLLATE NOCASE LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
             LibrarySection::Downloaded => self.items(
-                "SELECT id, 'track', source, title, artist, art, downloaded FROM tracks
+                "SELECT id, 'track', source, title, artist, art, (downloaded = 1 AND (source = 1 OR remote = 1)) FROM tracks
                  WHERE downloaded = 1 ORDER BY added_at DESC LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
             LibrarySection::LikedSongs => self.items(
-                "SELECT id, 'track', source, title, artist, art, downloaded FROM tracks
+                "SELECT id, 'track', source, title, artist, art, (downloaded = 1 AND (source = 1 OR remote = 1)) FROM tracks
                  WHERE saved = 1 OR liked = 1 ORDER BY added_at DESC LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),

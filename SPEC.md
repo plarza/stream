@@ -23,7 +23,7 @@ Rust core  (static lib, packed as StreamCore.xcframework)
   ├─ engine    decoding (symphonia / librespot), queue, gapless, crossfade, normalization
   ├─ lyrics    Spotify synced lyrics + embedded lyrics + LRCLIB, "best sync wins"
   ├─ scrobble  Last.fm (Spotify and local files), offline queue
-  └─ sync      Mac → iPhone file sync over the LAN (Bonjour + TCP)
+  └─ node      your own files on the Stream node, streamed or downloaded; aza sync items
   │  C ABI render callback (lock-free ring buffer)
   ▼
 AVAudioEngine (AVAudioSourceNode) → system output, Now Playing, AirPlay
@@ -69,8 +69,7 @@ Rules:
 - Mixed playlists live **on Spotify**, using `spotify:local:` entries that resolve to your files.
 - Made For You, Discover Weekly and Daily Mixes are tucked inside Library → Playlists.
 - **Offline (iPhone):** manual "Download" on an album or playlist. Uses librespot's encrypted
-  audio cache. Only Spotify downloads take space this way, since local files are already
-  synced.
+  audio cache for Spotify songs; songs from the Stream node are downloaded as their files.
 - Heart = Spotify Like (Liked Songs). Hearting a local track sets a local "liked" flag so it
   shows up in Liked Songs.
 
@@ -79,14 +78,34 @@ Rules:
 - **Mac:** watched folders (FSEvents), linked in place and never copied. Formats: FLAC, ALAC,
   AAC/M4A, MP3, Ogg Vorbis, Opus, WAV, AIFF. Tags read with `lofty`. Artwork comes from
   embedded images or `cover.jpg`/`folder.jpg`.
-- **iPhone:** gets *everything* over Wi-Fi from the Mac, with original files kept (no
-  transcode). Sync runs automatically whenever the iPhone app is open on the same network as
-  the Mac. The Mac advertises over Bonjour, and transfers are resumable and content-hashed.
+- **iPhone:** has no music folders. It plays the Mac's files from the Stream node (below):
+  streamed while they play, or downloaded from an album or playlist to play offline.
 - The library is **merged but not deduplicated**: Spotify and local versions show as separate
   items.
-- One **downloaded** badge (⬇) marks any track playable offline, whether it's a synced local
-  file or a Spotify download.
+- One **downloaded** badge (⬇) marks a song from the Stream node or Spotify that's downloaded
+  to this device.
 - Artist info comes from Spotify only. An artist that exists only locally gets a plain page.
+
+## aza sync and the Stream node
+
+Stream signs in with aza (app ID `stream.aza.network`, scopes `sign-in`, `read`, `write`). The
+iPhone approves in the aza app on the same phone; the Mac shows a QR code that the aza app scans.
+
+- **aza sync data** (encrypted on your aza home node): `settings` holds the Spotify client ID and
+  the Last.fm API key and sign-in, so you enter them once. Spotify's own sign-in stays per
+  device: its tokens rotate and are tied to the device that asked. `songs/<sha256>` is one item
+  per music file: its tags, path, size, ReplayGain and cover hash, written by the device that has
+  the file and written empty when the file goes.
+- **The Stream node** (`node/`, at `stream.aza.network` on azalab-0) stores the files themselves,
+  by SHA-256, one folder per aza identity, up to each identity's quota: 1 GB by default, 10 GB for
+  aiden. Stream signs in to it with its aza certificate and a signed challenge for a 90-day
+  token. Every device uploads its own music folders' files (and covers) the node doesn't have yet,
+  then writes their items. A file over the quota stays off the node and Profile says so.
+- **Playing a song from the node** streams it: the file arrives into the cache and plays as it
+  arrives, and the last 2 GB streamed stay cached. **Download** on an album or playlist keeps its
+  songs on the device. A device's own file always wins over the same song from the node.
+- Profile → Stream node shows the storage used, uploads in progress and how many songs came from
+  other devices.
 
 ## Playback
 
@@ -197,6 +216,7 @@ project.yml           XcodeGen project: Stream-iOS, Stream-macOS, StreamUITests-
 Shared/               SwiftUI views and app model used by both apps
 iOS/, macOS/          each app's entry point and platform extras
 core/                 Rust core (stream-core crate, UniFFI)
+node/                 the Stream node (stream-node crate), deployed from .forgejo/workflows/node.yml
 Generated/            StreamCore.xcframework + Swift bindings (built, not committed)
 tests/                Simulator UI tests and fixture music
 scripts/              build-core.sh, deploy.sh, test.sh, demo.py

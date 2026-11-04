@@ -1,4 +1,4 @@
-//! Stream core: library, Spotify, playback, lyrics, scrobbling and sync,
+//! Stream core: library, Spotify, playback, lyrics, scrobbling and the Stream node,
 //! exposed to Swift through UniFFI.
 
 uniffi::setup_scaffolding!();
@@ -8,12 +8,12 @@ mod db;
 mod lastfm;
 mod local;
 mod lyrics;
+mod node;
 mod player;
 mod queue;
 mod scan;
 mod signin;
 mod spotify;
-mod sync;
 mod types;
 
 use std::path::PathBuf;
@@ -29,6 +29,7 @@ use player::{Engine, EngineEvent};
 use spotify::api::{self, WebApi};
 use spotify::auth::{self, Tokens};
 use spotify::session::{self as sp_session, Playback};
+pub use node::{NodeStatus, SyncItem};
 pub use types::*;
 
 const SECRET_WEB_TOKENS: &str = "spotify.web";
@@ -46,6 +47,8 @@ pub trait CoreDelegate: Send + Sync {
     fn secret_get(&self, key: String) -> Option<String>;
     fn secret_set(&self, key: String, value: Option<String>);
     fn message(&self, text: String);
+    /// There are aza sync items to write (`sync_outgoing`).
+    fn sync_needed(&self);
 }
 
 #[derive(uniffi::Record)]
@@ -54,22 +57,13 @@ pub struct CoreConfig {
     pub data_dir: String,
     /// Caches: artwork, lyrics, Spotify audio.
     pub cache_dir: String,
-    /// iPhone: where synced music lives. Mac: unused (watched folders instead).
+    /// iPhone: where the old Wi-Fi sync put the Mac's files; any that are songs on the
+    /// Stream node become downloads. Mac: unused (watched folders instead).
     pub music_dir: Option<String>,
     pub is_phone: bool,
     /// UI tests only: a stand-in for Spotify's accounts service and Web API.
     pub spotify_accounts_url: Option<String>,
     pub spotify_api_url: Option<String>,
-}
-
-#[derive(uniffi::Record)]
-pub struct SyncStatus {
-    pub running: bool,
-    pub files_done: u32,
-    pub files_total: u32,
-    pub bytes_done: u64,
-    pub bytes_total: u64,
-    pub last_error: Option<String>,
 }
 
 #[derive(uniffi::Object)]
@@ -87,12 +81,10 @@ pub struct StreamCore {
     art_dir: PathBuf,
     lyrics_dir: PathBuf,
     audio_dir: PathBuf,
-    music_dir: Option<PathBuf>,
     folders: Mutex<Vec<PathBuf>>,
     scan_progress: Arc<scan::Progress>,
     scanning: Mutex<bool>,
-    sync_progress: Arc<sync::SyncProgress>,
-    sync_state: Mutex<(bool, Option<String>)>,
+    node: Arc<node::Node>,
     device_id: String,
     is_phone: bool,
     last_library_sync: Mutex<Option<std::time::Instant>>,
@@ -161,7 +153,19 @@ impl StreamCore {
                 core.on_engine(ev);
             }
         });
-        let engine = Engine::new(db.clone(), playback.clone(), notify);
+        let node = Arc::new(
+            node::Node::new(
+                http.clone(),
+                db.clone(),
+                art_dir.clone(),
+                &data,
+                &cache,
+                config.music_dir.clone().filter(|_| config.is_phone).map(PathBuf::from),
+                rt.handle().clone(),
+            )
+            .map_err(err)?,
+        );
+        let engine = Engine::new(db.clone(), node.clone(), playback.clone(), notify);
         engine.normalization.store(settings.normalization, Ordering::Relaxed);
 
         let core = Arc::new(StreamCore {
@@ -186,12 +190,10 @@ impl StreamCore {
             art_dir,
             lyrics_dir,
             audio_dir,
-            music_dir: config.music_dir.map(PathBuf::from),
             folders: Mutex::new(folders),
             scan_progress: Arc::new(scan::Progress { done: 0.into(), total: 0.into() }),
             scanning: Mutex::new(false),
-            sync_progress: Arc::new(sync::SyncProgress::new()),
-            sync_state: Mutex::new((false, None)),
+            node,
             device_id,
             is_phone: config.is_phone,
             last_library_sync: Mutex::new(None),
@@ -335,10 +337,8 @@ impl StreamCore {
         std::thread::Builder::new()
             .name("stream-scan".into())
             .spawn(move || {
-                let roots: Vec<PathBuf> = match &me.music_dir {
-                    Some(d) if me.is_phone => vec![d.clone()],
-                    _ => me.folders.lock().clone(),
-                };
+                // The iPhone has no music folders (but UI tests' fixtures): its songs come from the Stream node.
+                let roots: Vec<PathBuf> = me.folders.lock().clone();
                 let changed = scan::scan(&me.db, &roots, &me.art_dir, true, &me.scan_progress).unwrap_or_else(|e| {
                     me.delegate.message(format!("Scanning failed: {e:#}"));
                     false
@@ -347,6 +347,7 @@ impl StreamCore {
                 if changed {
                     me.delegate.library_changed();
                 }
+                me.clone().upload_now();
             })
             .ok();
     }
@@ -675,75 +676,120 @@ impl StreamCore {
         Ok(())
     }
 
-    // ---- sync --------------------------------------------------------------
+    // ---- the Stream node and aza sync --------------------------------------------
 
-    /// Mac: serve the local library to iPhones on the network.
-    pub fn start_sync_server(&self) -> u16 {
-        let db = self.db.clone();
-        self.rt.spawn(async move {
-            if let Err(e) = sync::serve(db).await {
-                log::warn!("sync server stopped: {e:#}");
-            }
-        });
-        sync::PORT
-    }
-
-    /// iPhone: mirror the Mac at `base_url`.
-    pub async fn sync_from(self: Arc<Self>, base_url: String) -> Result<(), CoreError> {
-        let root = self.music_dir.clone().ok_or_else(|| err("no music folder"))?;
-        {
-            let mut s = self.sync_state.lock();
-            if s.0 {
-                return Ok(());
-            }
-            *s = (true, None);
+    /// Signed in to the Stream node as `identity`. A different aza account than before starts
+    /// the synced library afresh.
+    pub fn node_connect(self: Arc<Self>, url: String, token: String, identity: String) {
+        if self.db.get_kv("aza_identity").as_deref() != Some(identity.as_str()) {
+            self.db.clear_sync();
+            self.db.set_kv("aza_identity", &identity);
+            self.delegate.library_changed();
         }
+        self.node.connect(url, token);
+        self.clone().upload_now();
         let me = self.clone();
-        let result = self
-            .rt
-            .spawn(async move { sync::pull(&me.http, &base_url, &root, &me.sync_progress).await })
-            .await
-            .map_err(err)?;
-        let changed = match &result {
-            Ok(c) => *c,
-            Err(_) => false,
-        };
-        *self.sync_state.lock() = (false, result.as_ref().err().map(|e| format!("{e:#}")));
-        if changed {
-            self.clone().rescan();
-        }
-        result.map(|_| ()).map_err(err)
+        self.rt.spawn(async move { me.fetch_art().await });
     }
 
-    pub fn sync_status(&self) -> SyncStatus {
-        let s = self.sync_state.lock();
-        SyncStatus {
-            running: s.0,
-            files_done: self.sync_progress.files_done.load(Ordering::Relaxed),
-            files_total: self.sync_progress.files_total.load(Ordering::Relaxed),
-            bytes_done: self.sync_progress.bytes_done.load(Ordering::Relaxed),
-            bytes_total: self.sync_progress.bytes_total.load(Ordering::Relaxed),
-            last_error: s.1.clone(),
+    /// Signed out of aza: songs from the node go, this device's own files stay.
+    pub fn node_disconnect(&self) {
+        self.node.disconnect();
+        self.db.clear_sync();
+        self.db.set_kv("aza_identity", "");
+        self.delegate.library_changed();
+    }
+
+    pub fn node_status(&self) -> NodeStatus {
+        self.node.status()
+    }
+
+    /// Uploads this device's files the node doesn't have yet, in the background.
+    pub fn upload_now(self: Arc<Self>) {
+        let me = self.clone();
+        let ready: Arc<dyn Fn() + Send + Sync> = Arc::new(move || me.delegate.sync_needed());
+        let node = self.node.clone();
+        self.rt.spawn(async move { node.upload(ready).await });
+    }
+
+    /// Items read from aza sync data, newest version of each.
+    pub fn sync_apply(self: Arc<Self>, items: Vec<SyncItem>) {
+        for item in items.iter().filter(|i| i.name == "settings") {
+            self.apply_settings_item(item);
+        }
+        if self.node.apply_songs(&items) {
+            self.delegate.library_changed();
+            let me = self.clone();
+            self.rt.spawn(async move { me.fetch_art().await });
         }
     }
 
-    // ---- Spotify downloads (iPhone) ----------------------------------------
+    /// Items to write: each one's version is one more than the last read or written.
+    pub fn sync_outgoing(&self) -> Vec<SyncItem> {
+        let mut out = Vec::new();
+        let current = serde_json::to_vec(&self.synced_settings()).unwrap_or_default();
+        let known = self.db.sync_item("settings");
+        let synced = known.as_ref().and_then(|(_, _, d)| d.clone());
+        if synced.as_deref() != Some(current.as_slice()) && self.synced_settings() != SyncedSettings::default() {
+            out.push(SyncItem { name: "settings".into(), version: known.map_or(0, |(v, ..)| v) + 1, data: current });
+        }
+        out.extend(self.node.outgoing_songs());
+        out
+    }
 
-    /// Keeps a Spotify album/playlist playable offline: fetches each song's
-    /// audio into librespot's cache.
+    /// An item `sync_outgoing` gave was written.
+    pub fn sync_written(&self, item: SyncItem) {
+        self.db.set_sync_item(&item.name, item.version, true, Some(&item.data));
+        if item.data.is_empty()
+            && let Some(hash) = item.name.strip_prefix("songs/")
+        {
+            let (node, hash) = (self.node.clone(), hash.to_string());
+            self.rt.spawn(async move {
+                if let Err(e) = node.delete(&hash).await {
+                    log::warn!("deleting {hash} from the Stream node: {e:#}");
+                }
+            });
+        }
+    }
+
+    // ---- downloads ------------------------------------------------------------------
+
+    /// Keeps an album or playlist playable offline: songs from the Stream node are downloaded,
+    /// and (iPhone) Spotify songs fetched into librespot's cache.
     pub async fn download(self: Arc<Self>, collection_id: String) -> Result<(), CoreError> {
         let c = self.clone().collection(collection_id.clone()).await?;
-        let pb = self.playback.read().clone().ok_or(CoreError::NotSignedIn)?;
-        let ids: Vec<String> = c.tracks.iter().filter(|t| t.source == Source::Spotify).map(|t| t.id.clone()).collect();
+        let ids: Vec<String> = c.tracks.iter().map(|t| t.id.clone()).collect();
+        let remote: Vec<(String, String, String)> = self
+            .db
+            .remote_songs(Some(&ids))
+            .into_iter()
+            .filter(|(.., downloaded)| !downloaded)
+            .map(|(id, hash, rel, _)| (id, hash, rel))
+            .collect();
+        let spotify: Vec<String> = c.tracks.iter().filter(|t| t.source == Source::Spotify).map(|t| t.id.clone()).collect();
+        let pb = self.playback.read().clone();
+        if pb.is_none() && !spotify.is_empty() && remote.is_empty() {
+            return Err(CoreError::NotSignedIn);
+        }
         let me = self.clone();
         self.rt
             .spawn(async move {
-                let mut done = Vec::new();
-                for id in &ids {
-                    if spotify::download::fetch(&pb.session, id).await.is_ok() {
-                        done.push(id.clone());
-                        me.db.set_downloaded(std::slice::from_ref(id), true);
-                        me.delegate.library_changed();
+                if !remote.is_empty() {
+                    let db = me.db.clone();
+                    let delegate = me.delegate.clone();
+                    me.node
+                        .download(remote, &move |id: &str| {
+                            db.set_downloaded(&[id.to_string()], true);
+                            delegate.library_changed();
+                        })
+                        .await?;
+                }
+                if let Some(pb) = pb {
+                    for id in &spotify {
+                        if spotify::download::fetch(&pb.session, id).await.is_ok() {
+                            me.db.set_downloaded(std::slice::from_ref(id), true);
+                            me.delegate.library_changed();
+                        }
                     }
                 }
                 Ok::<_, anyhow::Error>(())
@@ -751,6 +797,86 @@ impl StreamCore {
             .await
             .map_err(err)?
             .map_err(err)
+    }
+
+    /// Removes an album's or playlist's downloaded songs from the Stream node; they still stream.
+    pub async fn remove_download(self: Arc<Self>, collection_id: String) -> Result<(), CoreError> {
+        let c = self.clone().collection(collection_id).await?;
+        let ids: Vec<String> = c.tracks.iter().map(|t| t.id.clone()).collect();
+        let songs = self.db.remote_songs(Some(&ids));
+        for (_, hash, rel, _) in &songs {
+            self.node.remove_download(hash, rel);
+        }
+        self.db.set_downloaded(&songs.into_iter().map(|(id, ..)| id).collect::<Vec<_>>(), false);
+        self.delegate.library_changed();
+        Ok(())
+    }
+}
+
+/// The `settings` item: what you'd otherwise type in again on each device.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Default, Debug)]
+struct SyncedSettings {
+    #[serde(rename = "spotifyClientId", default, skip_serializing_if = "Option::is_none")]
+    spotify_client_id: Option<String>,
+    /// Your Last.fm API account: `{key, secret}`.
+    #[serde(rename = "lastfmApi", default, skip_serializing_if = "Option::is_none")]
+    lastfm_api: Option<serde_json::Value>,
+    /// The Last.fm sign-in: `{key, name}`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    lastfm: Option<serde_json::Value>,
+}
+
+impl StreamCore {
+    fn synced_settings(&self) -> SyncedSettings {
+        let json = |k: &str| self.delegate.secret_get(k.into()).and_then(|s| serde_json::from_str(&s).ok());
+        SyncedSettings {
+            spotify_client_id: self.db.get_kv("spotify_client_id").filter(|s| !s.is_empty()),
+            lastfm_api: json(SECRET_LASTFM_API),
+            lastfm: json(SECRET_LASTFM),
+        }
+    }
+
+    /// Takes the synced settings unless this device changed its own since the last sync, in
+    /// which case its own are written over them next. What the item leaves out stays as it is.
+    fn apply_settings_item(&self, item: &SyncItem) {
+        let known = self.db.sync_item("settings");
+        if known.as_ref().is_some_and(|(v, ..)| *v >= item.version) {
+            return;
+        }
+        let synced = known.as_ref().and_then(|(_, _, d)| d.clone());
+        let current = serde_json::to_vec(&self.synced_settings()).unwrap_or_default();
+        let dirty = synced.is_some() && synced.as_deref() != Some(current.as_slice());
+        if dirty {
+            self.db.set_sync_item("settings", item.version, false, synced.as_deref());
+            return;
+        }
+        let Ok(s) = serde_json::from_slice::<SyncedSettings>(&item.data) else { return };
+        if let Some(id) = &s.spotify_client_id
+            && self.db.get_kv("spotify_client_id").as_deref() != Some(id)
+        {
+            self.set_spotify_client_id(id.clone());
+        }
+        if let Some(api) = &s.lastfm_api
+            && let (Some(k), Some(sec)) = (api["key"].as_str(), api["secret"].as_str())
+            && self.synced_settings().lastfm_api.as_ref() != Some(api)
+        {
+            self.set_lastfm_api(k.into(), sec.into());
+        }
+        if let Some(session) = &s.lastfm
+            && self.synced_settings().lastfm.as_ref() != Some(session)
+        {
+            self.delegate.secret_set(SECRET_LASTFM.into(), Some(session.to_string()));
+            self.account.lock().lastfm_user = session["name"].as_str().map(str::to_string);
+            self.emit_account();
+        }
+        let now = serde_json::to_vec(&self.synced_settings()).unwrap_or_default();
+        self.db.set_sync_item("settings", item.version, false, Some(&now));
+    }
+
+    async fn fetch_art(self: Arc<Self>) {
+        let me = self.clone();
+        let changed: Arc<dyn Fn() + Send + Sync> = Arc::new(move || me.delegate.library_changed());
+        self.node.clone().fetch_art(changed).await;
     }
 }
 
@@ -1200,7 +1326,10 @@ impl StreamCore {
             return cached;
         }
         let embedded = if track.source == Source::Local {
-            self.db.local_path(&track.id).and_then(|(p, ..)| lyrics::embedded(std::path::Path::new(&p)))
+            match self.db.local_source(&track.id) {
+                Some(db::LocalSource::File { path, .. }) => lyrics::embedded(std::path::Path::new(&path)),
+                _ => None,
+            }
         } else {
             None
         };

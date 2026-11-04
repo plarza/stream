@@ -144,7 +144,7 @@ struct CollectionView: View {
                     }
                     if item.kind != .artist, let q = commonQuality(page.tracks) {
                         HStack(spacing: 4) {
-                            if page.tracks.allSatisfy(\.downloaded) { DownloadedBadge() }
+                            if page.tracks.allSatisfy({ $0.downloaded && ($0.source == .spotify || $0.remote) }) { DownloadedBadge() }
                             QualityChip(text: q)
                         }
                         .padding(.top, 4)
@@ -198,8 +198,33 @@ struct CollectionView: View {
             .buttonStyle(.pressable)
             .accessibilityLabel(pinned ? "Unpin" : "Pin")
             .accessibilityIdentifier("collection.pin")
+            if item.kind != .artist, let page, page.tracks.contains(where: \.remote) {
+                // Songs from the Stream node: download to play offline, or remove the download.
+                let all = page.tracks.filter(\.remote).allSatisfy(\.downloaded)
+                Button {
+                    Task {
+                        do {
+                            if all {
+                                try await model.core.removeDownload(collectionId: item.id)
+                                model.show("Removed download")
+                            } else {
+                                model.show("Downloading…")
+                                try await model.core.download(collectionId: item.id)
+                                model.show("Downloaded")
+                            }
+                            await load()
+                        } catch { model.show(error.localizedDescription) }
+                    }
+                } label: {
+                    Image(systemName: all ? "arrow.down.circle.fill" : "arrow.down.circle").font(.title3)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .buttonStyle(.pressable)
+                .accessibilityLabel(all ? "Remove download" : "Download")
+                .accessibilityIdentifier("collection.download")
+            }
             #if os(iOS)
-            if shown.source == .spotify, item.kind != .artist {
+            if shown.source == .spotify, item.kind != .artist, page?.tracks.contains(where: \.remote) != true {
                 Button {
                     Task {
                         model.show("Downloading…")

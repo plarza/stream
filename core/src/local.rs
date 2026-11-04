@@ -1,7 +1,5 @@
 //! Decoding local files with symphonia.
 
-use std::fs::File;
-use std::path::Path;
 use std::sync::OnceLock;
 
 use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
@@ -9,7 +7,7 @@ use symphonia::core::codecs::registry::CodecRegistry;
 use symphonia::core::errors::Error as SymError;
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, SeekMode, SeekTo, TrackType};
-use symphonia::core::io::MediaSourceStream;
+use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::units::Time;
 
@@ -33,11 +31,11 @@ pub struct OpenTrack {
     pub sample_rate: u32,
 }
 
-pub fn open(path: &Path) -> anyhow::Result<OpenTrack> {
-    let file = File::open(path)?;
-    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+/// `ext` is the file's extension, a hint for working out its format.
+pub fn open(source: Box<dyn MediaSource>, ext: Option<&str>) -> anyhow::Result<OpenTrack> {
+    let mss = MediaSourceStream::new(source, Default::default());
     let mut hint = Hint::new();
-    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+    if let Some(ext) = ext {
         hint.with_extension(ext);
     }
     let format = symphonia::default::get_probe().probe(&hint, mss, FormatOptions::default(), MetadataOptions::default())?;
@@ -58,16 +56,17 @@ pub enum Outcome {
     Cancelled,
 }
 
-/// Decodes `path` from `start_ms` into the output. Blocks until the song is
+/// Decodes a song from `start_ms` into the output. Blocks until the song is
 /// fully written or a jump cancels it.
 pub fn play(
-    path: &Path,
+    source: Box<dyn MediaSource>,
+    ext: Option<&str>,
     start_ms: u32,
     out: std::sync::Arc<Output>,
     generation: u64,
     gain: f32,
 ) -> anyhow::Result<Outcome> {
-    let mut t = open(path)?;
+    let mut t = open(source, ext)?;
     if start_ms > 0 {
         let _ = t.format.seek(
             SeekMode::Accurate,

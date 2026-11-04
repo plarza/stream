@@ -6,10 +6,10 @@
 
 <table>
 <tr><td><b>Platform</b></td><td>iPhone, iOS 27, and Mac, macOS 27</td></tr>
-<tr><td><b>Data</b></td><td>On your devices. The library index is SQLite in the app's container; Spotify credentials are in the Keychain, on this device only</td></tr>
-<tr><td><b>Network</b></td><td>Spotify, LRCLIB for lyrics, Last.fm if you sign in, the Mac and iPhone to each other over Wi-Fi, and your aza profile picture when signed in</td></tr>
+<tr><td><b>Data</b></td><td>On your devices. The library index is SQLite in the app's container; Spotify credentials are in the Keychain, on this device only. Signed in with aza, the Spotify client ID, Last.fm and the list of your own songs are aza sync data, and your music files are on the Stream node (<code>stream.aza.network</code>, on azalab-0)</td></tr>
+<tr><td><b>Network</b></td><td>Spotify, LRCLIB for lyrics, Last.fm if you sign in, and with aza your aza home node and the Stream node</td></tr>
 <tr><td><b>Account</b></td><td>Spotify Premium and your own Spotify developer app for Spotify. Local files need nothing. Sign in with aza is offered once, on first launch</td></tr>
-<tr><td><b>Permissions</b></td><td>Local Network, to copy your library from the Mac</td></tr>
+<tr><td><b>Permissions</b></td><td>None</td></tr>
 <tr><td><b>Install</b></td><td><code>scripts/deploy.sh</code> to this Mac and a connected iPhone, or TestFlight. Not for the App Store: it plays Spotify through librespot</td></tr>
 </table>
 
@@ -36,7 +36,7 @@
 
 - A floating glass sidebar and player over the page, and ⌘K to play or go to anything.
 - A menu bar mini player; closing the window keeps the music going there.
-- The iPhone copies the Mac's music folders over Wi-Fi.
+- The Mac's music folders go up to the Stream node; the iPhone streams them, or downloads an album or playlist to play offline. Signed in with aza, Spotify's client ID and Last.fm come along too.
 
 ### You
 
@@ -51,7 +51,7 @@
 | Loudness | One toggle, on by default: ReplayGain tags for files, Spotify's own normalization for Spotify |
 | Lyrics | Spotify's, the file's own tags and LRCLIB; the best sync wins (word over line over plain) and is cached |
 | Scrobbling | Spotify and local files alike: Spotify's own Last.fm link never hears of plays through librespot. A track counts past half or 4 minutes if it's over 30 seconds; scrobbles queue offline and go out 50 at a time |
-| Sync | The Mac advertises over Bonjour; the iPhone copies everything while open on the same Wi-Fi. Originals, never transcoded, resumable and checked by hash |
+| Sync | aza sync data: `settings`, and `songs/<sha256>` for each music file. The files are on the Stream node (`node/`), by hash, up to each aza identity's quota; they stream while they play and download on request. Originals, never transcoded, checked by hash |
 | Library | Spotify and local copies of the same song stay separate items |
 | Likes and toggles | Change on screen at once, and roll back if the core or Spotify refuses |
 
@@ -60,7 +60,8 @@
 | Where | Holds |
 |---|---|
 | `Application Support/network.aza.stream/library.sqlite` | The library: local files, Spotify's library, pins, recents |
-| `Caches/network.aza.stream/` | Artwork, lyrics, and Spotify downloads (encrypted by librespot) |
+| `Caches/network.aza.stream/` | Artwork, lyrics, Spotify downloads (encrypted by librespot), and the last 2 GB of songs streamed from the Stream node |
+| `Application Support/network.aza.stream/Downloads` | Songs from the Stream node you downloaded |
 | Keychain | Spotify and Last.fm credentials, this device only |
 | Mac music folders | Your files, read in place and never copied or changed |
 
@@ -68,8 +69,9 @@
 
 ```
 Shared/        SwiftUI for both apps: AppModel, views, audio output, Now Playing, artwork
-iOS/, macOS/   Each app's entry point and platform pieces (Wi-Fi sync client, menu bar)
-core/          The Rust core: Spotify (librespot), decoding, queue, SQLite library, lyrics, Last.fm, sync
+iOS/, macOS/   Each app's entry point and platform pieces (menu bar, folder watching)
+core/          The Rust core: Spotify (librespot), decoding, queue, SQLite library, lyrics, Last.fm, the Stream node
+node/          The Stream node, at stream.aza.network: your music files, behind an aza sign-in
 Generated/     StreamCore.xcframework and its UniFFI bindings, built by scripts/build-core.sh
 tests/         End-to-end UI tests, a fake Spotify, and a small fixture library
 scripts/       build-core, deploy, testflight, test, demo

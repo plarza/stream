@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use parking_lot::{Mutex, RwLock};
 
 use crate::audio::Output;
-use crate::db::Db;
+use crate::db::{Db, LocalSource};
 use crate::local::{self, Outcome};
 use crate::queue::{Queue, SavedQueue};
 use crate::spotify::session::Playback;
@@ -42,6 +42,7 @@ pub struct Engine {
     segments: Mutex<VecDeque<Segment>>,
     status: Mutex<PlaybackStatus>,
     db: Arc<Db>,
+    node: Arc<crate::node::Node>,
     pub spotify: Arc<RwLock<Option<Arc<Playback>>>>,
     notify: Arc<dyn Fn(EngineEvent) + Send + Sync>,
     feeder_done: AtomicU64,
@@ -61,13 +62,19 @@ const SAVED_QUEUE: &str = "queue";
 const SAVED_POSITION: &str = "queue.position";
 
 impl Engine {
-    pub fn new(db: Arc<Db>, spotify: Arc<RwLock<Option<Arc<Playback>>>>, notify: Arc<dyn Fn(EngineEvent) + Send + Sync>) -> Arc<Self> {
+    pub fn new(
+        db: Arc<Db>,
+        node: Arc<crate::node::Node>,
+        spotify: Arc<RwLock<Option<Arc<Playback>>>>,
+        notify: Arc<dyn Fn(EngineEvent) + Send + Sync>,
+    ) -> Arc<Self> {
         let engine = Arc::new(Self {
             out: Output::shared(),
             queue: Mutex::new(Queue::default()),
             segments: Mutex::new(VecDeque::new()),
             status: Mutex::new(PlaybackStatus::Stopped),
             db,
+            node,
             spotify,
             notify,
             feeder_done: AtomicU64::new(u64::MAX),
@@ -313,10 +320,20 @@ impl Engine {
                 start_ms: ms,
             });
             let result = match entry.track.source {
-                Source::Local => match self.db.local_path(&entry.track.id) {
-                    Some((path, rg, peak)) => {
-                        let gain = if self.normalization.load(Ordering::Relaxed) { local::replaygain(rg, peak) } else { 1.0 };
-                        local::play(std::path::Path::new(&path), ms, self.out.clone(), generation, gain)
+                Source::Local => match self.db.local_source(&entry.track.id) {
+                    Some(LocalSource::File { path, gain, peak }) => {
+                        let gain = if self.normalization.load(Ordering::Relaxed) { local::replaygain(gain, peak) } else { 1.0 };
+                        let path = std::path::Path::new(&path);
+                        std::fs::File::open(path).map_err(anyhow::Error::from).and_then(|f| {
+                            local::play(Box::new(f), path.extension().and_then(|e| e.to_str()), ms, self.out.clone(), generation, gain)
+                        })
+                    }
+                    Some(LocalSource::Remote { hash, rel_path, size, gain, peak }) => {
+                        let gain = if self.normalization.load(Ordering::Relaxed) { local::replaygain(gain, peak) } else { 1.0 };
+                        let ext = std::path::Path::new(&rel_path).extension().and_then(|e| e.to_str()).map(str::to_string);
+                        self.node
+                            .open(&hash, &rel_path, size)
+                            .and_then(|src| local::play(src, ext.as_deref(), ms, self.out.clone(), generation, gain))
                     }
                     None => Err(anyhow::anyhow!("the file for “{}” is missing", entry.track.title)),
                 },

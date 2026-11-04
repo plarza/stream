@@ -11,12 +11,13 @@ struct StreamApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .azaUI(name: "Stream", accent: "FF375F")
+                .azaUI(name: "Stream", accent: "FF375F", appID: StreamSync.appID, scopes: ["sign-in", "read", "write"])
                 .onContinueUserActivity("network.aza.stream.playing") { model.continueActivity($0) }
                 .onOpenURL { model.handle(url: $0) }
                 .onChange(of: phase) { _, p in
                     if p == .active {
-                        SyncClient.shared.syncNow()
+                        StreamSync.shared.start()
+                        StreamSync.shared.run()
                         model.core.rescan()
                         Task { try? await model.core.refreshSpotify(force: false) }
                     }

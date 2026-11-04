@@ -2,14 +2,15 @@ import StreamBindings
 import AzaUI
 import SwiftUI
 
-/// Your account, Spotify, music from the Mac, Last.fm, playback, then Appearance.
+/// Your account, Spotify, music folders (Mac), the Stream node, Last.fm, playback, then Appearance.
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
     @State private var clientId = ""
     @State private var lastfmKey = ""
     @State private var lastfmSecret = ""
     @State private var settings = Preferences(normalization: true, crossfadeSeconds: 0, autoplay: false, bitPerfect: false, scrobbling: true)
-    @State private var sync: SyncStatus?
+    @State private var node: NodeStatus?
+    @Environment(Account.self) private var aza
     @State private var refreshing = false
     #if os(macOS)
     @State private var folders: [String] = []
@@ -24,9 +25,8 @@ struct ProfileView: View {
                     spotify
                     #if os(macOS)
                     musicFolders
-                    #else
-                    syncSection
                     #endif
+                    nodeSection
                     lastfm
                     SettingsCard("Playback") {
                         Toggle("Normalize loudness", isOn: $settings.normalization)
@@ -64,14 +64,12 @@ struct ProfileView: View {
             folders = model.core.musicFolders()
             #endif
         }
-        #if os(iOS)
         .task {
             while !Task.isCancelled {
-                sync = model.core.syncStatus()
+                node = model.core.nodeStatus()
                 try? await Task.sleep(for: .seconds(1))
             }
         }
-        #endif
     }
 
     /// The same on iPhone and Mac: everything shown comes from the core's sign-in step.
@@ -212,24 +210,52 @@ struct ProfileView: View {
         }
     }
 
-    #if os(iOS)
-    private var syncSection: some View {
-        SettingsCard("Library from Mac") {
-            if let s = sync, s.running {
-                ProgressView(value: Double(s.bytesDone), total: Double(max(1, s.bytesTotal))) {
-                    Text("Copying \(s.filesDone) of \(s.filesTotal)")
-                } currentValueLabel: {
-                    Text("\(Format.bytes(s.bytesDone)) of \(Format.bytes(s.bytesTotal))")
+    /// Your own music on the Stream node: how much room it takes, what's still going up, and the
+    /// songs here from your other devices.
+    private var nodeSection: some View {
+        SettingsCard("Stream node") {
+            if aza.client == nil {
+                Text("Sign in with aza to keep your music on the Stream node and play it on all your devices.")
+                    .foregroundStyle(.secondary)
+            } else if let n = node, n.connected || n.quota > 0 {
+                if n.quota > 0 {
+                    ProgressView(value: Double(min(n.used, n.quota)), total: Double(n.quota)) {
+                        Text("Storage")
+                    } currentValueLabel: {
+                        Text("\(Format.bytes(n.used)) of \(Format.bytes(n.quota))").monospacedDigit()
+                    }
+                    .accessibilityIdentifier("node.storage")
                 }
+                if n.uploading {
+                    ProgressView(value: Double(n.bytesDone), total: Double(max(1, n.bytesTotal))) {
+                        Text("Uploading \(n.filesDone) of \(n.filesTotal)")
+                    } currentValueLabel: {
+                        Text("\(Format.bytes(n.bytesDone)) of \(Format.bytes(n.bytesTotal))").monospacedDigit()
+                    }
+                }
+                if n.songs > 0 {
+                    LabeledContent("From your other devices") {
+                        Text(n.downloaded > 0 ? "\(n.songs) songs, \(n.downloaded) downloaded" : "\(n.songs) songs")
+                            .monospacedDigit()
+                    }
+                }
+                if let p = n.problem { Text(p).font(.footnote).foregroundStyle(.red) }
+            } else if let p = node?.problem {
+                Text(p).font(.footnote).foregroundStyle(.red)
             } else {
-                Button("Sync now") { SyncClient.shared.syncNow() }
-                if let e = sync?.lastError { Text(e).font(.footnote).foregroundStyle(.red) }
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Connecting").foregroundStyle(.secondary)
+                }
             }
         } footer: {
-            Text("Your Mac’s music copies here automatically whenever Stream is open on the same Wi-Fi.")
+            #if os(macOS)
+            Text("Your music folders go up to the Stream node, so your iPhone can stream them or download albums and playlists to play offline.")
+            #else
+            Text("Songs from your Mac stream from the Stream node. Download an album or playlist to play it offline.")
+            #endif
         }
     }
-    #endif
 
     #if os(macOS)
     private var musicFolders: some View {

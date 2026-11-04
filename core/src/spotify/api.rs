@@ -182,6 +182,7 @@ pub fn row_to_track(r: &SpotifyTrackRow) -> Track {
         downloaded: false,
         liked: false,
         quality: "OGG 320".into(),
+        remote: false,
     }
 }
 

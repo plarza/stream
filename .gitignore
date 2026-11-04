@@ -8,3 +8,5 @@ macOS/Info.plist
 .DS_Store
 macOS/Stream.entitlements
 tests/fixtures/
+iOS/Stream.entitlements
+node/target/

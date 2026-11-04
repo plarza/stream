@@ -65,9 +65,8 @@ final class AppModel {
             caches = root.appendingPathComponent("cache")
         }
         #if os(iOS)
-        var musicDir: URL? = fm.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Music", isDirectory: true)
-        if Self.isTesting, let m = Self.argument("-musicFolder") { musicDir = URL(fileURLWithPath: m) }
-        try? fm.createDirectory(at: musicDir!, withIntermediateDirectories: true)
+        // Where the old Wi-Fi sync put the Mac's files; any that are songs on the Stream node become downloads.
+        let musicDir: URL? = Self.isTesting ? nil : fm.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Music", isDirectory: true)
         let isPhone = true
         #else
         let musicDir: URL? = nil
@@ -87,11 +86,10 @@ final class AppModel {
         bridge.model = self
         core.setVolume(volume: Float(volume))
         audio.meter.volume = Float(volume)
-        #if os(macOS)
+        // UI tests' fixture library, on both: the iPhone has no music folders of its own otherwise.
         if Self.isTesting, let m = Self.argument("-musicFolder") {
             core.setMusicFolders(folders: [m])
         }
-        #endif
         audio.onRateChange = { [weak self] rate in self?.core.setOutputRate(rate: rate) }
         audio.start()
         nowPlaying.attach(model: self)
@@ -427,5 +425,9 @@ final class CoreBridge: CoreDelegate, @unchecked Sendable {
 
     func message(text: String) {
         Task { @MainActor in self.model?.show(text) }
+    }
+
+    func syncNeeded() {
+        Task { @MainActor in StreamSync.shared.run() }
     }
 }

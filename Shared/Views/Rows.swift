@@ -23,7 +23,7 @@ struct TrackRow: View {
                 SongTitle(id: track.id, title: track.title)
                 if showArtist {
                     HStack(spacing: 4) {
-                        if track.downloaded && track.source == .spotify { DownloadedBadge() }
+                        if track.downloaded && (track.source == .spotify || track.remote) { DownloadedBadge() }
                         Text(track.artist).lineLimit(1)
                     }
                     .font(.subheadline)
@@ -31,7 +31,7 @@ struct TrackRow: View {
                 }
             }
             Spacer(minLength: 8)
-            if !showArtist && track.downloaded && track.source == .spotify { DownloadedBadge() }
+            if !showArtist && track.downloaded && (track.source == .spotify || track.remote) { DownloadedBadge() }
             if track.liked {
                 Image(systemName: "heart.fill").font(.caption).foregroundStyle(accent.opacity(0.9))
             }
@@ -87,7 +87,7 @@ struct ItemRow: View {
                 }
                 if showSubtitle && !item.subtitle.isEmpty {
                     HStack(spacing: 4) {
-                        if item.downloaded && item.source == .spotify { DownloadedBadge() }
+                        if item.downloaded { DownloadedBadge() }
                         Text(item.subtitle).lineLimit(1)
                     }
                     .font(.subheadline)

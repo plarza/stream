@@ -77,6 +77,9 @@ pub struct Track {
     pub liked: bool,
     /// "FLAC 24/96", "OGG 320", "AAC 256".
     pub quality: String,
+    /// A song from the Stream node rather than a file on this device.
+    #[serde(default)]
+    pub remote: bool,
 }
 
 impl Track {

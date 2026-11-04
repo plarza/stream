@@ -8,7 +8,7 @@ options:
 packages:
   AzaUI:
     url: https://github.com/plarza/ui
-    from: 0.1.1
+    from: 0.8.0
 settings:
   base:
     DEVELOPMENT_TEAM: H5A6B4L9W8
@@ -76,8 +76,6 @@ targets:
         UIApplicationSupportsIndirectInputEvents: true
         CADisableMinimumFrameDurationOnPhone: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
-        NSLocalNetworkUsageDescription: Stream copies your library from your Mac over Wi-Fi.
-        NSBonjourServices: [_streamsync._tcp]
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSUserActivityTypes: [network.aza.stream.playing]
@@ -85,6 +83,12 @@ targets:
           - CFBundleURLName: network.aza.stream
             CFBundleURLSchemes: [network-aza-stream]
         ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: iOS/Stream.entitlements
+      properties:
+        # aza sign-ins come back as universal links to stream.aza.network/aza.
+        com.apple.developer.associated-domains:
+          - applinks:stream.aza.network
   StreamUITests-iOS:
     type: bundle.ui-testing
     platform: iOS
@@ -136,8 +140,6 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.music
-        NSLocalNetworkUsageDescription: Stream shares your library with your iPhone over Wi-Fi.
-        NSBonjourServices: [_streamsync._tcp]
         NSUserActivityTypes: [network.aza.stream.playing]
         CFBundleURLTypes:
           - CFBundleURLName: network.aza.stream

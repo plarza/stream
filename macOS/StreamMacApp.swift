@@ -15,7 +15,7 @@ struct StreamMacApp: App {
             Zoomed(zoom: zoom) {
                 MacRootView(showPalette: $palette)
                     .environment(model)
-                    .azaUI(name: "Stream", accent: "FF375F")
+                    .azaUI(name: "Stream", accent: "FF375F", appID: StreamSync.appID, scopes: ["sign-in", "read", "write"])
             }
             .frame(minWidth: 900 * zoom, minHeight: 560 * zoom)
                 .onContinueUserActivity("network.aza.stream.playing") { model.continueActivity($0) }
@@ -56,12 +56,12 @@ struct StreamMacApp: App {
 
         Settings {
             ProfileView().environment(model).frame(width: 520, height: 640)
-                .azaUI(name: "Stream", accent: "FF375F", showsSignIn: false)
+                .azaUI(name: "Stream", accent: "FF375F", appID: StreamSync.appID, scopes: ["sign-in", "read", "write"], showsSignIn: false)
         }
 
         MenuBarExtra {
             MenuBarCard().environment(model)
-                .azaUI(name: "Stream", accent: "FF375F", showsSignIn: false)
+                .azaUI(name: "Stream", accent: "FF375F", appID: StreamSync.appID, scopes: ["sign-in", "read", "write"], showsSignIn: false)
         } label: {
             MenuBarLabel()
         }
@@ -119,22 +119,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             guard !AppModel.isTesting else { return }
             FolderWatcher.shared.watch(model.core.musicFolders())
-            SyncAdvertiser.shared.start(port: model.core.startSyncServer())
+            StreamSync.shared.start()
         }
-    }
-}
-
-/// Publishes the library server so iPhones on the network find it.
-@MainActor
-final class SyncAdvertiser: NSObject, NetServiceDelegate {
-    static let shared = SyncAdvertiser()
-    private var service: NetService?
-
-    func start(port: UInt16) {
-        let name = Host.current().localizedName ?? "Mac"
-        let s = NetService(domain: "local.", type: "_streamsync._tcp.", name: name, port: Int32(port))
-        s.publish()
-        service = s
     }
 }
 

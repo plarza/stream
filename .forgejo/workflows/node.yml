@@ -1,0 +1,30 @@
+name: Stream node
+
+# Runs on azalab-0 and builds the Stream node's image, which Flux deploys to stream.aza.network.
+
+on:
+  push:
+    branches: [main]
+    paths: [node/**, .forgejo/workflows/node.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: node-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: host
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and publish
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+        run: |
+          DOCKER_CONFIG="$(mktemp -d)"
+          export DOCKER_CONFIG
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          echo "$REGISTRY_TOKEN" | docker login git.aza.network --username aiden --password-stdin
+          image="git.aza.network/aza/stream-node:${GITHUB_REF_NAME}-${GITHUB_SHA::12}-${GITHUB_RUN_NUMBER}"
+          docker build --build-arg SOURCE_REV="$GITHUB_SHA" --tag "$image" node
+          docker push "$image"

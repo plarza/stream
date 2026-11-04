@@ -1,0 +1,23 @@
+[package]
+name = "stream-node"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+aza = { git = "https://github.com/plarza/protocol", rev = "0b18801addb5ab425e1d65cc31e49161aa145a1c" }
+anyhow = "1"
+axum = "0.8"
+base64 = "0.22"
+futures-util = "0.3"
+hex = "0.4"
+rand = "0.9"
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["full"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
