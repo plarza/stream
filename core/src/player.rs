@@ -498,6 +498,31 @@ impl Engine {
         }
     }
 
+    /// Autoplay's songs, after everything else. If the feeder already ran out on the last
+    /// song (still playing), it picks up with these.
+    pub fn append_autoplay(self: &Arc<Self>, tracks: Vec<Track>) {
+        if tracks.is_empty() {
+            return;
+        }
+        let first = {
+            let mut q = self.queue.lock();
+            let first = q.entries.len();
+            q.extend_autoplay(tracks);
+            first
+        };
+        let generation = self.out.generation();
+        if self.status() == PlaybackStatus::Playing
+            && self.feeder_done.compare_exchange(generation, u64::MAX, Ordering::AcqRel, Ordering::Acquire).is_ok()
+        {
+            let me = self.clone();
+            std::thread::Builder::new()
+                .name("stream-feeder".into())
+                .spawn(move || me.feed(generation, first, 0))
+                .expect("spawn feeder");
+        }
+        (self.notify)(EngineEvent::Changed);
+    }
+
     pub fn queue_changed(&self) {
         (self.notify)(EngineEvent::Changed);
     }

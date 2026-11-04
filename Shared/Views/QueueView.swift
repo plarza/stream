@@ -2,10 +2,11 @@ import StreamBindings
 import SwiftUI
 
 /// "Playing Next" (songs you queued) above "Continue from …" (the rest of the
-/// album or playlist). Drag to reorder, swipe to remove, tap to jump.
+/// album or playlist), then "Autoplay" (what Spotify plays once that runs out).
+/// Drag to reorder, swipe to remove, tap to jump.
 struct QueueView: View {
     @Environment(AppModel.self) private var model
-    @State private var snapshot = QueueSnapshot(upNext: [], context: [], contextTitle: nil)
+    @State private var snapshot = QueueSnapshot(upNext: [], context: [], autoplay: [], contextTitle: nil)
 
     var body: some View {
         List {
@@ -24,7 +25,7 @@ struct QueueView: View {
                 }
                 .sectionHeader()
                 ForEach(snapshot.upNext, id: \.key) { e in row(e) }
-                    .onMove { from, to in move(in: snapshot.upNext, from: from, to: to, end: snapshot.context.first?.key) }
+                    .onMove { from, to in move(in: snapshot.upNext, from: from, to: to, end: (snapshot.context.first ?? snapshot.autoplay.first)?.key) }
                     .onDelete { idx in idx.forEach { model.core.queueRemove(key: snapshot.upNext[$0].key) } }
             }
             if !snapshot.context.isEmpty {
@@ -32,10 +33,18 @@ struct QueueView: View {
                     .lineLimit(1)
                     .sectionHeader()
                 ForEach(snapshot.context, id: \.key) { e in row(e) }
-                    .onMove { from, to in move(in: snapshot.context, from: from, to: to, end: nil) }
+                    .onMove { from, to in move(in: snapshot.context, from: from, to: to, end: snapshot.autoplay.first?.key) }
                     .onDelete { idx in idx.forEach { model.core.queueRemove(key: snapshot.context[$0].key) } }
             }
-            if snapshot.upNext.isEmpty && snapshot.context.isEmpty {
+            if !snapshot.autoplay.isEmpty {
+                Text("Autoplay")
+                    .sectionHeader()
+                    .accessibilityIdentifier("queue.autoplay")
+                ForEach(snapshot.autoplay, id: \.key) { e in row(e) }
+                    .onMove { from, to in move(in: snapshot.autoplay, from: from, to: to, end: nil) }
+                    .onDelete { idx in idx.forEach { model.core.queueRemove(key: snapshot.autoplay[$0].key) } }
+            }
+            if snapshot.upNext.isEmpty && snapshot.context.isEmpty && snapshot.autoplay.isEmpty {
                 Text("Nothing up next").foregroundStyle(.white.opacity(0.5)).listRowBackground(Color.clear)
             }
         }

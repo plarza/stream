@@ -224,6 +224,8 @@ pub struct QueueSnapshot {
     pub up_next: Vec<QueueEntry>,
     /// The rest of the album or playlist.
     pub context: Vec<QueueEntry>,
+    /// Songs autoplay added once the album or playlist runs out.
+    pub autoplay: Vec<QueueEntry>,
     pub context_title: Option<String>,
 }
 
@@ -302,7 +304,7 @@ impl Default for Preferences {
         Self {
             normalization: true,
             crossfade_seconds: 0,
-            autoplay: false,
+            autoplay: true,
             bit_perfect: false,
             scrobbling: true,
         }

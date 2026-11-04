@@ -36,6 +36,64 @@ pub async fn fetch(session: &Session, uri: &str) -> Result<()> {
     Ok(())
 }
 
+/// What Spotify's own apps play when a context runs out: songs that follow on from it and
+/// from the songs just played, read over the streaming session.
+pub async fn autoplay(session: &Session, context_uri: &str, recent: &[String], db: &Db) -> Result<Vec<crate::types::Track>> {
+    use librespot_protocol::autoplay_context_request::AutoplayContextRequest;
+    let mut req = AutoplayContextRequest::new();
+    req.set_context_uri(context_uri.to_string());
+    req.recent_track_uri = recent.to_vec();
+    let spclient = session.spclient();
+    let ctx = spclient.get_autoplay_context(&req).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+    let mut uris: Vec<String> = Vec::new();
+    for page in &ctx.pages {
+        let mut tracks: Vec<String> = page.tracks.iter().map(|t| t.uri().to_string()).collect();
+        // A page can come as only a link to its songs.
+        if tracks.is_empty() && !page.page_url().is_empty() {
+            let url = page.page_url().trim_start_matches("hm://context-resolve/v1/");
+            if let Ok(more) = spclient.get_context(url).await {
+                tracks = more.pages.iter().flat_map(|p| p.tracks.iter().map(|t| t.uri().to_string())).collect();
+            }
+        }
+        uris.extend(tracks.into_iter().filter(|u| u.starts_with("spotify:track:")));
+        if uris.len() >= AUTOPLAY_SONGS {
+            break;
+        }
+    }
+    uris.retain(|u| !recent.contains(u));
+    uris.dedup();
+    uris.truncate(AUTOPLAY_SONGS);
+    let ids: Vec<SpotifyUri> = uris.iter().filter_map(|u| SpotifyUri::from_uri(u).ok()).collect();
+    let tracks: Vec<SessionTrack> = stream::iter(ids)
+        .map(|u| async move { SessionTrack::get(session, &u).await.ok() })
+        .buffered(16)
+        .filter_map(|t| async move { t })
+        .collect()
+        .await;
+    let rows: Vec<SpotifyTrackRow> = tracks.iter().map(row).collect();
+    db.upsert_spotify_tracks(&rows, None)?;
+    Ok(rows.iter().filter_map(|r| db.track(&r.id)).collect())
+}
+
+/// Songs asked for at a time.
+const AUTOPLAY_SONGS: usize = 25;
+
+fn row(t: &SessionTrack) -> SpotifyTrackRow {
+    SpotifyTrackRow {
+        id: t.id.to_uri().unwrap_or_default(),
+        title: t.name.clone(),
+        artist: t.artists.iter().map(|a| a.name.clone()).collect::<Vec<_>>().join(", "),
+        artist_id: t.artists.first().and_then(|a| a.id.to_uri().ok()),
+        artists: t.artists.iter().filter_map(|a| Some(crate::types::ArtistCredit { id: a.id.to_uri().ok()?, name: a.name.clone() })).collect(),
+        album: t.album.name.clone(),
+        album_id: t.album.id.to_uri().ok(),
+        art: cover_url(&t.album),
+        duration_ms: t.duration.max(0) as u32,
+        track_no: t.number.max(0) as u32,
+        disc_no: t.disc_number.max(0) as u32,
+    }
+}
+
 fn cover_url(album: &librespot_metadata::Album) -> Option<String> {
     let img = album.covers.iter().max_by_key(|i| i.width)?;
     Some(format!("{IMAGE_HOST}{}", img.id.to_base16().ok()?))
@@ -52,22 +110,7 @@ pub async fn session_playlist(session: &Session, id: &str, db: &Db) -> Result<Co
         .filter_map(|t| async move { t })
         .collect()
         .await;
-    let rows: Vec<SpotifyTrackRow> = tracks
-        .iter()
-        .map(|t| SpotifyTrackRow {
-            id: t.id.to_uri().unwrap_or_default(),
-            title: t.name.clone(),
-            artist: t.artists.iter().map(|a| a.name.clone()).collect::<Vec<_>>().join(", "),
-            artist_id: t.artists.first().and_then(|a| a.id.to_uri().ok()),
-            artists: t.artists.iter().filter_map(|a| Some(crate::types::ArtistCredit { id: a.id.to_uri().ok()?, name: a.name.clone() })).collect(),
-            album: t.album.name.clone(),
-            album_id: t.album.id.to_uri().ok(),
-            art: cover_url(&t.album),
-            duration_ms: t.duration.max(0) as u32,
-            track_no: t.number.max(0) as u32,
-            disc_no: t.disc_number.max(0) as u32,
-        })
-        .collect();
+    let rows: Vec<SpotifyTrackRow> = tracks.iter().map(row).collect();
     db.upsert_spotify_tracks(&rows, None)?;
     let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
     db.set_playlist_tracks(id, &ids, None);

@@ -80,6 +80,8 @@ pub struct StreamCore {
     lastfm: RwLock<Option<Arc<lastfm::LastFm>>>,
     account: Mutex<AccountState>,
     settings: Mutex<Preferences>,
+    /// The queue entry autoplay last looked for songs after.
+    autoplay_seed: Mutex<Option<u64>>,
     art_dir: PathBuf,
     lyrics_dir: PathBuf,
     audio_dir: PathBuf,
@@ -189,6 +191,7 @@ impl StreamCore {
                 sign_in: SignInStep::Idle,
             }),
             settings: Mutex::new(settings),
+            autoplay_seed: Mutex::new(None),
             art_dir,
             lyrics_dir,
             audio_dir,
@@ -1194,9 +1197,15 @@ impl StreamCore {
 struct SettingsJson {
     normalization: bool,
     crossfade_seconds: u32,
+    /// Its own key: `autoplay` was saved as `false` before there was a switch for it.
+    #[serde(rename = "autoplay_similar", default = "yes")]
     autoplay: bool,
     bit_perfect: bool,
     scrobbling: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 impl From<SettingsJson> for Preferences {
@@ -1239,7 +1248,10 @@ impl StreamCore {
                 self.delegate.player_changed(state);
             }
             EngineEvent::Played { track, started_at } => self.add_play(track, started_at),
-            EngineEvent::TrackStarted(t) => self.now_playing(t),
+            EngineEvent::TrackStarted(t) => {
+                self.autoplay_if_ending();
+                self.now_playing(t)
+            }
             EngineEvent::Heard { track, started_at } => self.scrobble(track, started_at),
             EngineEvent::Error(m) => self.delegate.message(m),
         }
@@ -1249,6 +1261,53 @@ impl StreamCore {
         let lf = self.lastfm.read().clone()?;
         let sk: serde_json::Value = serde_json::from_str(&self.delegate.secret_get(SECRET_LASTFM.into())?).ok()?;
         Some((lf, sk["key"].as_str()?.to_string()))
+    }
+
+    /// On the last song of the queue, with repeat off: asks Spotify what follows on from it
+    /// and adds that after it, as Spotify's own apps do.
+    fn autoplay_if_ending(&self) {
+        if !self.settings.lock().autoplay {
+            return;
+        }
+        let (context, recent, seed) = {
+            let q = self.engine.queue.lock();
+            if q.repeat != RepeatMode::Off || q.remaining() > 0 {
+                return;
+            }
+            let Some(cur) = q.current() else { return };
+            let seed = cur.key;
+            let recent: Vec<String> = q.entries[..=q.current]
+                .iter()
+                .rev()
+                .filter(|e| e.track.source == Source::Spotify)
+                .take(20)
+                .map(|e| e.track.id.clone())
+                .collect();
+            let context = q
+                .context_id
+                .clone()
+                .filter(|c| c.starts_with("spotify:") && !q.entries[q.current].autoplay)
+                .or_else(|| recent.first().cloned());
+            (context, recent, seed)
+        };
+        // Nothing from Spotify to go on (only your own files).
+        let Some(context) = context else { return };
+        if std::mem::replace(&mut *self.autoplay_seed.lock(), Some(seed)) == Some(seed) {
+            return;
+        }
+        let (engine, db, spotify) = (self.engine.clone(), self.db.clone(), self.engine.spotify.clone());
+        self.rt.spawn(async move {
+            let Some(pb) = spotify.read().clone() else { return };
+            match spotify::download::autoplay(&pb.session, &context, &recent, &db).await {
+                Ok(tracks) => {
+                    // Still on that song: the queue didn't move on to something else meanwhile.
+                    if engine.queue.lock().current().is_some_and(|e| e.key == seed) {
+                        engine.append_autoplay(tracks);
+                    }
+                }
+                Err(e) => log::warn!("autoplay after {context}: {e:#}"),
+            }
+        });
     }
 
     fn now_playing(&self, t: Track) {

@@ -8,7 +8,7 @@ struct ProfileView: View {
     @State private var clientId = ""
     @State private var lastfmKey = ""
     @State private var lastfmSecret = ""
-    @State private var settings = Preferences(normalization: true, crossfadeSeconds: 0, autoplay: false, bitPerfect: false, scrobbling: true)
+    @State private var settings = Preferences(normalization: true, crossfadeSeconds: 0, autoplay: true, bitPerfect: false, scrobbling: true)
     @State private var node: NodeStatus?
     @Environment(Account.self) private var aza
     @State private var refreshing = false
@@ -30,6 +30,8 @@ struct ProfileView: View {
                     lastfm
                     SettingsCard("Playback") {
                         Toggle("Normalize loudness", isOn: $settings.normalization)
+                        Toggle("Autoplay similar songs", isOn: $settings.autoplay)
+                            .accessibilityIdentifier("settings.autoplay")
                         Toggle("Scrobble to Last.fm", isOn: $settings.scrobbling)
                     }
                     .onChange(of: settings) { model.core.setSettings(s: settings) }

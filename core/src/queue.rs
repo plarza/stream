@@ -13,6 +13,8 @@ pub struct Entry {
     pub user: bool,
     /// Position in the unshuffled context.
     order: usize,
+    /// Added by autoplay when the context ran out.
+    pub autoplay: bool,
 }
 
 #[derive(Default)]
@@ -42,6 +44,9 @@ pub struct SavedQueue {
     repeat: RepeatMode,
     context_title: Option<String>,
     context_id: Option<String>,
+    /// Where in `entries` autoplay's songs are.
+    #[serde(default)]
+    autoplay: Vec<usize>,
 }
 
 /// Songs kept either side of the current one, so a huge playlist stays a small write.
@@ -58,6 +63,7 @@ impl Queue {
             repeat: self.repeat,
             context_title: self.context_title.clone(),
             context_id: self.context_id.clone(),
+            autoplay: self.entries[from..to].iter().enumerate().filter(|(_, e)| e.autoplay).map(|(i, _)| i).collect(),
         }
     }
 
@@ -65,9 +71,10 @@ impl Queue {
         self.entries = saved
             .entries
             .into_iter()
-            .map(|(track, user, order)| {
+            .enumerate()
+            .map(|(i, (track, user, order))| {
                 self.next_key += 1;
-                Entry { key: self.next_key, track, user, order }
+                Entry { key: self.next_key, track, user, order, autoplay: saved.autoplay.contains(&i) }
             })
             .collect();
         self.current = saved.current.min(self.entries.len().saturating_sub(1));
@@ -89,7 +96,7 @@ impl Queue {
             .enumerate()
             .map(|(order, track)| {
                 self.next_key += 1;
-                Entry { key: self.next_key, track, user: false, order }
+                Entry { key: self.next_key, track, user: false, order, autoplay: false }
             })
             .collect();
         self.current = start.min(self.entries.len().saturating_sub(1));
@@ -152,7 +159,7 @@ impl Queue {
         let at = (self.current + 1).min(self.entries.len());
         for (n, t) in tracks.into_iter().enumerate() {
             let key = self.key();
-            self.entries.insert(at + n, Entry { key, track: t, user: true, order: usize::MAX });
+            self.entries.insert(at + n, Entry { key, track: t, user: true, order: usize::MAX, autoplay: false });
         }
         self.version += 1;
     }
@@ -161,8 +168,23 @@ impl Queue {
         let mut at = if self.entries.is_empty() { 0 } else { self.user_block_end() };
         for t in tracks {
             let key = self.key();
-            self.entries.insert(at, Entry { key, track: t, user: true, order: usize::MAX });
+            self.entries.insert(at, Entry { key, track: t, user: true, order: usize::MAX, autoplay: false });
             at += 1;
+        }
+        self.version += 1;
+    }
+
+    /// Songs left to play after the current one, as things stand.
+    pub fn remaining(&self) -> usize {
+        self.entries.len().saturating_sub(self.current + 1)
+    }
+
+    /// Autoplay's songs, after everything else.
+    pub fn extend_autoplay(&mut self, tracks: Vec<Track>) {
+        let order = self.entries.iter().map(|e| e.order).filter(|o| *o != usize::MAX).max().map_or(0, |o| o + 1);
+        for (n, track) in tracks.into_iter().enumerate() {
+            let key = self.key();
+            self.entries.push(Entry { key, track, user: false, order: order + n, autoplay: true });
         }
         self.version += 1;
     }
@@ -223,6 +245,7 @@ impl Queue {
     pub fn snapshot(&self) -> QueueSnapshot {
         let mut up_next = Vec::new();
         let mut context = Vec::new();
+        let mut autoplay = Vec::new();
         let mut in_user = true;
         for e in self.entries.iter().skip(self.current + 1) {
             if in_user && e.user {
@@ -230,10 +253,11 @@ impl Queue {
                 continue;
             }
             in_user = false;
-            if context.len() < 300 {
-                context.push(QueueEntry { key: e.key, track: e.track.clone() });
+            let list = if e.autoplay { &mut autoplay } else { &mut context };
+            if list.len() < 300 {
+                list.push(QueueEntry { key: e.key, track: e.track.clone() });
             }
         }
-        QueueSnapshot { up_next, context, context_title: self.context_title.clone() }
+        QueueSnapshot { up_next, context, autoplay, context_title: self.context_title.clone() }
     }
 }
