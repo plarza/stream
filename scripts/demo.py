@@ -3,6 +3,7 @@
   python3 -I scripts/demo.py --screenshots                          docs/screenshots/*.png
   python3 -I scripts/demo.py --screenshots --cast NAME --out DIR    another cast, somewhere else
   python3 -I scripts/demo.py --screenshots --only lyrics,album      just those shots
+  python3 -I scripts/demo.py --screenshots --app-args "-key value"  with extra launch arguments
 
 Each shot is one launch: deep links set the screen up (pins, what's playing, the page,
 the lyric line), the app writes tmp/links-done when they're all done, and the shot is taken
@@ -264,7 +265,8 @@ def shoot(name, urls, out):
     done = os.path.join(simctl("get_app_container", SIM, BUNDLE, "data").stdout.strip(), "tmp", "links-done")
     if os.path.exists(done):
         os.remove(done)
-    args = ["-musicFolder", LIBRARY, "-uiTesting", "YES", "-signInAnswered", "YES"]
+    # --app-args "-key value …" goes to the app as well (e.g. to try a setting).
+    args = ["-musicFolder", LIBRARY, "-uiTesting", "YES", "-signInAnswered", "YES", *(arg("--app-args") or "").split()]
     for u in urls:
         args += ["-url", "network-aza-stream://" + u]
     simctl("launch", "--terminate-running-process", SIM, BUNDLE, *args, env={"SIMCTL_CHILD_SAMPLE_ACCOUNT": "1"})

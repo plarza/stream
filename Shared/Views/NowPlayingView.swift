@@ -21,7 +21,7 @@ struct NowPlayingView: View {
         GeometryReader { geo in
             ZStack {
                 ImmersiveBackground(url: track?.art, palette: model.accent)
-                if visualizer { NowPlayingVisualizer(url: track?.art) }
+                if visualizer { NowPlayingVisualizer(url: track?.art).transition(.opacity) }
                 VStack(spacing: 0) {
                     #if os(iOS)
                     Capsule().fill(.white.opacity(0.35)).frame(width: 38, height: 5).padding(.top, 8)
@@ -194,11 +194,33 @@ struct NowPlayingView: View {
                 .frame(width: NowPlayingMetrics.glyph * 2, height: NowPlayingMetrics.glyph * 2)
                 .frame(width: 64, height: 48)
             Spacer()
+            visualizerButton
+            Spacer()
             modeButton(.queue, symbol: "list.bullet").accessibilityLabel("Queue").accessibilityIdentifier("nowPlaying.queue")
         }
         .font(.system(size: NowPlayingMetrics.glyph, weight: .medium))
         .foregroundStyle(.white.opacity(0.7))
         .padding(.horizontal, 28)
+    }
+
+    /// Aurora on and off, right where you see it.
+    private var visualizerButton: some View {
+        Button {
+            Haptics.tap()
+            withAnimation(.smooth(duration: 0.5)) { visualizer.toggle() }
+        } label: {
+            Image(systemName: visualizer ? "waveform" : "waveform.slash")
+                .font(.system(size: NowPlayingMetrics.glyph, weight: .medium))
+                .foregroundStyle(visualizer ? AnyShapeStyle(accent) : AnyShapeStyle(.white.opacity(0.7)))
+                .contentTransition(.symbolEffect(.replace))
+                // The whole cell answers, not just the glyph.
+                .frame(width: 64, height: 48)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("Visualizer")
+        .accessibilityValue(visualizer ? "on" : "off")
+        .accessibilityIdentifier("nowPlaying.visualizer")
     }
 
     private func modeButton(_ mode: AppModel.NowPlayingMode, symbol: String) -> some View {
@@ -219,7 +241,7 @@ struct NowPlayingView: View {
 }
 
 enum NowPlayingMetrics {
-    /// Every secondary control (shuffle, repeat, lyrics, AirPlay, queue) draws at this size.
+    /// Every secondary control (shuffle, repeat, lyrics, AirPlay, visualizer, queue) draws at this size.
     static let glyph: CGFloat = 18
 }
 

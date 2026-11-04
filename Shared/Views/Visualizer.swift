@@ -211,6 +211,8 @@ struct NowPlayingVisualizer: View {
 private struct AuroraLayer: View {
     let f: AudioFrame
     let colors: CoverColors
+    /// How strongly the music moves and lights it, 0…1.
+    private let strength: Float = 0.75
 
     var body: some View {
         ZStack {
@@ -226,9 +228,9 @@ private struct AuroraLayer: View {
             for i in 0..<4 {
                 let k = Float(j * 4 + i)
                 var p = SIMD2(Float(i) / 3, Float(j) / 3)
-                let drift = SIMD2(sin(f.flow * 0.9 + k * 1.7), cos(f.flow * 0.7 + k * 2.3)) * 0.11
+                let drift = SIMD2(sin(f.flow * 0.9 + k * 1.7), cos(f.flow * 0.7 + k * 2.3)) * 0.15 * strength
                 let away = p - SIMD2(0.5, 0.42)
-                let push = away / max(simd_length(away), 0.01) * 0.05 * f.kick
+                let push = away / max(simd_length(away), 0.01) * 0.1 * strength * f.kick
                 // Edges stay on their edge so the mesh always fills the screen.
                 if i > 0 && i < 3 { p.x += drift.x + push.x }
                 if j > 0 && j < 3 { p.y += drift.y + push.y }
@@ -244,7 +246,7 @@ private struct AuroraLayer: View {
             // Rows climb the spectrum from the bottom; columns pick within the row.
             let band = min(AudioFrame.bands - 1, row * 12 + col * 3 + 1)
             let level = (f.spectrum[band] + f.spectrum[max(0, band - 1)] + f.spectrum[min(AudioFrame.bands - 1, band + 1)]) / 3
-            return Color(colors.grid[v], gain: 0.62 + 0.45 * level + 0.08 * f.kick)
+            return Color(colors.grid[v], gain: 0.62 + strength * (0.75 * level + 0.15 * f.kick))
         }
     }
 }

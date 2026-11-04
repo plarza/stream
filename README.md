@@ -22,7 +22,7 @@ Because it uses librespot, Stream isn't for the App Store. Install it with `scri
 - **One library.** Spotify and your own files side by side in Playlists, Artists, Albums, Songs, Uploads and Downloaded, with Made For You, Discover Weekly and the Daily Mixes in Playlists.
 - **Home** is a grid of pins above your recents. Long-press any album, song, artist or playlist to pin it.
 - **One search** across your library and Spotify, ranked together, with type chips and recent searches.
-- **Now Playing** is tinted from the album art and shows the format and quality, like FLAC 24/96 or OGG 320.
+- **Now Playing** is tinted from the album art and shows the format and quality, like FLAC 24/96 or OGG 320. Behind it, Aurora melts the cover's colours into a mesh that moves with the music; the waveform button beside AirPlay turns it off.
 - **Synced lyrics**, word by word where the source has it. Tap a line to seek.
 - **A queue** of Play Next and Play Later above the rest of the album or playlist.
 - **Artist pages** like Spotify's: header photo, top songs, every release with filter pills, bio, listeners and top cities.

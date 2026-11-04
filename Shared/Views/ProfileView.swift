@@ -6,7 +6,6 @@ import SwiftUI
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
     /// Aurora behind Now Playing; this device only.
-    @AppStorage("visualizer") private var visualizer = true
     @State private var clientId = ""
     @State private var lastfmKey = ""
     @State private var lastfmSecret = ""
@@ -34,7 +33,6 @@ struct ProfileView: View {
                         Toggle("Normalize loudness", isOn: $settings.normalization)
                         Toggle("Autoplay similar songs", isOn: $settings.autoplay)
                             .accessibilityIdentifier("settings.autoplay")
-                        Toggle("Visualizer", isOn: $visualizer)
                         Toggle("Scrobble to Last.fm", isOn: $settings.scrobbling)
                     }
                     .onChange(of: settings) { model.core.setSettings(s: settings) }

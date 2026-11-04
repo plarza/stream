@@ -392,7 +392,9 @@ final class AppModel {
             for u in urls { await perform(u) }
             // Let the last screen settle into place.
             try? await Task.sleep(for: .milliseconds(600))
-            if Self.isTesting { FileManager.default.createFile(atPath: done.path, contents: nil) }
+            // Where the song is, and when: recordings line their audio up with it.
+            let clock = "\(core.positionMs()) \(Int(Date().timeIntervalSince1970 * 1000))"
+            if Self.isTesting { FileManager.default.createFile(atPath: done.path, contents: Data(clock.utf8)) }
         }
     }
 

@@ -158,7 +158,7 @@ bottom accessory.
 
 | Screen | Choice |
 |---|---|
-| Now Playing | `01` **A Immersive**: blurred full-bleed art, big art, format/quality chip (e.g. FLAC 24/96, OGG 320) |
+| Now Playing | `01` **A Immersive**: blurred full-bleed art, big art, format/quality chip (e.g. FLAC 24/96, OGG 320). Behind it, Aurora: a 4×4 mesh of the cover's colours, each row lit by its part of the spectrum (bass at the bottom) and pushed outward on beats. The bottom row is Lyrics, AirPlay, Visualizer (waveform, accent when on, slashed when off; saved per device) and Queue |
 | Home | `02` **D Pinned grid + recents**, without the floating search pill. You can pin albums, songs, artists and playlists |
 | Library | Category list: Playlists, Podcasts, Artists, Albums, Songs, Liked Songs, Uploads, Downloaded, History |
 | Podcasts | Library → Podcasts: the shows you follow on Spotify as a grid. A show's page lists its episodes newest first with the date, description, length or time left, and Played. Play starts the newest episode you haven't finished; an episode resumes where you left it, and counts as played within 15 seconds of the end |
