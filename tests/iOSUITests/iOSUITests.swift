@@ -10,12 +10,19 @@ final class iOSUITests: StreamUITestCase {
 
     func testTabsAndLibrarySections() {
         app.tabBars.buttons["Library"].tap()
-        for s in ["Playlists", "Artists", "Albums", "Songs", "Liked Songs", "Downloaded"] {
+        for s in ["Playlists", "Artists", "Albums", "Songs", "Liked Songs", "Uploads", "Downloaded"] {
             wait(el("library.\(s)"))
         }
         el("library.Artists").tap()
         wait(el("row.Ada Field"))
         XCTAssertFalse(el("row.Ada Field feat. Juno").exists)
+        // Your own files are Uploads; they're already on this device, so not Downloaded.
+        app.navigationBars.buttons.firstMatch.tap()
+        wait(el("library.Uploads")).tap()
+        wait(el("row.Tunnel"))
+        app.navigationBars.buttons.firstMatch.tap()
+        wait(el("library.Downloaded")).tap()
+        wait(text("Nothing downloaded"))
     }
 
     func testPlayAlbumFromItsPage() {
@@ -102,11 +109,26 @@ final class iOSUITests: StreamUITestCase {
     func testSearchFindsSongs() {
         app.tabBars.buttons["Search"].tap()
         let field = wait(app.searchFields.firstMatch)
-        XCTAssertEqual(field.placeholderValue, "Search your library")
+        XCTAssertEqual(field.placeholderValue, "Search")
         field.tap()
         field.typeText("tunnel")
-        wait(el("result.Tunnel")).tap()
+        wait(el("result.Tunnel"))
+        // Signed out of Spotify: search says so rather than looking like Spotify found nothing.
+        wait(el("search.spotifyError"))
+        el("result.Tunnel").tap()
         waitLabel(el("mini.title"), "Tunnel")
+    }
+
+    func testHistoryShowsPlayedSongs() {
+        openAlbum("Night Drive")
+        wait(el("track.Tunnel")).tap()
+        waitLabel(el("mini.title"), "Tunnel")
+        // Past halfway through a song under 10 seconds, it counts as played.
+        app.tabBars.buttons["History"].tap()
+        wait(text("Today"), 10)
+        wait(el("history.Tunnel")).tap()
+        waitLabel(el("mini.title"), "Tunnel")
+        waitLabel(el("mini.playPause"), "Pause")
     }
 
     func testProfileOpens() {

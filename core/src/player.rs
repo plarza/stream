@@ -31,6 +31,8 @@ pub enum EngineEvent {
     Changed,
     /// The audible song switched (from, to).
     TrackStarted(Track),
+    /// A song got 10 seconds in (past half of one shorter than that): History counts it.
+    Played { track: Track, started_at: i64 },
     /// A song was listened to long enough to scrobble.
     Heard { track: Track, started_at: i64 },
     Error(String),
@@ -49,8 +51,9 @@ pub struct Engine {
     pub normalization: AtomicBool,
     /// Last audible segment, for change detection.
     audible: Mutex<Option<(u64, u64)>>,
-    /// Frames heard of the audible segment, and whether it was reported.
-    heard: Mutex<(u64, bool, i64)>,
+    /// Frames heard of the audible segment, whether it was scrobbled, when it started, and
+    /// whether History has it.
+    heard: Mutex<(u64, bool, i64, bool)>,
     /// Where playback stands when nothing is buffered (after a jump, at the end).
     idle_position: AtomicU64,
     /// Queue version last written to disk, and when the position last was.
@@ -80,7 +83,7 @@ impl Engine {
             feeder_done: AtomicU64::new(u64::MAX),
             normalization: AtomicBool::new(true),
             audible: Mutex::new(None),
-            heard: Mutex::new((0, false, 0)),
+            heard: Mutex::new((0, false, 0, false)),
             idle_position: AtomicU64::new(0),
             saved_version: AtomicU64::new(0),
             position_saved_at: Mutex::new(Instant::now()),
@@ -222,7 +225,7 @@ impl Engine {
                     }
                     q.current().map(|e| e.track.clone())
                 };
-                *self.heard.lock() = (0, false, crate::db::now());
+                *self.heard.lock() = (0, false, crate::db::now(), false);
                 // Old segments are no longer needed.
                 let mut segs = self.segments.lock();
                 while segs.len() > 1 && segs[0].start_frame < seg.start_frame {
@@ -239,6 +242,19 @@ impl Engine {
             let played = self.out.frames_played.load(Ordering::Acquire).saturating_sub(seg.start_frame);
             let mut h = self.heard.lock();
             h.0 = played;
+            if !h.3 {
+                let track = self.queue.lock().current().map(|e| e.track.clone());
+                let at = played * 1000 / rate + seg.start_ms as u64;
+                if let Some(track) = track
+                    && (if track.duration_ms < 10_000 { at * 2 > track.duration_ms as u64 } else { at >= 10_000 })
+                {
+                    h.3 = true;
+                    let ev = EngineEvent::Played { track, started_at: h.2 };
+                    drop(h);
+                    (self.notify)(ev);
+                    h = self.heard.lock();
+                }
+            }
             if !h.1 {
                 let q = self.queue.lock();
                 if let Some(e) = q.current() {
@@ -458,6 +474,21 @@ impl Engine {
             self.set_status(PlaybackStatus::Paused);
             self.idle_position.store(ms as u64, Ordering::Relaxed);
         }
+    }
+
+    /// Puts a song up paused at `ms`, as if the app had closed on it there.
+    pub fn cue(&self, track: Track, ms: u32) {
+        let (generation, _) = self.out.flush();
+        if let Some(sp) = self.spotify.read().clone() {
+            sp.stop();
+        }
+        self.segments.lock().clear();
+        *self.audible.lock() = None;
+        self.queue.lock().set_context(vec![track], 0, None, None, false);
+        self.idle_position.store(ms as u64, Ordering::Relaxed);
+        // Nothing is buffered, so Play starts the song afresh at that position.
+        self.feeder_done.store(generation, Ordering::Release);
+        self.set_status(PlaybackStatus::Paused);
     }
 
     pub fn jump_to(self: &Arc<Self>, key: u64) {

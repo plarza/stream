@@ -154,12 +154,26 @@ pub struct Home {
     pub recents: Vec<Item>,
 }
 
+/// A song in History: when it was played, and on which device ("iPhone", "Mac").
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct Play {
+    pub track: Track,
+    /// Unix seconds the song started.
+    pub played_at: i64,
+    pub device: String,
+    /// False for a file that's on neither this device nor the Stream node.
+    pub playable: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum LibrarySection {
     Playlists,
     Artists,
     Albums,
     Songs,
+    /// Your own music files, on the Stream node (and the Mac's folders).
+    Uploads,
+    /// On this device to play offline: downloaded Spotify songs and Uploads.
     Downloaded,
     LikedSongs,
 }

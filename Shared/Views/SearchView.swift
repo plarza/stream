@@ -25,6 +25,8 @@ final class SearchModel {
     var library: [Item] = []
     var spotify: [Item] = []
     var loading = false
+    /// Why Spotify gave nothing, when it failed rather than found nothing.
+    var spotifyError: String?
     private var task: Task<Void, Never>?
 
     /// Library hits first (instant), then Spotify's, without duplicates.
@@ -37,7 +39,7 @@ final class SearchModel {
         task?.cancel()
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else {
-            library = []; spotify = []; loading = false
+            library = []; spotify = []; loading = false; spotifyError = nil
             return
         }
         library = model.core.searchLibrary(query: q, filter: filter)
@@ -46,9 +48,15 @@ final class SearchModel {
             try? await Task.sleep(for: .milliseconds(220))
             guard !Task.isCancelled else { return }
             loading = true
-            let found = (try? await model.core.searchSpotify(query: q, filter: filter)) ?? []
+            var found: [Item] = []
+            var failure: String?
+            do { found = try await model.core.searchSpotify(query: q, filter: filter) } catch CoreError.NotSignedIn {
+                failure = "Connect Spotify to search it too"
+            } catch {
+                failure = AppModel.message(error)
+            }
             guard !Task.isCancelled else { return }
-            withAnimation(.smooth) { spotify = found; loading = false }
+            withAnimation(.smooth) { spotify = found; spotifyError = failure; loading = false }
         }
     }
 }
@@ -83,6 +91,8 @@ struct SearchResultsView: View {
                     }
                     if search.loading {
                         ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(.vertical, 12)
+                    } else if let e = search.spotifyError {
+                        spotifyFailure(e).padding(.horizontal, 10).padding(.vertical, 12)
                     }
                 }
             }
@@ -106,6 +116,8 @@ struct SearchResultsView: View {
                 }
                 if search.loading {
                     HStack { Spacer(); ProgressView(); Spacer() }.listRowSeparator(.hidden)
+                } else if let e = search.spotifyError {
+                    spotifyFailure(e).listRowSeparator(.hidden)
                 }
             }
         }
@@ -141,7 +153,7 @@ struct SearchResultsView: View {
     @ViewBuilder
     private var recentSection: some View {
         if recents.isEmpty {
-            ContentUnavailableView("Search your library", systemImage: "magnifyingglass")
+            ContentUnavailableView("Search Spotify and your Uploads", systemImage: "magnifyingglass")
                 .listRowSeparator(.hidden)
         } else {
             #if os(macOS)
@@ -184,6 +196,26 @@ struct SearchResultsView: View {
             }
             #endif
         }
+    }
+
+    /// Spotify's half of the results didn't come: say why, rather than looking like it found nothing.
+    private func spotifyFailure(_ message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.circle")
+            Text(message)
+            #if os(iOS)
+            if !model.account.spotifyWeb {
+                Spacer(minLength: 0)
+                Button("Connect") { model.showSettings = true }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.tint)
+            }
+            #endif
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("search.spotifyError")
     }
 
     private var clearButton: some View {

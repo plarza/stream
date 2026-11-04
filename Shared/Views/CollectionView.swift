@@ -144,7 +144,7 @@ struct CollectionView: View {
                     }
                     if item.kind != .artist, let q = commonQuality(page.tracks) {
                         HStack(spacing: 4) {
-                            if page.tracks.allSatisfy({ $0.downloaded && ($0.source == .spotify || $0.remote) }) { DownloadedBadge() }
+                            if page.tracks.allSatisfy({ $0.downloaded && $0.downloadable }) { DownloadedBadge() }
                             QualityChip(text: q)
                         }
                         .padding(.top, 4)
@@ -198,9 +198,9 @@ struct CollectionView: View {
             .buttonStyle(.pressable)
             .accessibilityLabel(pinned ? "Unpin" : "Pin")
             .accessibilityIdentifier("collection.pin")
-            if item.kind != .artist, let page, page.tracks.contains(where: \.remote) {
-                // Songs from the Stream node: download to play offline, or remove the download.
-                let all = page.tracks.filter(\.remote).allSatisfy(\.downloaded)
+            if item.kind != .artist, let page, page.tracks.contains(where: \.downloadable) {
+                // Spotify songs and Uploads: download to play offline, or remove the download.
+                let all = page.tracks.filter(\.downloadable).allSatisfy(\.downloaded)
                 Button {
                     Task {
                         do {
@@ -213,7 +213,7 @@ struct CollectionView: View {
                                 model.show("Downloaded")
                             }
                             await load()
-                        } catch { model.show(error.localizedDescription) }
+                        } catch { model.show(AppModel.message(error)) }
                     }
                 } label: {
                     Image(systemName: all ? "arrow.down.circle.fill" : "arrow.down.circle").font(.title3)
@@ -223,17 +223,6 @@ struct CollectionView: View {
                 .accessibilityLabel(all ? "Remove download" : "Download")
                 .accessibilityIdentifier("collection.download")
             }
-            #if os(iOS)
-            if shown.source == .spotify, item.kind != .artist, page?.tracks.contains(where: \.remote) != true {
-                Button {
-                    Task {
-                        model.show("Downloading…")
-                        do { try await model.core.download(collectionId: item.id) ; model.show("Downloaded") } catch { model.show(error.localizedDescription) }
-                    }
-                } label: { Image(systemName: "arrow.down.circle").font(.title3) }
-                    .buttonStyle(.pressable)
-            }
-            #endif
             Spacer()
             // In the page, not the toolbar: the Mac window has none to show it in.
             if item.kind == .playlist { sortMenu }

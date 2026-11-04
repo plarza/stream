@@ -20,6 +20,8 @@ final class AppModel {
     var home: Home = Home(pins: [], recents: [])
     /// Bumped whenever the library changes; views that page the library observe it.
     var libraryVersion = 0
+    /// Bumped whenever History gains a play, here or from another device.
+    var historyVersion = 0
     var toast: String?
     var showNowPlaying = false
     /// iPhone's Settings sheet (the account button, and prompts to connect Spotify).
@@ -260,6 +262,26 @@ final class AppModel {
         if isPinned(item.id) { core.unpin(id: item.id) } else { core.pin(item: item) }
     }
 
+    /// Downloads a song, album or playlist to play offline, or removes the download.
+    func setDownloaded(_ item: Item, _ on: Bool) {
+        Haptics.tap()
+        Task {
+            do {
+                switch (item.kind, on) {
+                case (.track, true):
+                    show("Downloading…")
+                    try await core.downloadSongs(trackIds: [item.id])
+                case (.track, false): core.removeDownloads(trackIds: [item.id])
+                case (_, true):
+                    show("Downloading…")
+                    try await core.download(collectionId: item.id)
+                case (_, false): try await core.removeDownload(collectionId: item.id)
+                }
+                show(on ? "Downloaded" : "Removed download")
+            } catch { show(Self.message(error)) }
+        }
+    }
+
     func playNext(_ tracks: [Track]) { Haptics.tap(); core.playNext(tracks: tracks); show("Playing next") }
     func playLater(_ tracks: [Track]) { Haptics.tap(); core.playLater(tracks: tracks); show("Added to queue") }
 
@@ -425,6 +447,10 @@ final class CoreBridge: CoreDelegate, @unchecked Sendable {
 
     func message(text: String) {
         Task { @MainActor in self.model?.show(text) }
+    }
+
+    func historyChanged() {
+        Task { @MainActor in self.model?.historyVersion &+= 1 }
     }
 
     func syncNeeded() {

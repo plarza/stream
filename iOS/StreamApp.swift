@@ -32,10 +32,11 @@ struct RootView: View {
     @State private var search = SearchModel()
     @State private var homePath = NavigationPath()
     @State private var libraryPath = NavigationPath()
+    @State private var historyPath = NavigationPath()
     @State private var searchPath = NavigationPath()
     @Namespace private var zoom
 
-    enum TabID: Hashable { case home, library, search }
+    enum TabID: Hashable { case home, library, history, search }
 
     var body: some View {
         @Bindable var model = model
@@ -56,6 +57,13 @@ struct RootView: View {
                         .destinations()
                 }
             }
+            Tab("History", systemImage: "clock.fill", value: .history) {
+                NavigationStack(path: $historyPath) {
+                    HistoryView()
+                        .profileButton { model.showSettings = true }
+                        .destinations()
+                }
+            }
             Tab(value: .search, role: .search) {
                 NavigationStack(path: $searchPath) {
                     SearchResultsView(search: search)
@@ -65,7 +73,7 @@ struct RootView: View {
                 }
                 // Always showing: by default it's a drawer under the title that scrolls
                 // away and comes back collapsed. (On the TabView it shows on every tab.)
-                .searchable(text: $search.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search your library")
+                .searchable(text: $search.query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search")
             }
         }
         // The playing bar stays full size while lists scroll.
@@ -96,6 +104,7 @@ struct RootView: View {
             search.query = ""
             homePath = NavigationPath()
             libraryPath = NavigationPath()
+            historyPath = NavigationPath()
             searchPath = NavigationPath()
             tab = .home
         }
@@ -109,6 +118,7 @@ struct RootView: View {
         switch tab {
         case .home: homePath.append(item)
         case .library: libraryPath.append(item)
+        case .history: historyPath.append(item)
         case .search: searchPath.append(item)
         }
     }

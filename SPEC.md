@@ -68,8 +68,9 @@ Rules:
   devices (device picker).
 - Mixed playlists live **on Spotify**, using `spotify:local:` entries that resolve to your files.
 - Made For You, Discover Weekly and Daily Mixes are tucked inside Library → Playlists.
-- **Offline (iPhone):** manual "Download" on an album or playlist. Uses librespot's encrypted
-  audio cache for Spotify songs; songs from the Stream node are downloaded as their files.
+- **Offline:** manual "Download" on a song, album or playlist (its page, or a long-press). Uses
+  librespot's encrypted audio cache for Spotify songs; Uploads are downloaded as their files.
+  Both land in Library → **Downloaded**.
 - Heart = Spotify Like (Liked Songs). Hearting a local track sets a local "liked" flag so it
   shows up in Liked Songs.
 
@@ -82,6 +83,10 @@ Rules:
   streamed while they play, or downloaded from an album or playlist to play offline.
 - The library is **merged but not deduplicated**: Spotify and local versions show as separate
   items.
+- **Uploads** (Library → Uploads) are your own music files, on the Stream node. They behave like
+  Spotify songs: they're in Songs, Albums, Artists and search, stream when played, and can be
+  downloaded. **Downloaded** is only what's on this device to play offline; the Mac's own
+  folders are Uploads, not downloads.
 - One **downloaded** badge (⬇) marks a song from the Stream node or Spotify that's downloaded
   to this device.
 - Artist info comes from Spotify only. An artist that exists only locally gets a plain page.
@@ -96,6 +101,12 @@ iPhone approves in the aza app on the same phone; the Mac shows a QR code that t
   device: its tokens rotate and are tied to the device that asked. `songs/<sha256>` is one item
   per music file: its tags, path, size, ReplayGain and cover hash, written by the device that has
   the file and written empty when the file goes.
+- **History** is synced as `history/<device>/<day>` items, one per device per UTC day, written only
+  by that device. A song counts once it's 10 seconds in (past halfway, for a song shorter than 10 seconds). Files are
+  matched across devices by their hash.
+- **What's playing** is the `playing` item: the song, its position, when that was, and whether it
+  was playing. Each device writes it when it changes song, plays, pauses or seeks. A device that
+  isn't playing takes up a newer one, paused where the other device is (or would be by now).
 - **The Stream node** (`node/`, at `stream.aza.network` on azalab-0) stores the files themselves,
   by SHA-256, one folder per aza identity, up to each identity's quota: 10 MB by default, 10 GB for
   aiden. Stream signs in to it with its aza certificate and a signed challenge for a 90-day
@@ -146,7 +157,8 @@ bottom accessory.
 |---|---|
 | Now Playing | `01` **A Immersive**: blurred full-bleed art, big art, format/quality chip (e.g. FLAC 24/96, OGG 320) |
 | Home | `02` **D Pinned grid + recents**, without the floating search pill. You can pin albums, songs, artists and playlists |
-| Library | Category list: Playlists, Artists, Albums, Songs, Downloaded |
+| Library | Category list: Playlists, Artists, Albums, Songs, Liked Songs, Uploads, Downloaded |
+| History | Every song played on any of your devices, newest first, by day, with the time and device |
 | Lyrics | `04` **A**: left-aligned, word fill on the active line, distance blur on the others, tap a line to seek |
 | Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, like, pin). Playlists sort from the toolbar (playlist order, title, artist, album, length, reversed), the same for every playlist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |
 | Queue | `06` **A** without the toggle row: "Playing Next" + "Continue from …" |

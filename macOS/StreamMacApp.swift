@@ -122,6 +122,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             StreamSync.shared.start()
         }
     }
+
+    /// Coming back to the Mac picks up what another device played meanwhile.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        MainActor.assumeIsolated { StreamSync.shared.run() }
+    }
 }
 
 /// Rescans when files change under the music folders (FSEvents, debounced).

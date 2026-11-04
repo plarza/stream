@@ -23,7 +23,7 @@ struct TrackRow: View {
                 SongTitle(id: track.id, title: track.title)
                 if showArtist {
                     HStack(spacing: 4) {
-                        if track.downloaded && (track.source == .spotify || track.remote) { DownloadedBadge() }
+                        if track.downloaded && track.downloadable { DownloadedBadge() }
                         Text(track.artist).lineLimit(1)
                     }
                     .font(.subheadline)
@@ -31,7 +31,7 @@ struct TrackRow: View {
                 }
             }
             Spacer(minLength: 8)
-            if !showArtist && track.downloaded && (track.source == .spotify || track.remote) { DownloadedBadge() }
+            if !showArtist && track.downloaded && track.downloadable { DownloadedBadge() }
             if track.liked {
                 Image(systemName: "heart.fill").font(.caption).foregroundStyle(accent.opacity(0.9))
             }
@@ -87,7 +87,8 @@ struct ItemRow: View {
                 }
                 if showSubtitle && !item.subtitle.isEmpty {
                     HStack(spacing: 4) {
-                        if item.downloaded { DownloadedBadge() }
+                        // A device's own file is "downloaded" in the core, but it's no download.
+                        if item.downloaded && song?.downloadable != false { DownloadedBadge() }
                         Text(item.subtitle).lineLimit(1)
                     }
                     .font(.subheadline)
@@ -232,10 +233,26 @@ struct ItemMenu: ViewModifier {
                     Button { model.openAlbum(of: t) } label: { Label("Go to Album", systemImage: "square.stack") }
                 }
             }
+            if let downloaded = downloadState {
+                Button { model.setDownloaded(item, !downloaded) } label: {
+                    Label(downloaded ? "Remove Download" : "Download", systemImage: downloaded ? "arrow.down.circle.fill" : "arrow.down.circle")
+                }
+                .accessibilityIdentifier(downloaded ? "menu.removeDownload" : "menu.download")
+            }
             Divider()
             let pinned = model.isPinned(item.id)
             Button { model.togglePin(item) } label: { Label(pinned ? "Unpin" : "Pin", systemImage: pinned ? "pin.slash" : "pin") }
                 .accessibilityIdentifier(pinned ? "menu.unpin" : "menu.pin")
+        }
+    }
+
+    /// Whether it's downloaded, for songs and collections that can be; nil for the rest
+    /// (artists, and a device's own files).
+    private var downloadState: Bool? {
+        switch item.kind {
+        case .track: model.track(item.id).flatMap { $0.downloadable ? $0.downloaded : nil }
+        case .album, .playlist: item.downloaded
+        default: nil
         }
     }
 

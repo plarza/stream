@@ -10,6 +10,7 @@ extension LibrarySection: Identifiable {
         case .artists: "Artists"
         case .albums: "Albums"
         case .songs: "Songs"
+        case .uploads: "Uploads"
         case .downloaded: "Downloaded"
         case .likedSongs: "Liked Songs"
         }
@@ -21,17 +22,18 @@ extension LibrarySection: Identifiable {
         case .artists: "music.mic"
         case .albums: "square.stack"
         case .songs: "music.note"
+        case .uploads: "arrow.up.circle"
         case .downloaded: "arrow.down.circle"
         case .likedSongs: "heart"
         }
     }
 
-    var isSongs: Bool { self == .songs || self == .downloaded || self == .likedSongs }
+    var isSongs: Bool { self == .songs || self == .uploads || self == .downloaded || self == .likedSongs }
 
     /// Shown as a grid of covers rather than a list.
     var isGrid: Bool { self == .albums || self == .artists || self == .playlists }
 
-    static let ordered: [LibrarySection] = [.playlists, .artists, .albums, .songs, .likedSongs, .downloaded]
+    static let ordered: [LibrarySection] = [.playlists, .artists, .albums, .songs, .likedSongs, .uploads, .downloaded]
 }
 
 /// The Library tab, laid out like Apple Music's: a glyph column, the name in
@@ -203,6 +205,7 @@ struct SectionView: View {
         switch section {
         case .downloaded: "Nothing downloaded"
         case .likedSongs: "No liked songs"
+        case .uploads: "No uploads yet"
         default: "No \(section.title.lowercased())"
         }
     }

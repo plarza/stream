@@ -24,7 +24,7 @@ use std::time::Duration;
 use parking_lot::{Mutex, RwLock};
 use tokio::runtime::Runtime;
 
-use db::Db;
+use db::{Db, PlayRow};
 use player::{Engine, EngineEvent};
 use spotify::api::{self, WebApi};
 use spotify::auth::{self, Tokens};
@@ -49,6 +49,8 @@ pub trait CoreDelegate: Send + Sync {
     fn message(&self, text: String);
     /// There are aza sync items to write (`sync_outgoing`).
     fn sync_needed(&self);
+    /// A play was added to History, here or from another device.
+    fn history_changed(&self);
 }
 
 #[derive(uniffi::Record)]
@@ -426,6 +428,19 @@ impl StreamCore {
         None
     }
 
+    /// Every song played, on every device, newest first.
+    pub fn history(&self, offset: u32, limit: u32) -> Vec<Play> {
+        let mine = self.device_id();
+        self.db
+            .plays(None, 0, i64::MAX, offset, limit)
+            .into_iter()
+            .filter_map(|row| {
+                let (track, playable) = self.resolve_played(&row.track, row.hash.as_deref(), row.device == mine)?;
+                Some(Play { track, played_at: row.at, device: row.device_name, playable })
+            })
+            .collect()
+    }
+
     pub fn search_library(&self, query: String, filter: SearchFilter) -> Vec<Item> {
         self.db.search(&query, filter, 40)
     }
@@ -717,6 +732,12 @@ impl StreamCore {
         for item in items.iter().filter(|i| i.name == "settings") {
             self.apply_settings_item(item);
         }
+        if items.iter().filter(|i| i.name.starts_with("history/")).fold(false, |any, i| self.apply_history_item(i) || any) {
+            self.delegate.history_changed();
+        }
+        for item in items.iter().filter(|i| i.name == PLAYING_ITEM) {
+            self.apply_playing_item(item);
+        }
         if self.node.apply_songs(&items) {
             self.delegate.library_changed();
             let me = self.clone();
@@ -734,12 +755,21 @@ impl StreamCore {
             out.push(SyncItem { name: "settings".into(), version: known.map_or(0, |(v, ..)| v) + 1, data: current });
         }
         out.extend(self.node.outgoing_songs());
+        out.extend(self.outgoing_history());
+        let state = self.engine.state();
+        if let Some(p) = self.playing_snapshot(&state).filter(|p| self.playing_dirty(p)) {
+            let version = self.db.sync_item(PLAYING_ITEM).map_or(0, |(v, ..)| v) + 1;
+            out.push(SyncItem { name: PLAYING_ITEM.into(), version, data: serde_json::to_vec(&p).unwrap_or_default() });
+        }
         out
     }
 
     /// An item `sync_outgoing` gave was written.
     pub fn sync_written(&self, item: SyncItem) {
         self.db.set_sync_item(&item.name, item.version, true, Some(&item.data));
+        if item.name == PLAYING_ITEM {
+            self.db.set_kv(PLAYING_LAST, &String::from_utf8_lossy(&item.data));
+        }
         if item.data.is_empty()
             && let Some(hash) = item.name.strip_prefix("songs/")
         {
@@ -754,19 +784,23 @@ impl StreamCore {
 
     // ---- downloads ------------------------------------------------------------------
 
-    /// Keeps an album or playlist playable offline: songs from the Stream node are downloaded,
-    /// and (iPhone) Spotify songs fetched into librespot's cache.
+    /// Keeps an album or playlist playable offline.
     pub async fn download(self: Arc<Self>, collection_id: String) -> Result<(), CoreError> {
-        let c = self.clone().collection(collection_id.clone()).await?;
-        let ids: Vec<String> = c.tracks.iter().map(|t| t.id.clone()).collect();
+        let c = self.clone().collection(collection_id).await?;
+        self.download_songs(c.tracks.into_iter().map(|t| t.id).collect()).await
+    }
+
+    /// Keeps songs on this device, to play offline: songs from the Stream node are downloaded
+    /// as their files, Spotify songs fetched into librespot's cache. Both are then Downloaded.
+    pub async fn download_songs(self: Arc<Self>, track_ids: Vec<String>) -> Result<(), CoreError> {
         let remote: Vec<(String, String, String)> = self
             .db
-            .remote_songs(Some(&ids))
+            .remote_songs(Some(&track_ids))
             .into_iter()
             .filter(|(.., downloaded)| !downloaded)
             .map(|(id, hash, rel, _)| (id, hash, rel))
             .collect();
-        let spotify: Vec<String> = c.tracks.iter().filter(|t| t.source == Source::Spotify).map(|t| t.id.clone()).collect();
+        let spotify: Vec<String> = track_ids.into_iter().filter(|id| id.starts_with("spotify:track:")).collect();
         let pb = self.playback.read().clone();
         if pb.is_none() && !spotify.is_empty() && remote.is_empty() {
             return Err(CoreError::NotSignedIn);
@@ -799,17 +833,26 @@ impl StreamCore {
             .map_err(err)
     }
 
-    /// Removes an album's or playlist's downloaded songs from the Stream node; they still stream.
+    /// Removes an album's or playlist's downloads; its songs still stream.
     pub async fn remove_download(self: Arc<Self>, collection_id: String) -> Result<(), CoreError> {
         let c = self.clone().collection(collection_id).await?;
-        let ids: Vec<String> = c.tracks.iter().map(|t| t.id.clone()).collect();
-        let songs = self.db.remote_songs(Some(&ids));
-        for (_, hash, rel, _) in &songs {
-            self.node.remove_download(hash, rel);
-        }
-        self.db.set_downloaded(&songs.into_iter().map(|(id, ..)| id).collect::<Vec<_>>(), false);
-        self.delegate.library_changed();
+        self.remove_downloads(c.tracks.into_iter().map(|t| t.id).collect());
         Ok(())
+    }
+
+    /// Takes songs off this device; they still stream. A Spotify song's audio stays in
+    /// librespot's cache until it's trimmed, but it no longer counts as Downloaded.
+    pub fn remove_downloads(&self, track_ids: Vec<String>) {
+        for (_, hash, rel, _) in self.db.remote_songs(Some(&track_ids)) {
+            self.node.remove_download(&hash, &rel);
+        }
+        // A device's own files (the Mac's music folders) aren't downloads to remove.
+        let ids: Vec<String> = track_ids
+            .into_iter()
+            .filter(|id| self.db.track(id).is_some_and(|t| t.source == Source::Spotify || t.remote))
+            .collect();
+        self.db.set_downloaded(&ids, false);
+        self.delegate.library_changed();
     }
 }
 
@@ -826,7 +869,156 @@ struct SyncedSettings {
     lastfm: Option<serde_json::Value>,
 }
 
+/// aza sync item holding the song playing (or last played) on any device, and where it was.
+const PLAYING_ITEM: &str = "playing";
+/// kv: the `playing` item this device last wrote or took up.
+const PLAYING_LAST: &str = "playing.last";
+/// History items each device writes: one per UTC day, `history/<device>/<day>`.
+const HISTORY_DAYS_RESENT: i64 = 14;
+
+/// The `playing` item.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+struct NowPlaying {
+    track: Track,
+    /// A file's hash, so other devices find the same song.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    hash: Option<String>,
+    position_ms: u32,
+    /// Unix milliseconds the position was taken.
+    at_ms: i64,
+    playing: bool,
+    device: String,
+}
+
+/// A day's plays on one device: the `history/<device>/<day>` item.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct HistoryDay {
+    device: String,
+    plays: Vec<PlayRow>,
+}
+
+fn now_ms() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
+}
+
 impl StreamCore {
+    /// This install's own ID in synced History and the `playing` item.
+    fn device_id(&self) -> String {
+        if let Some(id) = self.db.get_kv("device.id") {
+            return id;
+        }
+        let id = format!("{:016x}", rand::random::<u64>());
+        self.db.set_kv("device.id", &id);
+        id
+    }
+
+    fn device_name(&self) -> &'static str {
+        if self.is_phone { "iPhone" } else { "Mac" }
+    }
+
+    fn add_play(&self, track: Track, started_at: i64) {
+        let hash = if track.source == Source::Local { self.db.track_hash(&track.id) } else { None };
+        let Ok(json) = serde_json::to_string(&track) else { return };
+        self.db.add_play(&PlayRow { device: self.device_id(), device_name: self.device_name().into(), at: started_at, track: json, hash });
+        self.delegate.history_changed();
+        self.delegate.sync_needed();
+    }
+
+    /// The song as played, as it is on this device: Spotify's by its ID, a file by its hash
+    /// (this device's own, else the node's). A file found nowhere stays as it was, unplayable.
+    fn resolve_played(&self, json: &str, hash: Option<&str>, mine: bool) -> Option<(Track, bool)> {
+        let played: Track = serde_json::from_str(json).ok()?;
+        if played.source == Source::Spotify {
+            return Some((self.db.track(&played.id).unwrap_or(played), true));
+        }
+        if let Some(t) = hash.and_then(|h| self.db.track_for_hash(h)) {
+            return Some((t, true));
+        }
+        if mine && let Some(t) = self.db.track(&played.id) {
+            return Some((t, true));
+        }
+        Some((played, false))
+    }
+
+    fn outgoing_history(&self) -> Vec<SyncItem> {
+        let mine = self.device_id();
+        let from = (db::now() / 86400 - HISTORY_DAYS_RESENT) * 86400;
+        self.db
+            .play_days(&mine, from)
+            .into_iter()
+            .filter_map(|day| {
+                let plays = self.db.plays(Some(&mine), day * 86400, (day + 1) * 86400, 0, u32::MAX);
+                let data = serde_json::to_vec(&HistoryDay { device: self.device_name().into(), plays }).ok()?;
+                let name = format!("history/{mine}/{day}");
+                let known = self.db.sync_item(&name);
+                if known.as_ref().and_then(|(_, _, d)| d.as_deref()) == Some(data.as_slice()) {
+                    return None;
+                }
+                Some(SyncItem { name, version: known.map_or(0, |(v, ..)| v) + 1, data })
+            })
+            .collect()
+    }
+
+    /// Another device's day of plays. True when it added any.
+    fn apply_history_item(&self, item: &SyncItem) -> bool {
+        let Some(device) = item.name.strip_prefix("history/").and_then(|r| r.split('/').next()) else { return false };
+        if device == self.device_id() || self.db.sync_item(&item.name).is_some_and(|(v, ..)| v >= item.version) {
+            return false;
+        }
+        self.db.set_sync_item(&item.name, item.version, false, Some(&item.data));
+        let Ok(day) = serde_json::from_slice::<HistoryDay>(&item.data) else { return false };
+        for mut play in day.plays {
+            play.device = device.to_string();
+            play.device_name = day.device.clone();
+            self.db.add_play(&play);
+        }
+        true
+    }
+
+    fn playing_snapshot(&self, state: &PlayerState) -> Option<NowPlaying> {
+        let track = state.track.clone()?;
+        let hash = if track.source == Source::Local { self.db.track_hash(&track.id) } else { None };
+        Some(NowPlaying {
+            track,
+            hash,
+            position_ms: state.position_ms,
+            at_ms: now_ms(),
+            playing: state.status == PlaybackStatus::Playing,
+            device: self.device_id(),
+        })
+    }
+
+    /// Whether what's playing here moved on from the `playing` item last written or taken up:
+    /// another song, play or pause, or a seek.
+    fn playing_dirty(&self, now: &NowPlaying) -> bool {
+        let Some(last) = self.db.get_kv(PLAYING_LAST).and_then(|s| serde_json::from_str::<NowPlaying>(&s).ok()) else {
+            return true;
+        };
+        let expected = last.position_ms as i64 + if last.playing { now.at_ms - last.at_ms } else { 0 };
+        last.track.id != now.track.id || last.playing != now.playing || (expected - now.position_ms as i64).abs() > 4000
+    }
+
+    /// Another device's song: taken up here, paused where that device is, unless this one is playing.
+    fn apply_playing_item(&self, item: &SyncItem) {
+        if self.db.sync_item(PLAYING_ITEM).is_some_and(|(v, ..)| v >= item.version) {
+            return;
+        }
+        self.db.set_sync_item(PLAYING_ITEM, item.version, false, Some(&item.data));
+        let Ok(theirs) = serde_json::from_slice::<NowPlaying>(&item.data) else { return };
+        let last_at = self.db.get_kv(PLAYING_LAST).and_then(|s| serde_json::from_str::<NowPlaying>(&s).ok()).map_or(0, |l| l.at_ms);
+        if theirs.device == self.device_id() || theirs.at_ms <= last_at || self.engine.status() == PlaybackStatus::Playing {
+            return;
+        }
+        let json = serde_json::to_string(&theirs.track).unwrap_or_default();
+        let Some((track, true)) = self.resolve_played(&json, theirs.hash.as_deref(), false) else { return };
+        let elapsed = if theirs.playing { (now_ms() - theirs.at_ms).max(0) as u32 } else { 0 };
+        let ms = theirs.position_ms.saturating_add(elapsed).min(track.duration_ms.saturating_sub(1000));
+        // Taken up, it's what this device last had: nothing to write back.
+        let taken = NowPlaying { track: track.clone(), hash: theirs.hash.clone(), position_ms: ms, at_ms: now_ms(), playing: false, device: self.device_id() };
+        self.db.set_kv(PLAYING_LAST, &serde_json::to_string(&taken).unwrap_or_default());
+        self.engine.cue(track, ms);
+    }
+
     fn synced_settings(&self) -> SyncedSettings {
         let json = |k: &str| self.delegate.secret_get(k.into()).and_then(|s| serde_json::from_str(&s).ok());
         SyncedSettings {
@@ -924,8 +1116,13 @@ impl StreamCore {
         match ev {
             EngineEvent::Changed => {
                 self.engine.persist();
-                self.delegate.player_changed(self.engine.state());
+                let state = self.engine.state();
+                if self.playing_snapshot(&state).is_some_and(|p| self.playing_dirty(&p)) {
+                    self.delegate.sync_needed();
+                }
+                self.delegate.player_changed(state);
             }
+            EngineEvent::Played { track, started_at } => self.add_play(track, started_at),
             EngineEvent::TrackStarted(t) => self.now_playing(t),
             EngineEvent::Heard { track, started_at } => self.scrobble(track, started_at),
             EngineEvent::Error(m) => self.delegate.message(m),

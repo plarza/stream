@@ -3,7 +3,7 @@ import AzaUI
 import SwiftUI
 
 enum SidebarItem: Hashable {
-    case home, search, section(LibrarySection), pin(Item)
+    case home, search, history, section(LibrarySection), pin(Item)
 }
 
 /// A glass sidebar floating at the top left, only as tall as what's in it; the
@@ -191,7 +191,7 @@ struct MacRootView: View {
 
     private var searchPrompt: String {
         if case let .section(s) = selection { return "Search \(s.title)" }
-        return "Search your library"
+        return "Search"
     }
 
     /// In a library section the field filters it; elsewhere it searches everything,
@@ -200,7 +200,7 @@ struct MacRootView: View {
         if case .section = selection { return $sectionFilter }
         return Binding(get: { search.query }, set: { q in
             search.query = q
-            if selection == .home, !q.isEmpty { selection = .search }
+            if selection == .home || selection == .history, !q.isEmpty { selection = .search }
         })
     }
 
@@ -239,6 +239,7 @@ struct MacRootView: View {
                 Color.clear.frame(height: 30)
                 row(.home, "Home", "house").accessibilityIdentifier("sidebar.home")
                 row(.search, "Search", "magnifyingglass").accessibilityIdentifier("sidebar.search")
+                row(.history, "History", "clock").accessibilityIdentifier("sidebar.history")
                 header("Library")
                 ForEach(LibrarySection.ordered) { s in
                     row(.section(s), s.title, s.symbol).accessibilityIdentifier("sidebar.\(s.title)")
@@ -306,6 +307,8 @@ struct MacRootView: View {
             HomeView(columns: 6)
         case .search:
             SearchResultsView(search: search)
+        case .history:
+            HistoryView()
         case let .section(s):
             SectionView(section: s, filter: sectionFilter).id(s)
         case let .pin(item):

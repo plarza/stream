@@ -42,6 +42,9 @@ extension Item {
 }
 
 extension Track {
+    /// Spotify songs and Uploads from the Stream node can be downloaded; a device's own files are already here.
+    var downloadable: Bool { source == .spotify || remote }
+
     var item: Item {
         Item(id: id, kind: .track, source: source, title: title, subtitle: artist, art: art, downloaded: downloaded)
     }

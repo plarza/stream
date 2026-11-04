@@ -193,6 +193,19 @@ pub struct OwnFile {
     pub uploaded: bool,
 }
 
+/// One play as stored and synced: `track` is the song's JSON.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PlayRow {
+    #[serde(skip)]
+    pub device: String,
+    #[serde(skip)]
+    pub device_name: String,
+    pub at: i64,
+    pub track: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash: Option<String>,
+}
+
 /// A song from the node's track ID.
 pub fn remote_id(hash: &str) -> String {
     format!("local:track:{}", &hash[..16.min(hash.len())])
@@ -233,7 +246,18 @@ impl Db {
                  version INTEGER NOT NULL,
                  mine    INTEGER NOT NULL DEFAULT 0,
                  data    BLOB
-             );",
+             );
+             -- Every song played, on any device: when it started, and the song as it was then
+             -- (with a file's hash, to find the same song on other devices).
+             CREATE TABLE IF NOT EXISTS plays (
+                 device      TEXT NOT NULL,
+                 device_name TEXT NOT NULL,
+                 at          INTEGER NOT NULL,
+                 track       TEXT NOT NULL,
+                 hash        TEXT,
+                 PRIMARY KEY (device, at)
+             );
+             CREATE INDEX IF NOT EXISTS plays_at ON plays(at);",
         )?;
         Ok(Self { conn: Mutex::new(conn), art_dir })
     }
@@ -635,6 +659,57 @@ impl Db {
         stmt.query_map([], |r| Ok((r.get(0)?, r.get::<_, i64>(1)? as u64))).unwrap().filter_map(Result::ok).collect()
     }
 
+    // ---- history -----------------------------------------------------------
+
+    /// A file's hash, for a song that's a file (this device's or the node's).
+    pub fn track_hash(&self, id: &str) -> Option<String> {
+        self.conn.lock().query_row("SELECT hash FROM tracks WHERE id = ?1", [id], |r| r.get(0)).optional().ok().flatten().flatten()
+    }
+
+    /// The song with this file here: this device's own file first, else the node's.
+    pub fn track_for_hash(&self, hash: &str) -> Option<Track> {
+        let id: String = self
+            .conn
+            .lock()
+            .query_row("SELECT id FROM tracks WHERE hash = ?1 ORDER BY remote LIMIT 1", [hash], |r| r.get(0))
+            .optional()
+            .ok()
+            .flatten()?;
+        self.track(&id)
+    }
+
+    pub fn add_play(&self, play: &PlayRow) {
+        let _ = self.conn.lock().execute(
+            "INSERT OR REPLACE INTO plays(device, device_name, at, track, hash) VALUES(?1, ?2, ?3, ?4, ?5)",
+            params![play.device, play.device_name, play.at, play.track, play.hash],
+        );
+    }
+
+    /// Plays newest first.
+    pub fn plays(&self, device: Option<&str>, from: i64, to: i64, offset: u32, limit: u32) -> Vec<PlayRow> {
+        let conn = self.conn.lock();
+        let Ok(mut stmt) = conn.prepare_cached(
+            "SELECT device, device_name, at, track, hash FROM plays
+             WHERE (?1 IS NULL OR device = ?1) AND at >= ?2 AND at < ?3 ORDER BY at DESC LIMIT ?4 OFFSET ?5",
+        ) else {
+            return vec![];
+        };
+        stmt.query_map(params![device, from, to, limit, offset], |r| {
+            Ok(PlayRow { device: r.get(0)?, device_name: r.get(1)?, at: r.get(2)?, track: r.get(3)?, hash: r.get(4)? })
+        })
+        .map(|rows| rows.filter_map(Result::ok).collect())
+        .unwrap_or_default()
+    }
+
+    /// Days (UTC, as days since 1970) this device played anything since `from`.
+    pub fn play_days(&self, device: &str, from: i64) -> Vec<i64> {
+        let conn = self.conn.lock();
+        let Ok(mut stmt) = conn.prepare_cached("SELECT DISTINCT at / 86400 FROM plays WHERE device = ?1 AND at >= ?2") else {
+            return vec![];
+        };
+        stmt.query_map(params![device, from], |r| r.get(0)).map(|rows| rows.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+
     /// Forgets every item, for a different aza account.
     pub fn clear_sync(&self) {
         let conn = self.conn.lock();
@@ -1002,8 +1077,8 @@ impl Db {
             ),
             LibrarySection::Albums => self.items(
                 "SELECT a.id, 'album', a.source, a.title, a.artist, a.art,
-                    (a.source = 0 AND EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.remote = 1)
-                      AND NOT EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.remote = 1 AND t.downloaded = 0))
+                    (EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND (t.source = 1 OR t.remote = 1))
+                      AND NOT EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND (t.source = 1 OR t.remote = 1) AND t.downloaded = 0))
                  FROM albums a WHERE a.saved = 1 ORDER BY a.added_at DESC, a.title COLLATE NOCASE LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
@@ -1012,9 +1087,14 @@ impl Db {
                  WHERE source = 0 OR saved = 1 ORDER BY title COLLATE NOCASE LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
+            LibrarySection::Uploads => self.items(
+                "SELECT id, 'track', source, title, artist, art, (downloaded = 1 AND remote = 1) FROM tracks
+                 WHERE source = 0 ORDER BY title COLLATE NOCASE LIMIT ?1 OFFSET ?2",
+                &[&limit, &offset],
+            ),
             LibrarySection::Downloaded => self.items(
-                "SELECT id, 'track', source, title, artist, art, (downloaded = 1 AND (source = 1 OR remote = 1)) FROM tracks
-                 WHERE downloaded = 1 ORDER BY added_at DESC LIMIT ?1 OFFSET ?2",
+                "SELECT id, 'track', source, title, artist, art, 1 FROM tracks
+                 WHERE downloaded = 1 AND (source = 1 OR remote = 1) ORDER BY added_at DESC LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
             LibrarySection::LikedSongs => self.items(
@@ -1028,7 +1108,8 @@ impl Db {
     pub fn section_tracks(&self, section: LibrarySection) -> Vec<Track> {
         match section {
             LibrarySection::Songs => self.tracks_where("WHERE t.source = 0 OR t.saved = 1 ORDER BY t.title COLLATE NOCASE", &[]),
-            LibrarySection::Downloaded => self.tracks_where("WHERE t.downloaded = 1 ORDER BY t.added_at DESC", &[]),
+            LibrarySection::Uploads => self.tracks_where("WHERE t.source = 0 ORDER BY t.title COLLATE NOCASE", &[]),
+            LibrarySection::Downloaded => self.tracks_where("WHERE t.downloaded = 1 AND (t.source = 1 OR t.remote = 1) ORDER BY t.added_at DESC", &[]),
             LibrarySection::LikedSongs => self.tracks_where("WHERE t.saved = 1 OR t.liked = 1 ORDER BY t.added_at DESC", &[]),
             _ => vec![],
         }
