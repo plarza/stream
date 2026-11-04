@@ -59,6 +59,10 @@ nonisolated final class AudioOutput: @unchecked Sendable {
                   let r = abl[1].mData?.assumingMemoryBound(to: Float.self) else { return noErr }
             _ = stream_core_render(l, r, frameCount)
             meter.measure(l, r, Int(frameCount))
+            if meter.muted {
+                memset(l, 0, Int(frameCount) * 4)
+                memset(r, 0, Int(frameCount) * 4)
+            }
             return noErr
         }
         engine.attach(node)
@@ -101,19 +105,33 @@ nonisolated final class LevelMeter: @unchecked Sendable {
     private let bass = Atomic<UInt32>(0), mids = Atomic<UInt32>(0), highs = Atomic<UInt32>(0)
     // Filter state, touched only on the render thread.
     private var low: Float = 0, mid: Float = 0
+    /// Measures but plays nothing (`-muteOutput YES`, for recording the visualizers).
+    var muted = false
+    /// The last few thousand mono samples, for the Now Playing visualizer's spectrum.
+    static let historySize = 4096
+    private let history: UnsafeMutablePointer<Float> = {
+        let p = UnsafeMutablePointer<Float>.allocate(capacity: LevelMeter.historySize)
+        p.initialize(repeating: 0, count: LevelMeter.historySize)
+        return p
+    }()
+    private let written = Atomic<Int>(0)
 
     func measure(_ l: UnsafePointer<Float>, _ r: UnsafePointer<Float>, _ n: Int) {
         guard n > 0 else { return }
         let a1 = 1 - exp(-2 * Float.pi * 250 / sampleRate)
         let a2 = 1 - exp(-2 * Float.pi * 2500 / sampleRate)
         var e = (Float(0), Float(0), Float(0))
+        let w = written.load(ordering: .relaxed)
+        let mask = Self.historySize - 1
         for i in 0..<n {
             let x = (l[i] + r[i]) * 0.5
+            history[(w + i) & mask] = x
             low += a1 * (x - low)
             mid += a2 * (x - mid)
             let b = (low, mid - low, x - mid)
             e.0 += b.0 * b.0; e.1 += b.1 * b.1; e.2 += b.2 * b.2
         }
+        written.store(w + n, ordering: .releasing)
         let count = Float(n) * max(volume * volume, 1e-4)
         bass.store(Self.level(e.0 / count).bitPattern, ordering: .relaxed)
         mids.store(Self.level(e.1 / count).bitPattern, ordering: .relaxed)
@@ -124,6 +142,15 @@ nonisolated final class LevelMeter: @unchecked Sendable {
     private static func level(_ meanSquare: Float) -> Float {
         let db = 10 * log10(max(meanSquare, 1e-12))
         return min(max((db + 54) / 48, 0), 1)
+    }
+
+    /// Copies the latest `count` samples (oldest first), scaled back up by the volume.
+    /// Reads race the render thread by design: a torn sample only ever shows as a flicker.
+    func recent(into out: UnsafeMutablePointer<Float>, count: Int) {
+        let end = written.load(ordering: .acquiring)
+        let mask = Self.historySize - 1
+        let gain = 1 / max(volume, 0.01)
+        for i in 0..<count { out[i] = history[(end - count + i) & mask] * gain }
     }
 
     var levels: (Float, Float, Float) {

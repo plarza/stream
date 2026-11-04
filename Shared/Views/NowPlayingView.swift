@@ -10,6 +10,8 @@ struct NowPlayingView: View {
     @Environment(\.accent) private var accent
     @Environment(AppModel.self) private var model
     @Namespace private var art
+    @AppStorage("visualizer") private var visualizer = Visualizer.aurora
+    @State private var coverFrame = CGRect.zero
     var compact = false
 
     private var track: Track? { model.player.track }
@@ -20,6 +22,8 @@ struct NowPlayingView: View {
         GeometryReader { geo in
             ZStack {
                 ImmersiveBackground(url: track?.art, palette: model.accent)
+                NowPlayingVisualizer(style: visualizer, url: track?.art, cover: coverFrame,
+                                     expanded: model.nowPlayingMode == .artwork)
                 VStack(spacing: 0) {
                     #if os(iOS)
                     Capsule().fill(.white.opacity(0.35)).frame(width: 38, height: 5).padding(.top, 8)
@@ -83,6 +87,7 @@ struct NowPlayingView: View {
         Color.clear
             .frame(width: size, height: size)
             .matchedGeometryEffect(id: "art", in: art, isSource: true)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { coverFrame = $0 }
     }
 
     private func cover(size: CGFloat, expanded: Bool) -> some View {

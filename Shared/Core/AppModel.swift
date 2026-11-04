@@ -88,6 +88,11 @@ final class AppModel {
         account = core.account()
         home = core.home()
         bridge.model = self
+        // Recording the visualizers: the meter hears the song, the speakers don't.
+        if Self.argument("-muteOutput") == "YES" {
+            audio.meter.muted = true
+            volume = 1
+        }
         core.setVolume(volume: Float(volume))
         audio.meter.volume = Float(volume)
         // UI tests' fixture library, on both: the iPhone has no music folders of its own otherwise.
