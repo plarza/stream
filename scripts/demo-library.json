@@ -23,35 +23,67 @@
    "macPlaying": "Chromakopia",
    "album": "Imaginal Disk",
    "lyrics": [
-    "Imaginal Disk",
-    "Image",
-    "Meet your brand new image"
+    "My Beautiful Dark Twisted Fantasy",
+    "POWER",
+    "No one man should have all that power"
    ],
    "search": "kanye",
    "result": "Graduation"
   },
-  "lyrics-power": {
+  "lyrics-alright": {
    "base": "readme",
    "lyrics": [
-    "My Beautiful Dark Twisted Fantasy",
-    "POWER",
-    "No one man should have all that power"
+    "To Pimp a Butterfly",
+    "Alright",
+    "We gon' be alright"
    ]
   },
-  "lyrics-earfquake": {
+  "lyrics-stronger": {
    "base": "readme",
    "lyrics": [
-    "IGOR",
-    "EARFQUAKE",
-    "Don't leave, it's my fault"
+    "Graduation",
+    "Stronger",
+    "Can only make me stronger"
    ]
   },
-  "lyrics-liar": {
+  "lyrics-ultralight-beam": {
    "base": "readme",
    "lyrics": [
-    "Heaven knows",
-    "Boy's a liar Pt. 2",
-    "The-the boy's a liar, the boy's a liar"
+    "The Life of Pablo",
+    "Ultralight Beam",
+    "This is a God dream"
+   ]
+  },
+  "lyrics-accordion": {
+   "base": "readme",
+   "lyrics": [
+    "Madvillainy",
+    "Accordion",
+    "Living off borrowed time, the clock tick faster"
+   ]
+  },
+  "lyrics-dna": {
+   "base": "readme",
+   "lyrics": [
+    "DAMN.",
+    "DNA.",
+    "Loyalty, got royalty inside my DNA"
+   ]
+  },
+  "lyrics-jesus-walks": {
+   "base": "readme",
+   "lyrics": [
+    "The College Dropout",
+    "Jesus Walks",
+    "God show me the way because the Devil's tryna break me down"
+   ]
+  },
+  "lyrics-concorde": {
+   "base": "readme",
+   "lyrics": [
+    "Ants From Up There",
+    "Concorde",
+    "Concorde, I miss you"
    ]
   }
  },
