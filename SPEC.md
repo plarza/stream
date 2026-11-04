@@ -97,7 +97,7 @@ iPhone approves in the aza app on the same phone; the Mac shows a QR code that t
   per music file: its tags, path, size, ReplayGain and cover hash, written by the device that has
   the file and written empty when the file goes.
 - **The Stream node** (`node/`, at `stream.aza.network` on azalab-0) stores the files themselves,
-  by SHA-256, one folder per aza identity, up to each identity's quota: 1 GB by default, 10 GB for
+  by SHA-256, one folder per aza identity, up to each identity's quota: 10 MB by default, 10 GB for
   aiden. Stream signs in to it with its aza certificate and a signed challenge for a 90-day
   token. Every device uploads its own music folders' files (and covers) the node doesn't have yet,
   then writes their items. A file over the quota stays off the node and Profile says so.

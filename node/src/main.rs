@@ -346,7 +346,7 @@ async fn main() -> anyhow::Result<()> {
         app: env("STREAM_APP", "stream.aza.network"),
         port: env("STREAM_PORT", "8080").parse()?,
         data: env("STREAM_DATA", "data").into(),
-        quota: bytes(&env("STREAM_QUOTA", "1GB"))?,
+        quota: bytes(&env("STREAM_QUOTA", "10MB"))?,
         quotas,
         max_total: bytes(&env("STREAM_MAX_TOTAL", "0"))?,
     };
