@@ -6,6 +6,8 @@ pub enum ItemKind {
     Album,
     Artist,
     Playlist,
+    /// A podcast.
+    Show,
 }
 
 impl ItemKind {
@@ -15,6 +17,7 @@ impl ItemKind {
             ItemKind::Album => "album",
             ItemKind::Artist => "artist",
             ItemKind::Playlist => "playlist",
+            ItemKind::Show => "show",
         }
     }
 
@@ -24,6 +27,7 @@ impl ItemKind {
             "album" => ItemKind::Album,
             "artist" => ItemKind::Artist,
             "playlist" => ItemKind::Playlist,
+            "show" => ItemKind::Show,
             _ => return None,
         })
     }
@@ -110,6 +114,21 @@ pub struct CollectionPage {
     pub artist: Option<ArtistInfo>,
     pub liked: bool,
     pub pinned: bool,
+    /// Show pages: the episodes, newest first (`tracks` has them too, to play).
+    pub episodes: Vec<Episode>,
+}
+
+/// A podcast episode as its show lists it.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct Episode {
+    pub track: Track,
+    /// "2026-11-03" (or just a year or month, as Spotify gives it).
+    pub released: String,
+    pub description: String,
+    /// Where it was left off; 0 if never started.
+    pub resume_ms: u32,
+    /// Listened to the end.
+    pub played: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -176,6 +195,8 @@ pub enum LibrarySection {
     /// On this device to play offline: downloaded Spotify songs and Uploads.
     Downloaded,
     LikedSongs,
+    /// The podcasts you follow on Spotify.
+    Podcasts,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
@@ -185,6 +206,7 @@ pub enum SearchFilter {
     Albums,
     Artists,
     Playlists,
+    Podcasts,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]

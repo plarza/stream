@@ -8,7 +8,7 @@ fast startup. Built for one user and sideloaded, never shipped to the App Store
 - Name: **Stream** (App Store: azaStream)
 - Bundle ID: `network.aza.stream`
 - Platforms: iOS 26+, macOS 26+ (Liquid Glass APIs only, no fallbacks)
-- Appearance: System (default), Light or Dark in Settings; on the Mac, a pure-black option for dark mode (iPhone's dark mode is already black)
+- Appearance: System (default), Light or Dark in Settings; on the Mac also OLED Dark, pure black behind everything (iPhone's dark mode is already black)
 - Mockups: `mockups/*.html` (each chosen option is noted below)
 
 ## Architecture
@@ -160,7 +160,8 @@ bottom accessory.
 |---|---|
 | Now Playing | `01` **A Immersive**: blurred full-bleed art, big art, format/quality chip (e.g. FLAC 24/96, OGG 320) |
 | Home | `02` **D Pinned grid + recents**, without the floating search pill. You can pin albums, songs, artists and playlists |
-| Library | Category list: Playlists, Artists, Albums, Songs, Liked Songs, Uploads, Downloaded, History |
+| Library | Category list: Playlists, Podcasts, Artists, Albums, Songs, Liked Songs, Uploads, Downloaded, History |
+| Podcasts | Library → Podcasts: the shows you follow on Spotify as a grid. A show's page lists its episodes newest first with the date, description, length or time left, and Played. Play starts the newest episode you haven't finished; an episode resumes where you left it, and counts as played within 15 seconds of the end |
 | History | Library → History (not a tab): every song played on any of your devices, newest first, by day, with the time and device |
 | Lyrics | `04` **A**: left-aligned, word fill on the active line, distance blur on the others, tap a line to seek |
 | Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, like, pin). Playlists sort from the toolbar (playlist order, title, artist, album, length, reversed), the same for every playlist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |

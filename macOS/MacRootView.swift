@@ -23,6 +23,8 @@ struct MacRootView: View {
     @State private var sidebarHeight: CGFloat = 0
     @FocusState private var searchFocused: Bool
     @AppStorage(Zoom.key) private var zoom = Zoom.standard
+    /// AzaUI's theme, by name: "oledDark" is pure black behind everything.
+    @AppStorage(Appearance.key) private var appearance = "system"
 
     private let sidebarWidth: CGFloat = 220
     /// The sidebar's margin from the window edge: macOS's own 8pt at any zoom, so the
@@ -34,7 +36,7 @@ struct MacRootView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            if model.pureBlack && scheme == .dark {
+            if appearance == "oledDark" && scheme == .dark {
                 Color.black.ignoresSafeArea()
             }
             NavigationStack(path: $path) {

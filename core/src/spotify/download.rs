@@ -94,6 +94,58 @@ fn row(t: &SessionTrack) -> SpotifyTrackRow {
     }
 }
 
+/// A show and its newest episodes, read over the streaming session, for when the Web API
+/// won't serve them.
+pub async fn session_show(session: &Session, id: &str) -> Result<(Item, String, Vec<(SpotifyTrackRow, String, String, Option<(u32, bool)>)>)> {
+    use librespot_metadata::{Episode, Show};
+    let uri = SpotifyUri::from_uri(id).map_err(|e| anyhow::anyhow!("{e}"))?;
+    let show = Show::get(session, &uri).await.map_err(|e| anyhow::anyhow!("{e}"))?;
+    let item = Item {
+        id: id.to_string(),
+        kind: ItemKind::Show,
+        source: Source::Spotify,
+        title: show.name.clone(),
+        subtitle: show.publisher.clone(),
+        art: image_url(&show.covers),
+        downloaded: false,
+    };
+    let mut episodes: Vec<Episode> = stream::iter(show.episodes.iter().take(200).cloned().collect::<Vec<_>>())
+        .map(|u| async move { Episode::get(session, &u).await.ok() })
+        .buffered(16)
+        .filter_map(|e| async move { e })
+        .collect()
+        .await;
+    episodes.sort_by_key(|e| std::cmp::Reverse(e.publish_time.as_timestamp_ms()));
+    let rows = episodes
+        .iter()
+        .take(50)
+        .map(|e| {
+            let row = SpotifyTrackRow {
+                id: e.id.to_uri().unwrap_or_default(),
+                title: e.name.clone(),
+                artist: item.title.clone(),
+                artist_id: None,
+                artists: vec![],
+                album: item.title.clone(),
+                album_id: Some(id.to_string()),
+                art: image_url(&e.covers).or_else(|| item.art.clone()),
+                duration_ms: e.duration.max(0) as u32,
+                track_no: 0,
+                disc_no: 0,
+            };
+            let t = &e.publish_time;
+            let released = format!("{:04}-{:02}-{:02}", t.year(), u8::from(t.month()), t.day());
+            (row, released, e.description.clone(), None)
+        })
+        .collect();
+    Ok((item, show.description.clone(), rows))
+}
+
+fn image_url(images: &librespot_metadata::image::Images) -> Option<String> {
+    let img = images.iter().max_by_key(|i| i.width)?;
+    Some(format!("{IMAGE_HOST}{}", img.id.to_base16().ok()?))
+}
+
 fn cover_url(album: &librespot_metadata::Album) -> Option<String> {
     let img = album.covers.iter().max_by_key(|i| i.width)?;
     Some(format!("{IMAGE_HOST}{}", img.id.to_base16().ok()?))
@@ -132,6 +184,6 @@ pub async fn session_playlist(session: &Session, id: &str, db: &Db) -> Result<Co
         tracks,
         releases: vec![], artist: None,
         liked: false,
-        pinned: false,
+        pinned: false, episodes: vec![],
     })
 }

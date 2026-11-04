@@ -95,6 +95,12 @@ impl StreamCore {
             self.install_web(client_id, tokens);
             self.verify_web().await.map_err(|e| format!("Spotify signed you in but didn't answer for the account ({e})."))?;
             self.emit_account();
+            // The library needs only the account: it syncs while playback is approved, and
+            // whether or not playback connects.
+            let me = self.clone();
+            self.rt.spawn(async move {
+                let _ = me.refresh_spotify_inner().await;
+            });
         }
 
         if self.playback.read().is_none() {
@@ -117,11 +123,6 @@ impl StreamCore {
             }
             self.emit_account();
         }
-
-        let me = self.clone();
-        self.rt.spawn(async move {
-            let _ = me.refresh_spotify_inner().await;
-        });
         Ok(())
     }
 
@@ -136,6 +137,11 @@ impl StreamCore {
     /// Logs in to the streaming servers, a few tries for network trouble (librespot
     /// already walks the access points on each).
     async fn connect_playback(&self, creds: librespot_core::authentication::Credentials) -> Result<(), Refusal> {
+        // A stand-in Spotify (the UI tests') hands out tokens the real streaming servers
+        // always refuse; refuse them here, as they would, without going online for it.
+        if self.endpoints.accounts != auth::Endpoints::default().accounts {
+            return Err(Refusal::Credentials);
+        }
         let normalization = self.settings.lock().normalization;
         let mut last = String::new();
         for attempt in 0..3u64 {

@@ -31,6 +31,8 @@ pub const WEB_SCOPES: &[&str] = &[
     "user-library-read",
     "user-modify-playback-state",
     "user-read-playback-state",
+    // Where you left off in podcast episodes.
+    "user-read-playback-position",
     "user-read-private",
     "user-read-recently-played",
 ];

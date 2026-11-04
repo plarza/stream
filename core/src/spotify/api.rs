@@ -222,6 +222,50 @@ pub fn playlist_item(v: &Value) -> Option<Item> {
     })
 }
 
+pub fn show_item(v: &Value) -> Option<Item> {
+    Some(Item {
+        id: v["uri"].as_str()?.to_string(),
+        kind: ItemKind::Show,
+        source: Source::Spotify,
+        title: v["name"].as_str().unwrap_or("").to_string(),
+        subtitle: v["publisher"].as_str().unwrap_or("").to_string(),
+        art: best_image(v),
+        downloaded: false,
+    })
+}
+
+/// An episode as a song of its show (so it plays, queues and goes in History like one),
+/// with what only episodes have: when it came out, what it's about, and Spotify's
+/// resume point (`resume_position_ms`, `fully_played`), when the sign-in may read it.
+pub fn episode_row(v: &Value, show: &Item) -> Option<(SpotifyTrackRow, String, String, Option<(u32, bool)>)> {
+    let id = v["uri"].as_str()?;
+    if !id.starts_with("spotify:episode:") {
+        return None;
+    }
+    let row = SpotifyTrackRow {
+        id: id.to_string(),
+        title: v["name"].as_str().unwrap_or("").to_string(),
+        artist: show.title.clone(),
+        artist_id: None,
+        artists: vec![],
+        album: show.title.clone(),
+        album_id: Some(show.id.clone()),
+        art: best_image(v).or_else(|| show.art.clone()),
+        duration_ms: v["duration_ms"].as_u64().unwrap_or(0) as u32,
+        track_no: 0,
+        disc_no: 0,
+    };
+    let resume = v["resume_point"].is_object().then(|| {
+        (v["resume_point"]["resume_position_ms"].as_u64().unwrap_or(0) as u32, v["resume_point"]["fully_played"].as_bool().unwrap_or(false))
+    });
+    Some((
+        row,
+        v["release_date"].as_str().unwrap_or("").to_string(),
+        v["description"].as_str().unwrap_or("").to_string(),
+        resume,
+    ))
+}
+
 pub fn year_of(v: &Value) -> Option<u32> {
     v["release_date"].as_str()?.get(..4)?.parse().ok()
 }

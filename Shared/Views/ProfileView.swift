@@ -37,14 +37,6 @@ struct ProfileView: View {
                     .onChange(of: settings) { model.core.setSettings(s: settings) }
                     heading("Appearance")
                     AppearanceSection()
-                    #if os(macOS)
-                    // iPhone's dark mode is already pure black.
-                    Toggle("Pure black in dark mode", isOn: $model.pureBlack)
-                        .padding(16)
-                        .glassEffect(.regular, in: .rect(cornerRadius: 24))
-                        .padding(.top, 12)
-                        .accessibilityIdentifier("settings.pureBlack")
-                    #endif
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 30)
@@ -108,9 +100,8 @@ struct ProfileView: View {
                         model.show("Library up to date")
                     }
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
                         Text("Refresh library")
-                        Spacer()
                         if refreshing { ProgressView().controlSize(.small) }
                     }
                 }

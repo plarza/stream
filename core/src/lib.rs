@@ -88,6 +88,8 @@ pub struct StreamCore {
     folders: Mutex<Vec<PathBuf>>,
     scan_progress: Arc<scan::Progress>,
     scanning: Mutex<bool>,
+    /// A rescan asked for while one was running: run again once it ends, with the folders as they are then.
+    rescan_pending: std::sync::atomic::AtomicBool,
     node: Arc<node::Node>,
     device_id: String,
     is_phone: bool,
@@ -198,6 +200,7 @@ impl StreamCore {
             folders: Mutex::new(folders),
             scan_progress: Arc::new(scan::Progress { done: 0.into(), total: 0.into() }),
             scanning: Mutex::new(false),
+            rescan_pending: false.into(),
             node,
             device_id,
             is_phone: config.is_phone,
@@ -334,6 +337,7 @@ impl StreamCore {
         {
             let mut s = self.scanning.lock();
             if *s {
+                self.rescan_pending.store(true, Ordering::SeqCst);
                 return;
             }
             *s = true;
@@ -342,15 +346,21 @@ impl StreamCore {
         std::thread::Builder::new()
             .name("stream-scan".into())
             .spawn(move || {
-                // The iPhone has no music folders (but UI tests' fixtures): its songs come from the Stream node.
-                let roots: Vec<PathBuf> = me.folders.lock().clone();
-                let changed = scan::scan(&me.db, &roots, &me.art_dir, true, &me.scan_progress).unwrap_or_else(|e| {
-                    me.delegate.message(format!("Scanning failed: {e:#}"));
-                    false
-                });
-                *me.scanning.lock() = false;
-                if changed {
-                    me.delegate.library_changed();
+                loop {
+                    // The iPhone has no music folders (but UI tests' fixtures): its songs come from the Stream node.
+                    let roots: Vec<PathBuf> = me.folders.lock().clone();
+                    let changed = scan::scan(&me.db, &roots, &me.art_dir, true, &me.scan_progress).unwrap_or_else(|e| {
+                        me.delegate.message(format!("Scanning failed: {e:#}"));
+                        false
+                    });
+                    if changed {
+                        me.delegate.library_changed();
+                    }
+                    let mut s = me.scanning.lock();
+                    if !me.rescan_pending.swap(false, Ordering::SeqCst) {
+                        *s = false;
+                        break;
+                    }
                 }
                 me.clone().upload_now();
             })
@@ -413,20 +423,20 @@ impl StreamCore {
             let tracks = self.db.album_tracks(&id);
             let description = label.filter(|l| !l.is_empty()).map(|l| format!("℗ {l}"));
             return (!tracks.is_empty())
-                .then(|| CollectionPage { detail: detail(year, &tracks), item, description, tracks, releases: vec![], artist: None, liked: saved && id.starts_with("spotify:"), pinned });
+                .then(|| CollectionPage { detail: detail(year, &tracks), item, description, tracks, releases: vec![], artist: None, liked: saved && id.starts_with("spotify:"), pinned, episodes: vec![] });
         }
         if id.starts_with("spotify:playlist:") {
             let (item, description) = self.db.playlist_item(&id)?;
             let tracks = self.db.playlist_track_list(&id);
             return (!tracks.is_empty())
-                .then(|| CollectionPage { detail: list_detail(&tracks), item, description, tracks, releases: vec![], artist: None, liked: false, pinned });
+                .then(|| CollectionPage { detail: list_detail(&tracks), item, description, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
         }
         if id.starts_with("local:artist:") {
             let item = self.db.artist_item(&id)?;
             let releases = local_releases(self.db.artist_albums(&id));
             let tracks = self.db.artist_tracks(&id, 500);
             let n = releases.len();
-            return Some(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, releases, artist: None, liked: false, pinned });
+            return Some(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, releases, artist: None, liked: false, pinned, episodes: vec![] });
         }
         None
     }
@@ -507,6 +517,10 @@ impl StreamCore {
                 self.db.set_spotify_saved(&track_id, liked);
             } else if track_id.starts_with("spotify:album:") {
                 self.db.set_album_saved(&track_id, liked);
+                self.delegate.library_changed();
+            } else if track_id.starts_with("spotify:show:") {
+                self.db.set_show_saved(&track_id, liked);
+                let _ = self.db.rebuild_search();
                 self.delegate.library_changed();
             }
         }
@@ -1079,6 +1093,7 @@ impl StreamCore {
             ItemKind::Album => self.db.album_item(&pin.id).map(|(i, ..)| i),
             ItemKind::Artist => self.db.artist_item(&pin.id),
             ItemKind::Playlist => self.db.playlist_item(&pin.id).map(|(i, _)| i),
+            ItemKind::Show => self.db.show_item(&pin.id).map(|(i, ..)| i),
             ItemKind::Track => self
                 .db
                 .track(&pin.id)
@@ -1275,6 +1290,10 @@ impl StreamCore {
                 return;
             }
             let Some(cur) = q.current() else { return };
+            // A podcast ends where it ends.
+            if cur.track.id.starts_with("spotify:episode:") {
+                return;
+            }
             let seed = cur.key;
             let recent: Vec<String> = q.entries[..=q.current]
                 .iter()
@@ -1355,12 +1374,24 @@ impl StreamCore {
 
         let page: [(&str, String); 1] = [("limit", "50".into())];
         let follow: [(&str, String); 2] = [("type", "artist".into()), ("limit", "50".into())];
-        let (saved, albums, artists, playlists) = tokio::join!(
+        let (saved, albums, artists, playlists, shows) = tokio::join!(
             web.all_pages("/me/tracks", &page, 20_000),
             web.all_pages("/me/albums", &page, 5_000),
             web.all_pages("/me/following", &follow, 5_000),
             web.all_pages("/me/playlists", &page, 2_000),
+            web.all_pages("/me/shows", &page, 2_000),
         );
+        if let Ok(shows) = shows {
+            let mut ids = Vec::new();
+            for s in shows {
+                let show = &s["show"];
+                if let Some(item) = api::show_item(show) {
+                    self.db.upsert_show(&item, show["description"].as_str(), Some(true));
+                    ids.push(item.id);
+                }
+            }
+            self.db.set_saved_shows(&ids);
+        }
 
         if let Ok(saved) = saved {
             let rows: Vec<_> = saved.iter().filter_map(|i| api::track_row(&i["track"], None)).collect();
@@ -1439,14 +1470,14 @@ impl StreamCore {
         if id.starts_with("local:album:") {
             let (item, year, _) = self.db.album_item(id).ok_or(CoreError::NotFound)?;
             let tracks = self.db.album_tracks(id);
-            return Ok(CollectionPage { detail: detail(year, &tracks), item, description: None, tracks, releases: vec![], artist: None, liked: false, pinned });
+            return Ok(CollectionPage { detail: detail(year, &tracks), item, description: None, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
         }
         if id.starts_with("local:artist:") {
             let item = self.db.artist_item(id).ok_or(CoreError::NotFound)?;
             let releases = local_releases(self.db.artist_albums(id));
             let tracks = self.db.artist_tracks(id, 500);
             let n = releases.len();
-            return Ok(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, releases, artist: None, liked: false, pinned });
+            return Ok(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, releases, artist: None, liked: false, pinned, episodes: vec![] });
         }
         if id.starts_with("spotify:album:") {
             // An album fetched in full once doesn't change: serve it from disk.
@@ -1459,7 +1490,7 @@ impl StreamCore {
                 && !cached.is_empty()
                 && self.web.read().is_none()
             {
-                return Ok(CollectionPage { detail: detail(year, &cached), item, description: None, tracks: cached, releases: vec![], artist: None, liked: saved, pinned });
+                return Ok(CollectionPage { detail: detail(year, &cached), item, description: None, tracks: cached, releases: vec![], artist: None, liked: saved, pinned, episodes: vec![] });
             }
             let web = self.web.read().clone().ok_or(CoreError::NotSignedIn)?;
             let v = match web.get(&format!("/albums/{}", api::bare_id(id)), &[]).await {
@@ -1468,7 +1499,7 @@ impl StreamCore {
                     if let Some((item, year, saved)) = header
                         && !cached.is_empty()
                     {
-                        return Ok(CollectionPage { detail: detail(year, &cached), item, description: None, tracks: cached, releases: vec![], artist: None, liked: saved, pinned });
+                        return Ok(CollectionPage { detail: detail(year, &cached), item, description: None, tracks: cached, releases: vec![], artist: None, liked: saved, pinned, episodes: vec![] });
                     }
                     return Err(err(e));
                 }
@@ -1493,7 +1524,7 @@ impl StreamCore {
                 tracks,
                 releases: vec![], artist: None,
                 liked: saved.unwrap_or(false),
-                pinned,
+                pinned, episodes: vec![],
             });
         }
         if id.starts_with("spotify:playlist:") {
@@ -1502,7 +1533,83 @@ impl StreamCore {
         if id.starts_with("spotify:artist:") {
             return self.artist(id, pinned).await;
         }
+        if id.starts_with("spotify:show:") {
+            return self.show(id, pinned).await;
+        }
         Err(CoreError::NotFound)
+    }
+
+    /// A podcast and its newest episodes: from the Web API, else over the streaming session.
+    async fn show(&self, id: &str, pinned: bool) -> Result<CollectionPage, CoreError> {
+        let web = self.web.read().clone();
+        let header = self.db.show_item(id);
+        let followed = header.as_ref().is_some_and(|h| h.2);
+        let mut description = header.as_ref().and_then(|h| h.1.clone());
+        let mut item = header.map(|h| h.0);
+        let mut found = Vec::new();
+        if let Some(web) = &web {
+            let bare = api::bare_id(id);
+            let (path, episodes_path, limit) = (format!("/shows/{bare}"), format!("/shows/{bare}/episodes"), [("limit", "50".to_string())]);
+            let (show, list) = tokio::join!(web.get(&path, &[]), web.get(&episodes_path, &limit));
+            if let Ok(v) = &show
+                && let Some(i) = api::show_item(v)
+            {
+                description = v["description"].as_str().map(str::to_string).or(description);
+                self.db.upsert_show(&i, description.as_deref(), None);
+                item = Some(i);
+            }
+            if let (Some(show), Ok(list)) = (&item, &list) {
+                found = list["items"]
+                    .as_array()
+                    .map(|a| a.iter().filter(|e| !e.is_null()).filter_map(|e| api::episode_row(e, show)).collect())
+                    .unwrap_or_default();
+            }
+        }
+        if found.is_empty()
+            && let Some(pb) = self.playback_soon().await
+        {
+            match spotify::download::session_show(&pb.session, id).await {
+                Ok((i, d, list)) => {
+                    if item.is_none() {
+                        self.db.upsert_show(&i, Some(&d), None);
+                        description = Some(d);
+                        item = Some(i);
+                    }
+                    found = list;
+                }
+                Err(e) => log::warn!("{id} over the session: {e:#}"),
+            }
+        }
+        let item = item.ok_or(if web.is_none() { CoreError::NotSignedIn } else { CoreError::NotFound })?;
+        let rows: Vec<_> = found.iter().map(|e| e.0.clone()).collect();
+        self.db.upsert_spotify_tracks(&rows, None).map_err(err)?;
+        let episodes: Vec<Episode> = found
+            .into_iter()
+            .filter_map(|(row, released, description, theirs)| {
+                let track = self.db.track(&row.id)?;
+                let mine = self.db.episode_resume(&row.id);
+                // Spotify's place in an episode not started here: playing it starts there.
+                if mine.is_none()
+                    && let Some((ms, played)) = theirs.filter(|t| t.0 > 0 || t.1)
+                {
+                    self.db.set_episode_resume(&row.id, ms, played);
+                }
+                let (resume_ms, played) = mine.or(theirs).unwrap_or((0, false));
+                Some(Episode { track, released, description, resume_ms, played })
+            })
+            .collect();
+        let n = episodes.len();
+        Ok(CollectionPage {
+            detail: format!("{n} episode{}", if n == 1 { "" } else { "s" }),
+            item,
+            description: description.filter(|d| !d.is_empty()),
+            tracks: episodes.iter().map(|e| e.track.clone()).collect(),
+            releases: vec![],
+            artist: None,
+            liked: followed,
+            pinned,
+            episodes,
+        })
     }
 
     /// The playback session, waiting a little for one that is still reconnecting
@@ -1548,7 +1655,7 @@ impl StreamCore {
                 releases,
                 artist: Some(a.info),
                 liked: false,
-                pinned,
+                pinned, episodes: vec![],
             });
         }
         let web = web.ok_or(CoreError::NotSignedIn)?;
@@ -1557,7 +1664,7 @@ impl StreamCore {
         let item = api::artist_item(&artist.map_err(err)?).ok_or(CoreError::NotFound)?;
         self.db.upsert_artist(&item, None);
         let releases = merge_releases(vec![], releases);
-        Ok(CollectionPage { detail: String::new(), description: None, item, tracks: vec![], releases, artist: None, liked: false, pinned })
+        Ok(CollectionPage { detail: String::new(), description: None, item, tracks: vec![], releases, artist: None, liked: false, pinned, episodes: vec![] })
     }
 
     async fn playlist(&self, id: &str, pinned: bool) -> Result<CollectionPage, CoreError> {
@@ -1566,12 +1673,12 @@ impl StreamCore {
             && let Some((item, desc)) = header.clone()
         {
             let tracks = self.db.playlist_track_list(id);
-            return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, liked: false, pinned });
+            return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
         }
         let Some(web) = self.web.read().clone() else {
             if let Some((item, desc)) = header {
                 let tracks = self.db.playlist_track_list(id);
-                return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, liked: false, pinned });
+                return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
             }
             return Err(CoreError::NotSignedIn);
         };
@@ -1591,7 +1698,7 @@ impl StreamCore {
                 if let Some((item, desc)) = header {
                     let tracks = self.db.playlist_track_list(id);
                     if !tracks.is_empty() {
-                        return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, liked: false, pinned });
+                        return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
                     }
                 }
                 return Err(err(m.err().or(i.err()).map(|e| format!("{e:#}")).unwrap_or_default()));
@@ -1633,14 +1740,15 @@ impl StreamCore {
             tracks,
             releases: vec![], artist: None,
             liked: false,
-            pinned,
+            pinned, episodes: vec![],
         })
     }
 
     async fn search_spotify_inner(&self, q: &str, filter: SearchFilter) -> Result<Vec<Item>, CoreError> {
         let web = self.web.read().clone().ok_or(CoreError::NotSignedIn)?;
         let types = match filter {
-            SearchFilter::All => "track,album,artist,playlist",
+            SearchFilter::All => "track,album,artist,playlist,show",
+            SearchFilter::Podcasts => "show",
             SearchFilter::Songs => "track",
             SearchFilter::Albums => "album",
             SearchFilter::Artists => "artist",
@@ -1677,6 +1785,12 @@ impl StreamCore {
         let mut artists = list("artists", api::artist_item, "");
         let mut albums = list("albums", api::album_item, "Album");
         let mut playlists = list("playlists", api::playlist_item, "Playlist");
+        let mut shows = list("shows", api::show_item, "Podcast");
+        for s in &shows {
+            let mut plain = s.clone();
+            plain.subtitle = plain.subtitle.trim_start_matches("Podcast · ").trim_start_matches("Podcast").to_string();
+            self.db.upsert_show(&plain, None, None);
+        }
         // One ranked list: best artist, a few songs, albums, then the rest.
         let mut out = Vec::new();
         if !artists.is_empty() {
@@ -1685,6 +1799,7 @@ impl StreamCore {
         out.extend(tracks.drain(..tracks.len().min(4)));
         out.extend(albums.drain(..albums.len().min(3)));
         out.extend(playlists.drain(..playlists.len().min(2)));
+        out.extend(shows.drain(..shows.len().min(2)));
         out.extend(tracks);
         out.extend(artists);
         out.extend(albums);

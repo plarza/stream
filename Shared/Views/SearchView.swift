@@ -3,7 +3,7 @@ import SwiftUI
 
 extension SearchFilter: Identifiable, CaseIterable {
     public var id: Self { self }
-    public static var allCases: [SearchFilter] { [.all, .songs, .albums, .artists, .playlists] }
+    public static var allCases: [SearchFilter] { [.all, .songs, .albums, .artists, .playlists, .podcasts] }
     var title: String {
         switch self {
         case .all: "All"
@@ -11,6 +11,7 @@ extension SearchFilter: Identifiable, CaseIterable {
         case .albums: "Albums"
         case .artists: "Artists"
         case .playlists: "Playlists"
+        case .podcasts: "Podcasts"
         }
     }
 }

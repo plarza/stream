@@ -7,6 +7,12 @@ struct StreamApp: App {
     @State private var model = AppModel.shared
     @Environment(\.scenePhase) private var phase
 
+    init() {
+        // Tests and screenshots: pushes, sheets and transitions land at once, so UI tests
+        // don't wait out every animation and shots never catch one halfway.
+        if AppModel.isTesting { UIView.setAnimationsEnabled(false) }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -90,6 +96,12 @@ struct RootView: View {
             // Now Playing (if it's up) closes over the page.
             openPending()
             model.showNowPlaying = false
+        }
+        .onChange(of: model.searchRequest) {
+            guard let q = model.searchRequest else { return }
+            model.searchRequest = nil
+            tab = .search
+            search.query = q
         }
         .onChange(of: model.resetRequested) {
             model.showSettings = false

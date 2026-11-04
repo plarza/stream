@@ -92,6 +92,16 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
     PRIMARY KEY (playlist_id, position)
 );
 
+CREATE TABLE IF NOT EXISTS shows (
+    id          TEXT PRIMARY KEY,         -- spotify:show:<id>
+    title       TEXT NOT NULL,
+    publisher   TEXT NOT NULL DEFAULT '',
+    art         TEXT,
+    description TEXT,
+    saved       INTEGER NOT NULL DEFAULT 0, -- followed on Spotify
+    position    INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS pins (
     id        TEXT PRIMARY KEY,
     item      TEXT NOT NULL,  -- JSON Item
@@ -212,6 +222,7 @@ pub fn remote_id(hash: &str) -> String {
 }
 
 /// A Spotify track as cached from the Web API.
+#[derive(Clone)]
 pub struct SpotifyTrackRow {
     pub id: String,
     pub title: String,
@@ -773,6 +784,66 @@ impl Db {
         Ok(())
     }
 
+    /// A show as seen, keeping whether it's followed unless `saved` says.
+    pub fn upsert_show(&self, item: &Item, description: Option<&str>, saved: Option<bool>) {
+        let _ = self.conn.lock().execute(
+            "INSERT INTO shows(id, title, publisher, art, description, saved) VALUES(?1, ?2, ?3, ?4, ?5, COALESCE(?6, 0))
+             ON CONFLICT(id) DO UPDATE SET title = excluded.title, publisher = excluded.publisher,
+                art = COALESCE(excluded.art, shows.art), description = COALESCE(excluded.description, shows.description),
+                saved = COALESCE(?6, shows.saved)",
+            params![item.id, item.title, item.subtitle, item.art, description, saved.map(|s| s as i64)],
+        );
+    }
+
+    /// The shows followed on Spotify, in Spotify's order, in place of those followed before.
+    pub fn set_saved_shows(&self, ids: &[String]) {
+        let mut conn = self.conn.lock();
+        let Ok(tx) = conn.transaction() else { return };
+        let _ = tx.execute("UPDATE shows SET saved = 0", []);
+        for (i, id) in ids.iter().enumerate() {
+            let _ = tx.execute("UPDATE shows SET saved = 1, position = ?2 WHERE id = ?1", params![id, i as i64]);
+        }
+        let _ = tx.commit();
+    }
+
+    pub fn set_show_saved(&self, id: &str, saved: bool) {
+        let _ = self.conn.lock().execute("UPDATE shows SET saved = ?2 WHERE id = ?1", params![id, saved as i64]);
+    }
+
+    /// A show and its description.
+    pub fn show_item(&self, id: &str) -> Option<(Item, Option<String>, bool)> {
+        self.conn
+            .lock()
+            .query_row("SELECT id, title, publisher, art, description, saved FROM shows WHERE id = ?1", [id], |r| {
+                Ok((
+                    Item {
+                        id: r.get(0)?,
+                        kind: ItemKind::Show,
+                        source: Source::Spotify,
+                        title: r.get(1)?,
+                        subtitle: r.get(2)?,
+                        art: r.get(3)?,
+                        downloaded: false,
+                    },
+                    r.get(4)?,
+                    r.get::<_, i64>(5)? != 0,
+                ))
+            })
+            .optional()
+            .ok()
+            .flatten()
+    }
+
+    /// Where an episode was left off, and whether it was heard to the end.
+    pub fn episode_resume(&self, id: &str) -> Option<(u32, bool)> {
+        let v = self.get_kv(&format!("resume:{id}"))?;
+        if v == "done" { Some((0, true)) } else { v.parse().ok().map(|ms| (ms, false)) }
+    }
+
+    pub fn set_episode_resume(&self, id: &str, ms: u32, played: bool) {
+        self.set_kv(&format!("resume:{id}"), &if played { "done".to_string() } else { ms.to_string() });
+    }
+
     pub fn upsert_album(&self, item: &Item, artist_id: Option<&str>, year: Option<u32>, saved: Option<bool>) {
         let _ = self.conn.lock().execute(
             "INSERT INTO albums(id, source, title, artist, artist_id, year, art, added_at, saved)
@@ -1097,6 +1168,11 @@ impl Db {
                  WHERE downloaded = 1 AND (source = 1 OR remote = 1) ORDER BY added_at DESC LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
+            LibrarySection::Podcasts => self.items(
+                "SELECT id, 'show', 1, title, publisher, art, 0 FROM shows WHERE saved = 1
+                 ORDER BY position LIMIT ?1 OFFSET ?2",
+                &[&limit, &offset],
+            ),
             LibrarySection::LikedSongs => self.items(
                 "SELECT id, 'track', source, title, artist, art, (downloaded = 1 AND (source = 1 OR remote = 1)) FROM tracks
                  WHERE saved = 1 OR liked = 1 ORDER BY added_at DESC LIMIT ?1 OFFSET ?2",
@@ -1239,7 +1315,8 @@ impl Db {
                SELECT id, 'track', title, artist || ' ' || album FROM tracks WHERE source = 0 OR saved = 1
                UNION ALL SELECT id, 'album', title, artist FROM albums WHERE saved = 1
                UNION ALL SELECT id, 'artist', name, '' FROM artists WHERE saved = 1
-               UNION ALL SELECT id, 'playlist', name, owner FROM playlists",
+               UNION ALL SELECT id, 'playlist', name, owner FROM playlists
+               UNION ALL SELECT id, 'show', title, publisher FROM shows WHERE saved = 1",
             [],
         )?;
         tx.commit()?;
@@ -1264,6 +1341,7 @@ impl Db {
             SearchFilter::Albums => Some("album"),
             SearchFilter::Artists => Some("artist"),
             SearchFilter::Playlists => Some("playlist"),
+            SearchFilter::Podcasts => Some("show"),
         };
         let hits: Vec<(String, String)> = {
             let conn = self.conn.lock();
@@ -1292,6 +1370,10 @@ impl Db {
                 "playlist" => self.playlist_item(&id).map(|(mut p, _)| {
                     p.subtitle = format!("Playlist · {}", p.subtitle);
                     p
+                }),
+                "show" => self.show_item(&id).map(|(mut s, _, _)| {
+                    s.subtitle = format!("Podcast · {}", s.subtitle);
+                    s
                 }),
                 _ => None,
             })

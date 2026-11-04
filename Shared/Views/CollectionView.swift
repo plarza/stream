@@ -161,7 +161,7 @@ struct CollectionView: View {
             let isContext = model.player.contextId == item.id && model.player.track != nil
             let playing = isContext && model.player.status == .playing
             Button {
-                if isContext { model.toggle() } else if let page { model.play(ordered(page), from: page.item) }
+                if isContext { model.toggle() } else if let page { model.play(playable(page), from: page.item) }
             } label: {
                 Image(systemName: playing ? "pause.fill" : "play.fill")
                     .font(.title3)
@@ -173,12 +173,14 @@ struct CollectionView: View {
             .buttonStyle(.pressable)
             .accessibilityLabel(playing ? "Pause" : "Play")
             .accessibilityIdentifier("collection.play")
-            Button {
-                if let page { model.play(ordered(page), from: page.item, shuffle: true) }
-            } label: { Image(systemName: "shuffle").font(.title3) }
-                .buttonStyle(.pressable)
-                .accessibilityLabel("Shuffle")
-                .accessibilityIdentifier("collection.shuffle")
+            if item.kind != .show {
+                Button {
+                    if let page { model.play(ordered(page), from: page.item, shuffle: true) }
+                } label: { Image(systemName: "shuffle").font(.title3) }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel("Shuffle")
+                    .accessibilityIdentifier("collection.shuffle")
+            }
             if item.kind == .album, item.source == .spotify {
                 Button { toggleSaved() } label: {
                     Image(systemName: liked ? "heart.fill" : "heart").font(.title3)
@@ -198,7 +200,7 @@ struct CollectionView: View {
             .buttonStyle(.pressable)
             .accessibilityLabel(pinned ? "Unpin" : "Pin")
             .accessibilityIdentifier("collection.pin")
-            if item.kind != .artist, let page, page.tracks.contains(where: \.downloadable) {
+            if item.kind != .artist, item.kind != .show, let page, page.tracks.contains(where: \.downloadable) {
                 // Spotify songs and Uploads: download to play offline, or remove the download.
                 let all = page.tracks.filter(\.downloadable).allSatisfy(\.downloaded)
                 Button {
@@ -230,8 +232,34 @@ struct CollectionView: View {
         .foregroundStyle(.primary)
     }
 
+    /// What Play plays: a show's newest episode you haven't finished, everything else in order.
+    private func playable(_ page: CollectionPage) -> [Track] {
+        guard item.kind == .show else { return ordered(page) }
+        return (page.episodes.first { !$0.played } ?? page.episodes.first).map { [$0.track] } ?? []
+    }
+
     @ViewBuilder
     private func tracks(_ page: CollectionPage) -> some View {
+        if item.kind == .show {
+            LazyVStack(spacing: 0) {
+                ForEach(page.episodes, id: \.track.id) { e in
+                    Button { model.play([e.track], from: page.item) } label: {
+                        EpisodeRow(episode: e, playing: model.player.track?.id == e.track.id)
+                            .padding(.horizontal, Metrics.page)
+                            .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("episode.\(e.track.title)")
+                    Divider().padding(.leading, Metrics.page)
+                }
+            }
+        } else {
+            songs(page)
+        }
+    }
+
+    @ViewBuilder
+    private func songs(_ page: CollectionPage) -> some View {
         if item.kind == .artist, !page.tracks.isEmpty {
             Text("Popular").font(.title3.weight(.bold)).padding(.horizontal, Metrics.page).padding(.bottom, 4)
         }
@@ -404,6 +432,71 @@ struct CollectionView: View {
     private func commonQuality(_ tracks: [Track]) -> String? {
         guard let first = tracks.first?.quality, !first.isEmpty else { return nil }
         return tracks.allSatisfy { $0.quality == first } ? first : nil
+    }
+}
+
+/// One episode on a show's page: when it came out, its title and what it's about, and
+/// how far you got.
+struct EpisodeRow: View {
+    let episode: Episode
+    let playing: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(Self.date(episode.released))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Text(episode.track.title)
+                .font(.headline)
+                .foregroundStyle(playing ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            if !episode.description.isEmpty {
+                Text(episode.description)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            HStack(spacing: 8) {
+                Image(systemName: playing ? "speaker.wave.2.fill" : "play.fill")
+                    .font(.caption)
+                    .frame(width: 26, height: 26)
+                    .background(.quaternary, in: .circle)
+                if episode.played {
+                    Label("Played", systemImage: "checkmark").font(.caption.weight(.medium))
+                } else if episode.resumeMs > 0, episode.track.durationMs > 0 {
+                    ProgressView(value: Double(episode.resumeMs), total: Double(episode.track.durationMs))
+                        .frame(width: 44)
+                    Text("\(Self.minutes(episode.track.durationMs - min(episode.resumeMs, episode.track.durationMs))) left")
+                        .font(.caption.weight(.medium))
+                } else {
+                    Text(Self.minutes(episode.track.durationMs)).font(.caption.weight(.medium))
+                }
+            }
+            .foregroundStyle(.secondary)
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    /// "1 hr 5 min", "42 min".
+    static func minutes(_ ms: UInt32) -> String {
+        let m = max(1, Int((Double(ms) / 60_000).rounded()))
+        return m >= 60 ? "\(m / 60) hr \(m % 60) min" : "\(m) min"
+    }
+
+    /// "Today", "3 Nov", "3 Nov 2024"; Spotify sometimes gives only a year or a month.
+    static func date(_ released: String) -> String {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: released) else { return released }
+        if Calendar.current.isDateInToday(d) { return "Today" }
+        if Calendar.current.isDateInYesterday(d) { return "Yesterday" }
+        let sameYear = Calendar.current.isDate(d, equalTo: .now, toGranularity: .year)
+        return d.formatted(sameYear ? .dateTime.day().month(.abbreviated) : .dateTime.day().month(.abbreviated).year())
     }
 }
 

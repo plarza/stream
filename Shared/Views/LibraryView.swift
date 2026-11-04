@@ -13,6 +13,7 @@ extension LibrarySection: Identifiable {
         case .uploads: "Uploads"
         case .downloaded: "Downloaded"
         case .likedSongs: "Liked Songs"
+        case .podcasts: "Podcasts"
         }
     }
 
@@ -25,15 +26,16 @@ extension LibrarySection: Identifiable {
         case .uploads: "arrow.up.circle"
         case .downloaded: "arrow.down.circle"
         case .likedSongs: "heart"
+        case .podcasts: Item.showSymbol
         }
     }
 
     var isSongs: Bool { self == .songs || self == .uploads || self == .downloaded || self == .likedSongs }
 
     /// Shown as a grid of covers rather than a list.
-    var isGrid: Bool { self == .albums || self == .artists || self == .playlists }
+    var isGrid: Bool { self == .albums || self == .artists || self == .playlists || self == .podcasts }
 
-    static let ordered: [LibrarySection] = [.playlists, .artists, .albums, .songs, .likedSongs, .uploads, .downloaded]
+    static let ordered: [LibrarySection] = [.playlists, .podcasts, .artists, .albums, .songs, .likedSongs, .uploads, .downloaded]
 }
 
 /// A Library page that isn't one of the core's sections.

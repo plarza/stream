@@ -10,6 +10,13 @@ struct StreamMacApp: App {
     @State private var palette = false
     @AppStorage(Zoom.key) private var zoom = Zoom.standard
 
+    init() {
+        // "Pure black in dark mode" was its own switch; it's the OLED Dark theme now.
+        let d = UserDefaults.standard
+        if d.bool(forKey: "pureBlack") { d.set("oledDark", forKey: Appearance.key) }
+        d.removeObject(forKey: "pureBlack")
+    }
+
     var body: some Scene {
         Window("Stream", id: "main") {
             Zoomed(zoom: zoom) {

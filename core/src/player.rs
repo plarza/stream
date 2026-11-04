@@ -62,6 +62,10 @@ pub struct Engine {
 }
 
 const SAVED_QUEUE: &str = "queue";
+
+fn is_episode(id: &str) -> bool {
+    id.starts_with("spotify:episode:")
+}
 const SAVED_POSITION: &str = "queue.position";
 
 impl Engine {
@@ -137,7 +141,27 @@ impl Engine {
 
     fn save_position(&self) {
         *self.position_saved_at.lock() = Instant::now();
-        self.db.set_kv(SAVED_POSITION, &self.position_ms().to_string());
+        let ms = self.position_ms();
+        self.db.set_kv(SAVED_POSITION, &ms.to_string());
+        // A podcast episode keeps its own place, to pick up from next time.
+        let episode = self.queue.lock().current().map(|e| (e.track.id.clone(), e.track.duration_ms)).filter(|(id, _)| is_episode(id));
+        if let Some((id, duration)) = episode
+            && ms > 0
+        {
+            // The last seconds count as heard to the end.
+            self.db.set_episode_resume(&id, ms, ms + 15_000 >= duration);
+        }
+    }
+
+    /// Where a song starts when nothing says otherwise: an episode where it was left off.
+    fn start_ms(&self, track: &Track, ms: u32) -> u32 {
+        if ms > 0 || !is_episode(&track.id) {
+            return ms;
+        }
+        match self.db.episode_resume(&track.id) {
+            Some((at, false)) if at + 15_000 < track.duration_ms => at,
+            _ => 0,
+        }
     }
 
     pub fn output(&self) -> &Arc<Output> {
@@ -295,6 +319,7 @@ impl Engine {
         }
         self.segments.lock().clear();
         *self.audible.lock() = None;
+        let ms = self.queue.lock().entries.get(index).map_or(ms, |e| self.start_ms(&e.track, ms));
         self.idle_position.store(ms as u64, Ordering::Relaxed);
         {
             let mut q = self.queue.lock();
@@ -330,6 +355,7 @@ impl Engine {
                 (entry, next)
             };
             let Some(entry) = entry else { break };
+            ms = self.start_ms(&entry.track, ms);
             self.segments.lock().push_back(Segment {
                 start_frame: self.out.frames_written.load(Ordering::Acquire),
                 key: entry.key,
@@ -360,7 +386,12 @@ impl Engine {
             };
             match result {
                 Ok(Outcome::Cancelled) => return,
-                Ok(Outcome::Finished) => failures = 0,
+                Ok(Outcome::Finished) => {
+                    failures = 0;
+                    if is_episode(&entry.track.id) {
+                        self.db.set_episode_resume(&entry.track.id, 0, true);
+                    }
+                }
                 Err(_) if self.out.generation() != generation => return,
                 Err(e) => {
                     log::warn!("{e:#}");

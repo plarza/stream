@@ -250,13 +250,6 @@ final class AppModel {
         open(Item(id: id, kind: .album, source: track.source, title: track.album, subtitle: track.artist, art: track.art, downloaded: false))
     }
 
-    // MARK: Appearance
-
-    /// Pure black instead of dark grey in dark mode, for OLED screens.
-    var pureBlack: Bool = UserDefaults.standard.bool(forKey: "pureBlack") {
-        didSet { UserDefaults.standard.set(pureBlack, forKey: "pureBlack") }
-    }
-
     func togglePin(_ item: Item) {
         Haptics.success()
         if isPinned(item.id) { core.unpin(id: item.id) } else { core.pin(item: item) }
@@ -315,8 +308,14 @@ final class AppModel {
         return error.localizedDescription
     }
 
-    /// network-aza-stream://play?id=…[&shuffle=1] · open?id=… · nowplaying?mode=lyrics|queue
+    /// network-aza-stream://play?id=…[&shuffle=1|&track=<title>] · open?id=… · seek?ms=… · nowplaying?mode=lyrics|queue · search?q=…
     func handle(url: URL) {
+        Task { await perform(url) }
+    }
+
+    /// Does what a deep link asks and returns once it's done: `play` once the song is
+    /// playing, so a `seek` after it lands.
+    func perform(_ url: URL) async {
         guard url.scheme == "network-aza-stream" else { return }
         let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let value = { (name: String) in q.first { $0.name == name }?.value }
@@ -330,17 +329,32 @@ final class AppModel {
         case "play":
             guard let id = value("id") else { return }
             let item = Item(id: id, kind: Self.kind(of: id), source: id.hasPrefix("local:") ? .local : .spotify, title: "", subtitle: "", art: nil, downloaded: false)
-            play(item, shuffle: value("shuffle") == "1")
+            let before = core.playerState().queueVersion
+            if let title = value("track") {
+                // An album or playlist from one of its songs.
+                guard let page = try? await core.collection(id: id),
+                      let i = page.tracks.firstIndex(where: { $0.title == title }) else { return }
+                play(page.tracks, at: i, from: page.item)
+            } else {
+                do { try await core.playItem(item: item, shuffle: value("shuffle") == "1") } catch { show(Self.message(error)); return }
+                home = core.home()
+            }
+            await until { let p = self.core.playerState(); return p.queueVersion != before && p.status == .playing }
         case "open":
             guard let id = value("id") else { return }
             pendingNavigation = Item(id: id, kind: Self.kind(of: id), source: id.hasPrefix("local:") ? .local : .spotify, title: "", subtitle: "", art: nil, downloaded: false)
             openRequested &+= 1
         case "pin":
             guard let id = value("id") else { return }
-            Task {
-                if let t = core.track(id: id) { core.pin(item: t.item) }
-                else if let page = try? await core.collection(id: id) { core.pin(item: page.item) }
-            }
+            if let t = core.track(id: id) { core.pin(item: t.item) }
+            else if let page = try? await core.collection(id: id) { core.pin(item: page.item) }
+        case "seek":
+            guard let ms = value("ms").flatMap(UInt32.init) else { return }
+            seek(to: ms)
+            await until { self.core.positionMs() >= ms }
+        case "search":
+            searchRequest = value("q") ?? ""
+            showNowPlaying = false
         case "nowplaying":
             nowPlayingMode = switch value("mode") { case "lyrics": .lyrics; case "queue": .queue; default: .artwork }
             showNowPlaying = true
@@ -349,21 +363,34 @@ final class AppModel {
         }
     }
 
-    /// `-url <deep link>` launch arguments, run in order (handy from scripts and Xcode schemes).
+    /// Checks every 50ms, for up to 10 seconds.
+    private func until(_ done: @escaping () -> Bool) async {
+        for _ in 0..<200 where !done() { try? await Task.sleep(for: .milliseconds(50)) }
+    }
+
+    /// `-url <deep link>` launch arguments, run in order once the library is scanned (handy
+    /// from scripts and Xcode schemes). Under `-uiTesting` the app then writes `tmp/links-done`
+    /// in its container, so a script can take its screenshot without guessing how long to wait.
     func handleLaunchArguments() {
         let args = ProcessInfo.processInfo.arguments
         let urls = args.indices.filter { args[$0] == "-url" && $0 + 1 < args.count }.compactMap { URL(string: args[$0 + 1]) }
         guard !urls.isEmpty else { return }
+        let done = FileManager.default.temporaryDirectory.appendingPathComponent("links-done")
+        try? FileManager.default.removeItem(at: done)
         Task {
-            for u in urls {
-                try? await Task.sleep(for: .seconds(1.5))
-                handle(url: u)
-            }
+            await until { self.core.scanProgress().finished }
+            for u in urls { await perform(u) }
+            // Let the last screen settle into place.
+            try? await Task.sleep(for: .milliseconds(600))
+            if Self.isTesting { FileManager.default.createFile(atPath: done.path, contents: nil) }
         }
     }
 
     /// Bumped when a deep link asks to open a page.
     var openRequested = 0
+
+    /// A deep link's search: the Search tab shows it, then clears this.
+    var searchRequest: String?
 
     /// Bumped when UI tests reset the app between tests.
     var resetRequested = 0

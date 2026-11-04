@@ -37,8 +37,11 @@ extension Item {
         case .album: "square.stack"
         case .artist: "music.mic"
         case .playlist: "music.note.list"
+        case .show: Self.showSymbol
         }
     }
+
+    static let showSymbol = "antenna.radiowaves.left.and.right"
 }
 
 extension Track {
