@@ -79,7 +79,9 @@ final class AppModel {
         // UI tests stand in for Spotify's accounts service and Web API (see tests/Shared/FakeSpotify.swift).
         let config = CoreConfig(dataDir: support.path, cacheDir: caches.path, musicDir: musicDir?.path, isPhone: isPhone,
                                 spotifyAccountsUrl: Self.isTesting ? Self.argument("-spotifyAccounts") : nil,
-                                spotifyApiUrl: Self.isTesting ? Self.argument("-spotifyApi") : nil)
+                                spotifyApiUrl: Self.isTesting ? Self.argument("-spotifyApi") : nil,
+                                // Tests and screenshots: lyrics come from the songs' own .lrc files, never the internet.
+                                lyricsUrl: Self.isTesting ? "http://127.0.0.1:9" : nil)
         // A failure here means the disk is unusable; nothing sensible to show.
         core = try! StreamCore(config: config, delegate: bridge)
         player = core.playerState()
@@ -358,6 +360,9 @@ final class AppModel {
         case "nowplaying":
             nowPlayingMode = switch value("mode") { case "lyrics": .lyrics; case "queue": .queue; default: .artwork }
             showNowPlaying = true
+            if nowPlayingMode == .lyrics, let id = player.track?.id {
+                await until { self.lyricsShown == id }
+            }
         default:
             break
         }
@@ -385,6 +390,9 @@ final class AppModel {
             if Self.isTesting { FileManager.default.createFile(atPath: done.path, contents: nil) }
         }
     }
+
+    /// The song whose lyrics the lyrics view has finished loading (found or not).
+    var lyricsShown: String?
 
     /// Bumped when a deep link asks to open a page.
     var openRequested = 0

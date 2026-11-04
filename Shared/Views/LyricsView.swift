@@ -47,6 +47,8 @@ struct LyricsView: View {
             withAnimation(.smooth) {
                 lyrics = found
                 loaded = true
+            } completion: {
+                model.lyricsShown = track.id
             }
         }
     }

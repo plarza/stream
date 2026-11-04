@@ -53,3 +53,16 @@ fn pins_show_on_home_in_order() {
     mac.core.unpin(night.id);
     assert_eq!(mac.pins(), ["Morning Light"]);
 }
+
+#[test]
+fn a_songs_own_lrc_file_gives_its_synced_lyrics() {
+    let mac = Device::mac();
+    let song = mac.core.section_tracks(LibrarySection::Songs).into_iter().find(|t| t.title == "Loose Song").unwrap();
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    let start = std::time::Instant::now();
+    let lyrics = rt.block_on(mac.core.clone().lyrics(song)).expect("the .lrc next to the song");
+    assert_eq!(lyrics.sync, LyricSync::Line);
+    assert_eq!(lyrics.lines[0].text, "First line of the loose song");
+    // From the file alone: nothing waits on LRCLIB.
+    assert!(start.elapsed() < std::time::Duration::from_secs(2), "took {:?}", start.elapsed());
+}

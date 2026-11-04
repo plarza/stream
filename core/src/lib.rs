@@ -66,6 +66,8 @@ pub struct CoreConfig {
     /// UI tests only: a stand-in for Spotify's accounts service and Web API.
     pub spotify_accounts_url: Option<String>,
     pub spotify_api_url: Option<String>,
+    /// UI tests and screenshots only: LRCLIB's address, so lyrics never wait on the internet.
+    pub lyrics_url: Option<String>,
 }
 
 #[derive(uniffi::Object)]
@@ -84,6 +86,7 @@ pub struct StreamCore {
     autoplay_seed: Mutex<Option<u64>>,
     art_dir: PathBuf,
     lyrics_dir: PathBuf,
+    lrclib: String,
     audio_dir: PathBuf,
     folders: Mutex<Vec<PathBuf>>,
     scan_progress: Arc<scan::Progress>,
@@ -196,6 +199,7 @@ impl StreamCore {
             autoplay_seed: Mutex::new(None),
             art_dir,
             lyrics_dir,
+            lrclib: config.lyrics_url.clone().unwrap_or_else(|| lyrics::LRCLIB.into()),
             audio_dir,
             folders: Mutex::new(folders),
             scan_progress: Arc::new(scan::Progress { done: 0.into(), total: 0.into() }),
@@ -1834,7 +1838,7 @@ impl StreamCore {
                     _ => None,
                 }
             },
-            lyrics::lrclib(&self.http, &track.artist, &track.title, &track.album, track.duration_ms)
+            lyrics::lrclib(&self.http, &self.lrclib, &track.artist, &track.title, &track.album, track.duration_ms)
         );
         let best = lyrics::best([from_spotify, embedded, from_lrclib]);
         lyrics::write_cache(&path, &best);

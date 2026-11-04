@@ -75,6 +75,7 @@ impl Device {
                 // Nothing listens here: anything that reaches for Spotify fails fast.
                 spotify_accounts_url: Some("http://127.0.0.1:9".into()),
                 spotify_api_url: Some("http://127.0.0.1:9".into()),
+                lyrics_url: Some("http://127.0.0.1:9".into()),
             },
             events.clone(),
         )

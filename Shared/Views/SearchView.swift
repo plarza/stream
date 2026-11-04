@@ -72,7 +72,11 @@ struct SearchResultsView: View {
             .animation(.smooth, value: search.results.map(\.id))
             .onChange(of: search.query) { search.run(model) }
             .onChange(of: search.filter) { search.run(model) }
-            .onAppear { recents = model.core.recentSearches() }
+            .onAppear {
+                recents = model.core.recentSearches()
+                // A search link can set the query before this view exists, so no change fires.
+                if !search.query.isEmpty && search.results.isEmpty { search.run(model) }
+            }
             .onSubmit(of: .search) {
                 model.core.addRecentSearch(query: search.query)
             }

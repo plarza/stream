@@ -9,7 +9,7 @@ use lofty::tag::ItemKey;
 
 use crate::types::{LyricLine, LyricSync, LyricWord, Lyrics};
 
-const LRCLIB: &str = "https://lrclib.net/api";
+pub const LRCLIB: &str = "https://lrclib.net/api";
 
 /// Parses LRC, including enhanced word timing (`<mm:ss.xx>word`).
 pub fn parse_lrc(text: &str, source: &str) -> Option<Lyrics> {
@@ -112,10 +112,10 @@ pub fn embedded(path: &Path) -> Option<Lyrics> {
     std::fs::read_to_string(lrc).ok().and_then(|t| parse_lrc(&t, "LRC file"))
 }
 
-pub async fn lrclib(http: &reqwest::Client, artist: &str, title: &str, album: &str, duration_ms: u32) -> Option<Lyrics> {
+pub async fn lrclib(http: &reqwest::Client, base: &str, artist: &str, title: &str, album: &str, duration_ms: u32) -> Option<Lyrics> {
     let secs = (duration_ms / 1000).to_string();
     let exact = http
-        .get(format!("{LRCLIB}/get"))
+        .get(format!("{base}/get"))
         .query(&[("artist_name", artist), ("track_name", title), ("album_name", album), ("duration", &secs)])
         .header("User-Agent", "Stream (network.aza.stream)")
         .timeout(Duration::from_secs(8))
@@ -127,7 +127,7 @@ pub async fn lrclib(http: &reqwest::Client, artist: &str, title: &str, album: &s
     } else {
         // Rank search results by how close their length is.
         let results: serde_json::Value = http
-            .get(format!("{LRCLIB}/search"))
+            .get(format!("{base}/search"))
             .query(&[("artist_name", artist), ("track_name", title)])
             .header("User-Agent", "Stream (network.aza.stream)")
             .timeout(Duration::from_secs(8))

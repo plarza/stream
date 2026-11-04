@@ -34,6 +34,13 @@ struct MacRootView: View {
     /// The row holding the back button and search field, level with the traffic lights.
     private let topBar: CGFloat = 56
 
+    private func openPending() {
+        if let item = model.pendingNavigation {
+            model.pendingNavigation = nil
+            path.append(item)
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             if appearance == "oledDark" && scheme == .dark {
@@ -117,12 +124,9 @@ struct MacRootView: View {
             }
             .environment(model)
         }
-        .onChange(of: model.openRequested) {
-            if let item = model.pendingNavigation {
-                model.pendingNavigation = nil
-                path.append(item)
-            }
-        }
+        // On appear too: a launch link can ask before this window exists.
+        .onAppear(perform: openPending)
+        .onChange(of: model.openRequested, openPending)
         .onChange(of: model.showNowPlaying) { _, shown in
             if !shown, let item = model.pendingNavigation {
                 model.pendingNavigation = nil
