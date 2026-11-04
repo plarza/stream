@@ -379,7 +379,7 @@ impl StreamCore {
     // ---- browsing ----------------------------------------------------------
 
     pub fn home(&self) -> Home {
-        Home { pins: self.db.pins(), recents: self.db.recents(24) }
+        Home { pins: self.db.pins().into_iter().map(|p| self.pin_here(p)).collect(), recents: self.db.recents(24) }
     }
 
     pub fn section(&self, section: LibrarySection, offset: u32, limit: u32) -> Vec<Item> {
@@ -467,11 +467,13 @@ impl StreamCore {
     pub fn pin(&self, item: Item) {
         self.db.pin(&item);
         self.delegate.library_changed();
+        self.delegate.sync_needed();
     }
 
     pub fn unpin(&self, id: String) {
         self.db.unpin(&id);
         self.delegate.library_changed();
+        self.delegate.sync_needed();
     }
 
     pub fn is_pinned(&self, id: String) -> bool {
@@ -480,6 +482,7 @@ impl StreamCore {
 
     pub fn reorder_pins(&self, ids: Vec<String>) {
         self.db.move_pin(&ids);
+        self.delegate.sync_needed();
     }
 
     /// Heart: Spotify Like (any Spotify song/album/playlist), a local flag for local songs.
@@ -735,6 +738,11 @@ impl StreamCore {
         if items.iter().filter(|i| i.name.starts_with("history/")).fold(false, |any, i| self.apply_history_item(i) || any) {
             self.delegate.history_changed();
         }
+        for item in items.iter().filter(|i| i.name == PINS_ITEM) {
+            if self.apply_pins_item(item) {
+                self.delegate.library_changed();
+            }
+        }
         for item in items.iter().filter(|i| i.name == PLAYING_ITEM) {
             self.apply_playing_item(item);
         }
@@ -753,6 +761,11 @@ impl StreamCore {
         let synced = known.as_ref().and_then(|(_, _, d)| d.clone());
         if synced.as_deref() != Some(current.as_slice()) && self.synced_settings() != SyncedSettings::default() {
             out.push(SyncItem { name: "settings".into(), version: known.map_or(0, |(v, ..)| v) + 1, data: current });
+        }
+        let pins = self.synced_pins();
+        let known = self.db.sync_item(PINS_ITEM);
+        if known.as_ref().and_then(|(_, _, d)| d.as_deref()) != Some(pins.as_slice()) && (known.is_some() || pins != b"[]") {
+            out.push(SyncItem { name: PINS_ITEM.into(), version: known.map_or(0, |(v, ..)| v) + 1, data: pins });
         }
         out.extend(self.node.outgoing_songs());
         out.extend(self.outgoing_history());
@@ -871,6 +884,19 @@ struct SyncedSettings {
 
 /// aza sync item holding the song playing (or last played) on any device, and where it was.
 const PLAYING_ITEM: &str = "playing";
+
+/// Pins, in order: one `pins` item for every device.
+const PINS_ITEM: &str = "pins";
+
+/// Songs pinned on another device, by ID there, to their file's hash, until the file is here.
+const PIN_HASHES: &str = "pins.hashes";
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SyncedPin {
+    item: Item,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    hash: Option<String>,
+}
 /// kv: the `playing` item this device last wrote or took up.
 const PLAYING_LAST: &str = "playing.last";
 /// History items each device writes: one per UTC day, `history/<device>/<day>`.
@@ -1017,6 +1043,96 @@ impl StreamCore {
         let taken = NowPlaying { track: track.clone(), hash: theirs.hash.clone(), position_ms: ms, at_ms: now_ms(), playing: false, device: self.device_id() };
         self.db.set_kv(PLAYING_LAST, &serde_json::to_string(&taken).unwrap_or_default());
         self.engine.cue(track, ms);
+    }
+
+    /// The pins as synced: what's the same on every device (no artwork path or downloaded
+    /// flag), and a file's hash for a song that's a file, since its ID differs per device.
+    fn synced_pins(&self) -> Vec<u8> {
+        let hashes = self.pin_hashes();
+        let pins: Vec<SyncedPin> = self
+            .db
+            .pins()
+            .into_iter()
+            .map(|mut item| {
+                let hash = (item.kind == ItemKind::Track && item.source == Source::Local)
+                    .then(|| self.db.track_hash(&item.id).or_else(|| hashes.get(&item.id).cloned()))
+                    .flatten();
+                item.art = item.art.filter(|a| a.starts_with("http"));
+                item.downloaded = false;
+                SyncedPin { item, hash }
+            })
+            .collect();
+        serde_json::to_vec(&pins).unwrap_or_default()
+    }
+
+    fn pin_hashes(&self) -> std::collections::HashMap<String, String> {
+        self.db.get_kv(PIN_HASHES).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    }
+
+    /// A pin as it is on this device: its artwork, whether it's downloaded, and for a song from
+    /// another device, the same file here.
+    fn pin_here(&self, pin: Item) -> Item {
+        let here = match pin.kind {
+            ItemKind::Album => self.db.album_item(&pin.id).map(|(i, ..)| i),
+            ItemKind::Artist => self.db.artist_item(&pin.id),
+            ItemKind::Playlist => self.db.playlist_item(&pin.id).map(|(i, _)| i),
+            ItemKind::Track => self
+                .db
+                .track(&pin.id)
+                .or_else(|| self.pin_hashes().get(&pin.id).and_then(|h| self.db.track_for_hash(h)))
+                .map(|t| t.as_item()),
+        };
+        here.map(|mut i| {
+            // Keep Spotify's art when the library's copy has none.
+            if i.art.is_none() {
+                i.art = pin.art.clone().filter(|a| a.starts_with("http"));
+            }
+            i
+        })
+        .unwrap_or_else(|| Item { art: pin.art.filter(|a| a.starts_with("http")), ..pin })
+    }
+
+    /// Takes the synced pins unless this device changed its own since the last sync, in which
+    /// case its own are written over them next. The first time, this device's pins join theirs.
+    fn apply_pins_item(&self, item: &SyncItem) -> bool {
+        let known = self.db.sync_item(PINS_ITEM);
+        if known.as_ref().is_some_and(|(v, ..)| *v >= item.version) {
+            return false;
+        }
+        let synced = known.and_then(|(_, _, d)| d);
+        let current = self.synced_pins();
+        if synced.as_ref().is_some_and(|s| *s != current) {
+            self.db.set_sync_item(PINS_ITEM, item.version, false, synced.as_deref());
+            return false;
+        }
+        let Ok(theirs) = serde_json::from_slice::<Vec<SyncedPin>>(&item.data) else { return false };
+        let mut hashes = self.pin_hashes();
+        let mut pins: Vec<Item> = theirs
+            .into_iter()
+            .map(|p| {
+                let here = p.hash.as_ref().and_then(|h| self.db.track_for_hash(h));
+                if let (Some(h), None) = (&p.hash, &here) {
+                    hashes.insert(p.item.id.clone(), h.clone());
+                }
+                here.map(|t| t.as_item()).unwrap_or(p.item)
+            })
+            .collect();
+        let mine: Vec<Item> = if synced.is_none() {
+            self.db.pins().into_iter().filter(|m| !pins.iter().any(|p| p.id == m.id)).collect()
+        } else {
+            vec![]
+        };
+        let joined = !mine.is_empty();
+        pins.extend(mine);
+        self.db.set_kv(PIN_HASHES, &serde_json::to_string(&hashes).unwrap_or_default());
+        self.db.set_pins(&pins);
+        // Joined with this device's own, the pins differ from what's synced: written next.
+        let now = if joined { item.data.clone() } else { self.synced_pins() };
+        self.db.set_sync_item(PINS_ITEM, item.version, false, Some(&now));
+        if joined {
+            self.delegate.sync_needed();
+        }
+        true
     }
 
     fn synced_settings(&self) -> SyncedSettings {

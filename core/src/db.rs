@@ -1189,6 +1189,18 @@ impl Db {
         let _ = self.conn.lock().execute("DELETE FROM pins WHERE id = ?1", [id]);
     }
 
+    /// Every pin, in this order, in place of what was pinned.
+    pub fn set_pins(&self, items: &[Item]) {
+        let mut conn = self.conn.lock();
+        let Ok(tx) = conn.transaction() else { return };
+        let _ = tx.execute("DELETE FROM pins", []);
+        for (i, item) in items.iter().enumerate() {
+            let json = serde_json::to_string(item).unwrap_or_default();
+            let _ = tx.execute("INSERT OR IGNORE INTO pins(id, item, position) VALUES(?1, ?2, ?3)", params![item.id, json, i as i64]);
+        }
+        let _ = tx.commit();
+    }
+
     pub fn move_pin(&self, ids: &[String]) {
         let mut conn = self.conn.lock();
         let Ok(tx) = conn.transaction() else { return };

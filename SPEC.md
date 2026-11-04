@@ -104,6 +104,9 @@ iPhone approves in the aza app on the same phone; the Mac shows a QR code that t
 - **History** is synced as `history/<device>/<day>` items, one per device per UTC day, written only
   by that device. A song counts once it's 10 seconds in (past halfway, for a song shorter than 10 seconds). Files are
   matched across devices by their hash.
+- **Pins** are the `pins` item: every pin in order, a file's hash for a pinned song that's a file.
+  Each device keeps its own change over a newer one it hasn't seen yet and writes it next; the
+  first time a device syncs, its pins join the ones already synced.
 - **What's playing** is the `playing` item: the song, its position, when that was, and whether it
   was playing. Each device writes it when it changes song, plays, pauses or seeks. A device that
   isn't playing takes up a newer one, paused where the other device is (or would be by now).
