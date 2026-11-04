@@ -1,7 +1,6 @@
 <div align="center">
   <img src="docs/icon.png" width="128" alt="">
   <h1>Stream</h1>
-  <p>A music player for iPhone and Mac that plays your Spotify library and your own files as one.</p>
   <img src="docs/screenshots/home.png" width="19%" alt="Home: pins and recents">
   <img src="docs/screenshots/now-playing.png" width="19%" alt="Now Playing">
   <img src="docs/screenshots/lyrics.png" width="19%" alt="Synced lyrics">
