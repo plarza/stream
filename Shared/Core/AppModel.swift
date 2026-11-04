@@ -31,6 +31,7 @@ final class AppModel {
     var volume: Double = AppModel.isTesting ? 0 : (UserDefaults.standard.object(forKey: "volume") as? Double ?? 1) {
         didSet {
             core.setVolume(volume: Float(volume))
+            audio.meter.volume = Float(volume)
             if !AppModel.isTesting { UserDefaults.standard.set(volume, forKey: "volume") }
         }
     }
@@ -85,6 +86,7 @@ final class AppModel {
         home = core.home()
         bridge.model = self
         core.setVolume(volume: Float(volume))
+        audio.meter.volume = Float(volume)
         #if os(macOS)
         if Self.isTesting, let m = Self.argument("-musicFolder") {
             core.setMusicFolders(folders: [m])

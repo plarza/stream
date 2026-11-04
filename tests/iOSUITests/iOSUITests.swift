@@ -23,6 +23,14 @@ final class iOSUITests: StreamUITestCase {
         el("collection.play").tap()
         waitLabel(el("mini.title"), "Neon Lights")
         waitLabel(el("mini.playPause"), "Pause")
+        // The page knows it's the one playing: its button pauses and resumes it.
+        waitLabel(el("collection.play"), "Pause")
+        el("collection.play").tap()
+        waitLabel(el("mini.playPause"), "Play")
+        waitLabel(el("collection.play"), "Play")
+        el("collection.play").tap()
+        waitLabel(el("mini.title"), "Neon Lights")
+        waitLabel(el("mini.playPause"), "Pause")
         // Scrolling the page leaves the playing bar full size, next button and all.
         app.swipeUp()
         app.swipeUp()

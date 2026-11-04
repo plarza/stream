@@ -176,6 +176,7 @@ impl Engine {
         let repeat = q.repeat;
         let queue_version = q.version;
         let context_title = q.context_title.clone();
+        let context_id = q.context_id.clone();
         drop(q);
         PlayerState {
             status: self.status(),
@@ -186,6 +187,7 @@ impl Engine {
             repeat,
             queue_version,
             context_title,
+            context_id,
         }
     }
 

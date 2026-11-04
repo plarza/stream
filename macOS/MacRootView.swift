@@ -22,12 +22,15 @@ struct MacRootView: View {
     @State private var sectionFilter = ""
     @State private var sidebarHeight: CGFloat = 0
     @FocusState private var searchFocused: Bool
+    @AppStorage(Zoom.key) private var zoom = Zoom.standard
 
     private let sidebarWidth: CGFloat = 220
-    private let inset: CGFloat = 10
+    /// The sidebar's margin from the window edge: macOS's own 8pt at any zoom, so the
+    /// traffic lights (which macOS places and never scales) keep the same room around them.
+    private var inset: CGFloat { 8 / zoom }
     private var pageLeading: CGFloat { sidebarWidth + inset * 2 }
     /// The row holding the back button and search field, level with the traffic lights.
-    private let topBar: CGFloat = 52
+    private let topBar: CGFloat = 56
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -40,6 +43,13 @@ struct MacRootView: View {
                     .navigationDestination(for: LibrarySection.self) { SectionView(section: $0).navigationBarBackButtonHidden() }
             }
             .toolbar(removing: .title)
+            // A toolbar gives the window its 52pt toolbar row, which is what puts the
+            // traffic lights in from the corner, inside the sidebar. One invisible item
+            // makes it exist; a spacer would cover the search field and take its clicks.
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) { Color.clear.frame(width: 1, height: 1) }
+                    .sharedBackgroundVisibility(.hidden)
+            }
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             // Pages start under the top row (an inset, which they still scroll under)
             // instead of the title bar's, and scroll on beneath the playing bar.
@@ -151,7 +161,8 @@ struct MacRootView: View {
             .padding(.leading, Metrics.page - 4)
         }
         .frame(height: 36)
-        .padding(.top, 8)
+        // Centred on the traffic lights (26pt down in the window, whatever the zoom).
+        .padding(.top, max(0, 26 / zoom - 18))
         .animation(.snappy(duration: 0.2), value: searchable)
         .animation(.snappy(duration: 0.2), value: path.isEmpty)
     }
@@ -224,8 +235,8 @@ struct MacRootView: View {
     private func sidebar(maxHeight: CGFloat) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 2) {
-                // Room for the window's traffic lights.
-                Color.clear.frame(height: 26)
+                // Room for the window's traffic lights, which sit in the sidebar's corner.
+                Color.clear.frame(height: 30)
                 row(.home, "Home", "house").accessibilityIdentifier("sidebar.home")
                 row(.search, "Search", "magnifyingglass").accessibilityIdentifier("sidebar.search")
                 header("Library")
@@ -252,7 +263,9 @@ struct MacRootView: View {
         .scrollIndicators(.never)
         .scrollBounceBehavior(.basedOnSize)
         .frame(width: sidebarWidth, height: min(sidebarHeight, max(120, maxHeight)))
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        // Concentric with the close button, whose centre macOS puts 18pt in from the
+        // sidebar's edges (26pt from the window's, less the 8pt margin), as in Finder.
+        .glassEffect(.regular, in: .rect(cornerRadius: 18 / zoom))
         .animation(.smooth, value: sidebarHeight)
     }
 

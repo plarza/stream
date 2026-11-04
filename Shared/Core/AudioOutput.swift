@@ -1,5 +1,6 @@
 import StreamBindings
 import AVFoundation
+import Synchronization
 #if canImport(stream_coreFFI)
 import stream_coreFFI
 #endif
@@ -13,6 +14,8 @@ nonisolated final class AudioOutput: @unchecked Sendable {
     private var source: AVAudioSourceNode?
     private var stopWork: DispatchWorkItem?
     var onRateChange: ((UInt32) -> Void)?
+    /// Loudness of what's playing in three bands, for the playing-song bars.
+    let meter = LevelMeter()
 
     func start() {
         #if os(iOS)
@@ -47,12 +50,15 @@ nonisolated final class AudioOutput: @unchecked Sendable {
         let rate = engine.outputNode.outputFormat(forBus: 0).sampleRate
         let sampleRate = rate > 0 ? rate : 48_000
         let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 2)!
+        let meter = meter
+        meter.sampleRate = Float(sampleRate)
         let node = AVAudioSourceNode(format: format) { _, _, frameCount, buffers -> OSStatus in
             let abl = UnsafeMutableAudioBufferListPointer(buffers)
             guard abl.count >= 2,
                   let l = abl[0].mData?.assumingMemoryBound(to: Float.self),
                   let r = abl[1].mData?.assumingMemoryBound(to: Float.self) else { return noErr }
             _ = stream_core_render(l, r, frameCount)
+            meter.measure(l, r, Int(frameCount))
             return noErr
         }
         engine.attach(node)
@@ -82,5 +88,47 @@ nonisolated final class AudioOutput: @unchecked Sendable {
             stopWork = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
         }
+    }
+}
+
+/// Bass, mids and highs of the audio as it's rendered, each 0…1. The render
+/// thread splits the signal with one-pole filters and publishes each band's
+/// level per buffer; the UI reads them every frame without locking.
+nonisolated final class LevelMeter: @unchecked Sendable {
+    var sampleRate: Float = 48_000
+    /// The output volume, divided back out so the bars don't shrink when it's turned down.
+    var volume: Float = 1
+    private let bass = Atomic<UInt32>(0), mids = Atomic<UInt32>(0), highs = Atomic<UInt32>(0)
+    // Filter state, touched only on the render thread.
+    private var low: Float = 0, mid: Float = 0
+
+    func measure(_ l: UnsafePointer<Float>, _ r: UnsafePointer<Float>, _ n: Int) {
+        guard n > 0 else { return }
+        let a1 = 1 - exp(-2 * Float.pi * 250 / sampleRate)
+        let a2 = 1 - exp(-2 * Float.pi * 2500 / sampleRate)
+        var e = (Float(0), Float(0), Float(0))
+        for i in 0..<n {
+            let x = (l[i] + r[i]) * 0.5
+            low += a1 * (x - low)
+            mid += a2 * (x - mid)
+            let b = (low, mid - low, x - mid)
+            e.0 += b.0 * b.0; e.1 += b.1 * b.1; e.2 += b.2 * b.2
+        }
+        let count = Float(n) * max(volume * volume, 1e-4)
+        bass.store(Self.level(e.0 / count).bitPattern, ordering: .relaxed)
+        mids.store(Self.level(e.1 / count).bitPattern, ordering: .relaxed)
+        highs.store(Self.level(e.2 / count).bitPattern, ordering: .relaxed)
+    }
+
+    /// Mean square to 0…1 on a decibel scale: -54 dB is silent, -6 dB is full.
+    private static func level(_ meanSquare: Float) -> Float {
+        let db = 10 * log10(max(meanSquare, 1e-12))
+        return min(max((db + 54) / 48, 0), 1)
+    }
+
+    var levels: (Float, Float, Float) {
+        (Float(bitPattern: bass.load(ordering: .relaxed)),
+         Float(bitPattern: mids.load(ordering: .relaxed)),
+         Float(bitPattern: highs.load(ordering: .relaxed)))
     }
 }

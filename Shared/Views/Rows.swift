@@ -4,35 +4,23 @@ import SwiftUI
 
 /// One song in a list.
 struct TrackRow: View {
-    @Environment(\.accent) private var accent
     let track: Track
     var showArt = true
     var number: Int?
-    var isCurrent = false
     /// Album pages hide the artist when it's the album's own.
     var showArtist = true
-    @Environment(AppModel.self) private var model
+    @Environment(\.accent) private var accent
 
     var body: some View {
         HStack(spacing: Metrics.artGap) {
             if let number, !showArt {
-                ZStack {
-                    if isCurrent {
-                        NowPlayingBars(playing: model.player.status == .playing)
-                            .foregroundStyle(accent)
-                    } else {
-                        Text("\(number)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
-                    }
-                }
-                .frame(width: 22)
+                Text("\(number)").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                    .frame(width: 22)
             } else if showArt {
                 ArtworkView(url: track.art, size: 48)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(track.title)
-                    .font(.body)
-                    .foregroundStyle(isCurrent ? accent : .primary)
-                    .lineLimit(1)
+                SongTitle(id: track.id, title: track.title)
                 if showArtist {
                     HStack(spacing: 4) {
                         if track.downloaded && track.source == .spotify { DownloadedBadge() }
@@ -55,6 +43,29 @@ struct TrackRow: View {
     }
 }
 
+/// A song's title in any list: pink, with the bars before it, while it's the one playing.
+struct SongTitle: View {
+    let id: String
+    let title: String
+    @Environment(\.accent) private var accent
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let current = model.player.track?.id == id
+        HStack(spacing: 6) {
+            if current {
+                NowPlayingBars(playing: model.player.status == .playing)
+                    .foregroundStyle(accent)
+                    .transition(.scale(scale: 0.5).combined(with: .opacity))
+            }
+            Text(title)
+                .foregroundStyle(current ? accent : .primary)
+                .lineLimit(1)
+        }
+        .animation(.snappy(duration: 0.25), value: current)
+    }
+}
+
 /// Any item (song/album/artist/playlist) as a list row; songs show their length.
 struct ItemRow: View {
     let item: Item
@@ -69,7 +80,11 @@ struct ItemRow: View {
         HStack(spacing: Metrics.artGap) {
             ArtworkView(url: item.art, size: 48, circle: item.kind == .artist)
             VStack(alignment: .leading, spacing: 2) {
-                Text(item.title).lineLimit(1)
+                if item.kind == .track {
+                    SongTitle(id: item.id, title: item.title)
+                } else {
+                    Text(item.title).lineLimit(1)
+                }
                 if showSubtitle && !item.subtitle.isEmpty {
                     HStack(spacing: 4) {
                         if item.downloaded && item.source == .spotify { DownloadedBadge() }
@@ -118,20 +133,69 @@ struct ItemTile: View {
     }
 }
 
-/// Animated equalizer bars marking the playing song.
+/// Three bars marking the playing song. They dance on their own gentle waves,
+/// with the music setting how big and how quick (loudness) and kicking them up
+/// on each beat, redrawn every display frame (120 Hz on ProMotion screens).
+/// Paused, they rest in a little staircase.
 struct NowPlayingBars: View {
     var playing: Bool
+    private static let rest: [CGFloat] = [0.45, 0.8, 0.6]
+
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 20, paused: !playing)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
+        TimelineView(.animation(paused: !playing)) { ctx in
+            let levels = playing ? BarMotion.shared.heights(at: ctx.date).map { CGFloat($0) } : Self.rest
             HStack(alignment: .bottom, spacing: 2) {
-                ForEach(0..<3) { i in
-                    Capsule()
-                        .frame(width: 3, height: playing ? 4 + 9 * abs(sin(t * (3.1 + Double(i) * 1.3) + Double(i))) : 4)
+                ForEach(0..<3, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .frame(width: 3, height: max(3, 14 * levels[i]))
                 }
             }
-            .frame(height: 14, alignment: .bottom)
+            .frame(width: 13, height: 14, alignment: .bottom)
         }
+        .animation(.spring(duration: 0.4, bounce: 0.3), value: playing)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Turns the meter into bar heights. The levels only steer the bars: a smooth
+/// loudness envelope sets their reach and speed, bass onsets give a kick, and
+/// each bar rides its own pair of slow waves so they never move in lockstep.
+/// Shared, so every set of bars on screen moves together.
+@MainActor
+final class BarMotion {
+    static let shared = BarMotion()
+    private var energy: Float = 0
+    private var ceiling: Float = 0.5
+    private var bassSlow: Float = 0
+    private var kick: Float = 0
+    private var phase: Float = 0
+    private var shown: [Float] = [0.45, 0.8, 0.6]
+    private var last = Date.distantPast
+    private let speeds: [Float] = [1.0, 1.43, 0.79]
+    private let offsets: [Float] = [0, 2.1, 4.3]
+    private let kicks: [Float] = [0.8, 1, 0.65]
+
+    func heights(at date: Date) -> [Float] {
+        let dt = Float(min(max(date.timeIntervalSince(last), 0), 0.05))
+        guard dt > 0 else { return shown }
+        last = date
+        let raw = AppModel.shared.audio.meter.levels
+        let loud = (raw.0 + raw.1 + raw.2) / 3
+        // Loudness against the song's own recent peak, eased in and out.
+        ceiling = max(loud, ceiling - 0.08 * dt, 0.25)
+        let target = min(loud / ceiling, 1)
+        energy += (target - energy) * (1 - exp(-(target > energy ? 10 : 3) * dt))
+        // A beat: bass jumping above where it's been lately.
+        bassSlow += (raw.0 - bassSlow) * (1 - exp(-4 * dt))
+        kick = max(kick * exp(-7 * dt), min(max(raw.0 - bassSlow, 0) * 6, 1))
+        phase += dt * (2.2 + 3.5 * energy)
+        for i in 0..<3 {
+            let p = phase * speeds[i] + offsets[i]
+            let wave = 0.5 + 0.3 * sin(p) + 0.2 * sin(p * 2.37 + offsets[i] * 1.7)
+            let goal = 0.22 + 0.78 * min(energy * (0.35 + 0.65 * wave) + 0.4 * kick * kicks[i], 1)
+            shown[i] += (goal - shown[i]) * (1 - exp(-18 * dt))
+        }
+        return shown
     }
 }
 

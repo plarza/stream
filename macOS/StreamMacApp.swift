@@ -8,13 +8,16 @@ struct StreamMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var model = AppModel.shared
     @State private var palette = false
+    @AppStorage(Zoom.key) private var zoom = Zoom.standard
 
     var body: some Scene {
         Window("Stream", id: "main") {
-            MacRootView(showPalette: $palette)
-                .environment(model)
-                .azaUI(name: "Stream", accent: "FF375F")
-                .frame(minWidth: 1000, minHeight: 600)
+            Zoomed(zoom: zoom) {
+                MacRootView(showPalette: $palette)
+                    .environment(model)
+                    .azaUI(name: "Stream", accent: "FF375F")
+            }
+            .frame(minWidth: 900 * zoom, minHeight: 560 * zoom)
                 .onContinueUserActivity("network.aza.stream.playing") { model.continueActivity($0) }
                 .onOpenURL { model.handle(url: $0) }
                 .onAppear { NSApp.setActivationPolicy(.regular) }
@@ -23,12 +26,20 @@ struct StreamMacApp: App {
                     NSApp.setActivationPolicy(.accessory)
                 }
         }
-        .windowStyle(.hiddenTitleBar)
+        // A toolbar row (title hidden, background clear) puts the traffic lights
+        // where macOS puts them in its own apps, inside the floating sidebar.
+        .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1240, height: 800)
         // Always open the window at launch, even if it was closed last time.
         .defaultLaunchBehavior(.presented)
         .restorationBehavior(.disabled)
         .commands {
+            CommandGroup(after: .toolbar) {
+                Button("Zoom In") { zoom = Zoom.next(zoom, 1) }.keyboardShortcut("+", modifiers: .command)
+                Button("Zoom Out") { zoom = Zoom.next(zoom, -1) }.keyboardShortcut("-", modifiers: .command)
+                Button("Actual Size") { zoom = Zoom.standard }.keyboardShortcut("0", modifiers: .command)
+                Divider()
+            }
             CommandMenu("Playback") {
                 Button(model.player.status == .playing ? "Pause" : "Play") { model.toggle() }
                 Button("Next") { model.next() }.keyboardShortcut(.rightArrow, modifiers: .command)
@@ -94,8 +105,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             NSApp.setActivationPolicy(.regular)
             let model = AppModel.shared
-            // Space plays/pauses anywhere except while typing.
+            // Space plays/pauses anywhere except while typing; ⌘= zooms in like ⌘+.
             NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
+                if e.charactersIgnoringModifiers == "=", e.modifierFlags.intersection([.command, .option, .control, .shift]) == .command {
+                    let d = UserDefaults.standard
+                    d.set(Zoom.next(d.object(forKey: Zoom.key) as? Double ?? Zoom.standard, 1), forKey: Zoom.key)
+                    return nil
+                }
                 let typing = NSApp.keyWindow?.firstResponder is NSText
                 guard e.keyCode == 49, e.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty, !typing else { return e }
                 MainActor.assumeIsolated { model.toggle() }

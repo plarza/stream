@@ -157,17 +157,21 @@ struct CollectionView: View {
 
     private var actions: some View {
         HStack(spacing: 18) {
+            // This page is what's playing: the button pauses and resumes it, as Spotify's does.
+            let isContext = model.player.contextId == item.id && model.player.track != nil
+            let playing = isContext && model.player.status == .playing
             Button {
-                if let page { model.play(ordered(page), from: page.item) }
+                if isContext { model.toggle() } else if let page { model.play(ordered(page), from: page.item) }
             } label: {
-                Image(systemName: "play.fill")
+                Image(systemName: playing ? "pause.fill" : "play.fill")
                     .font(.title3)
+                    .contentTransition(.symbolEffect(.replace))
                     .frame(width: 52, height: 52)
                     .foregroundStyle(model.onTint)
                     .background(accent, in: .circle)
             }
             .buttonStyle(.pressable)
-            .accessibilityLabel("Play")
+            .accessibilityLabel(playing ? "Pause" : "Play")
             .accessibilityIdentifier("collection.play")
             Button {
                 if let page { model.play(ordered(page), from: page.item, shuffle: true) }
@@ -221,9 +225,7 @@ struct CollectionView: View {
             let tracks = ordered(page)
             ForEach(Array(tracks.prefix(item.kind == .artist ? 10 : .max).enumerated()), id: \.element.id) { i, t in
                 Button { model.play(tracks, at: i, from: page.item) } label: {
-                    TrackRow(track: t, showArt: item.kind != .album, number: item.kind == .album ? Int(t.trackNumber == 0 ? UInt32(i + 1) : t.trackNumber) : nil,
-                             isCurrent: model.player.track?.id == t.id,
-                             showArtist: item.kind != .album || t.artist != page.item.subtitle)
+                    TrackRow(track: t, showArt: item.kind != .album, number: item.kind == .album ? Int(t.trackNumber == 0 ? UInt32(i + 1) : t.trackNumber) : nil, showArtist: item.kind != .album || t.artist != page.item.subtitle)
                         .padding(.leading, Metrics.page)
                         .padding(.trailing, Metrics.pageTrailing)
                         .padding(.vertical, 8)

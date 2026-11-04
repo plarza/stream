@@ -197,6 +197,8 @@ pub struct PlayerState {
     pub queue_version: u64,
     /// Title of what's playing ("Shunka Ryougen"), for "Continue from …".
     pub context_title: Option<String>,
+    /// Id of the album, playlist or artist playing, so its page shows Pause.
+    pub context_id: Option<String>,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
