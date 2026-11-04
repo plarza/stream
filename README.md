@@ -1,104 +1,107 @@
-# <img src="docs/icon.png" width="40" align="absmiddle" alt=""> Stream
+<div align="center">
+  <img src="docs/icon.png" width="128" alt="">
+  <h1>Stream</h1>
+  <p>A music player for iPhone and Mac that plays your Spotify library and your own files as one.</p>
+  <img src="docs/screenshots/home.png" width="19%" alt="Home: pins and recents">
+  <img src="docs/screenshots/now-playing.png" width="19%" alt="Now Playing">
+  <img src="docs/screenshots/lyrics.png" width="19%" alt="Synced lyrics">
+  <img src="docs/screenshots/album.png" width="19%" alt="An album">
+  <img src="docs/screenshots/search.png" width="19%" alt="Search">
+  <br><br>
+  <img src="docs/screenshots/mac.png" width="97%" alt="The Mac app">
+</div>
 
-<img src="docs/screenshots/home.png" width="160" alt="Home: pins and recents"> <img src="docs/screenshots/now-playing.png" width="160" alt="Now Playing"> <img src="docs/screenshots/lyrics.png" width="160" alt="Synced lyrics"> <img src="docs/screenshots/album.png" width="160" alt="An album"> <img src="docs/screenshots/search.png" width="160" alt="Search">
+<br>
 
-<img src="docs/screenshots/mac.png" width="832" alt="The Mac app">
+Stream plays Spotify through [librespot](https://github.com/librespot-org/librespot) and your FLAC, ALAC, AAC, MP3, Ogg Vorbis, Opus, WAV and AIFF files through the same pipeline, so a playlist, an album and a search can mix both. It runs on iOS 27 and macOS 27. Spotify needs Premium and your own Spotify developer app; your own files need nothing.
 
-<table>
-<tr><td><b>Platform</b></td><td>iPhone, iOS 27, and Mac, macOS 27</td></tr>
-<tr><td><b>Data</b></td><td>On your devices. The library index is SQLite in the app's container; Spotify credentials are in the Keychain, on this device only. Signed in with aza, the Spotify client ID, Last.fm and the list of your own songs are aza sync data, and your music files are on the Stream node (<code>stream.aza.network</code>, on azalab-0)</td></tr>
-<tr><td><b>Network</b></td><td>Spotify, LRCLIB for lyrics, Last.fm if you sign in, and with aza your aza home node and the Stream node</td></tr>
-<tr><td><b>Account</b></td><td>Spotify Premium and your own Spotify developer app for Spotify. Local files need nothing. Sign in with aza is offered once, on first launch</td></tr>
-<tr><td><b>Permissions</b></td><td>None</td></tr>
-<tr><td><b>Install</b></td><td><code>scripts/deploy.sh</code> to this Mac and a connected iPhone, or TestFlight. Not for the App Store: it plays Spotify through librespot</td></tr>
-</table>
+Because it uses librespot, Stream isn't for the App Store. Install it with `scripts/deploy.sh` or TestFlight.
 
 ## Features
 
-### One library
+- **One library.** Spotify and your own files side by side in Playlists, Artists, Albums, Songs, Uploads and Downloaded, with Made For You, Discover Weekly and the Daily Mixes in Playlists.
+- **Home** is a grid of pins above your recents. Long-press any album, song, artist or playlist to pin it.
+- **One search** across your library and Spotify, ranked together, with type chips and recent searches.
+- **Now Playing** is tinted from the album art and shows the format and quality, like FLAC 24/96 or OGG 320.
+- **Synced lyrics**, word by word where the source has it. Tap a line to seek.
+- **A queue** of Play Next and Play Later above the rest of the album or playlist.
+- **Artist pages** like Spotify's: header photo, top songs, every release with filter pills, bio, listeners and top cities.
+- **Offline.** Download a song, album or playlist from its page or long-press menu. One ⬇ badge marks anything that plays offline.
+- **Podcasts** you follow on Spotify, in Library and in search. An episode picks up where you left off and is marked played when you finish it.
+- **History** of every song you played, on any device, by day.
+- **Pick up where you left off.** The playing song and its position follow you to your other devices.
+- **Gapless playback** and one loudness toggle: ReplayGain for files, Spotify's own normalization for Spotify.
+- **Last.fm scrobbling** for Spotify and your own files alike.
+- Lock Screen, Control Center, AirPlay, and Siri and Shortcuts.
 
-- Your Spotify account and your own files side by side: FLAC, ALAC, AAC, MP3, Ogg Vorbis, Opus, WAV and AIFF.
-- Home is a grid of pins (albums, songs, artists, playlists) above your recents; long-press anything to pin it.
-- Library is Playlists, Artists, Albums, Songs and Downloaded. Made For You, Discover Weekly and Daily Mixes sit in Playlists.
-- One search across your library and Spotify, ranked together, with type chips and recent searches.
-- Download a Spotify album or playlist to play offline; one ⬇ badge marks anything playable offline.
-- Artist pages as on Spotify: header photo, top songs, every album, single and EP with filter pills, bio, listeners and top cities.
-- Sort a playlist by title, artist, album or length; a song by several artists opens any one of them.
+On the Mac there's a floating glass sidebar and player, ⌘K to play or go to anything, and a menu bar mini player that keeps the music going after you close the window. Its music folders go up to the Stream node, so the iPhone can stream them or download them for offline.
 
-### Playing
+## Your data
 
-- Now Playing is tinted from the album art, with the format and quality ("FLAC 24/96", "OGG 320") under the cover.
-- Synced lyrics, word by word where the source has it; tap a line to seek.
-- A queue of Play Next and Play Later above the rest of the album or playlist.
-- Lock Screen, Control Center, AirPlay, and Siri and Shortcuts through App Intents.
+Everything stays on your devices unless you sign in with aza. The library is a SQLite database in the app's container, and your Spotify and Last.fm credentials are in the Keychain, on that device only. Stream reads your music folders in place and never copies or changes them.
 
-### Mac
+Signed in with aza, your settings, history and the list of your own songs sync through aza sync, and the files themselves go to the Stream node at `stream.aza.network`. They are stored by hash, never transcoded, and stream while they play.
 
-- A floating glass sidebar and player over the page, and ⌘K to play or go to anything.
-- A menu bar mini player; closing the window keeps the music going there.
-- The Mac's music folders go up to the Stream node; the iPhone streams them, or downloads an album or playlist to play offline. Signed in with aza, Spotify's client ID and Last.fm come along too.
+Stream talks to Spotify, [LRCLIB](https://lrclib.net) for lyrics, Last.fm if you sign in, and with aza your aza home node and the Stream node. It asks for no permissions.
 
-### You
+## Building
 
-- Last.fm scrobbling for Spotify and your own files, theme, colour and your aza account, all in Profile.
+You need Xcode 27, Rust, [uv](https://docs.astral.sh/uv/), XcodeGen and CMake:
 
-## Rules
-
-| Topic | Rule |
-|---|---|
-| Spotify sign-in | Two approvals in the system's sign-in sheet: your account through your own developer app (Web API), then playback through Spotify's desktop client (`streaming` only). Saved playback credentials are tried before asking again |
-| Audio | One pipeline for every source: Rust decodes into a ring buffer that an `AVAudioSourceNode` pulls from. Gapless always; crossfade off by default |
-| Loudness | One toggle, on by default: ReplayGain tags for files, Spotify's own normalization for Spotify |
-| Lyrics | Spotify's, the file's own tags and LRCLIB; the best sync wins (word over line over plain) and is cached |
-| Scrobbling | Spotify and local files alike: Spotify's own Last.fm link never hears of plays through librespot. A track counts past half or 4 minutes if it's over 30 seconds; scrobbles queue offline and go out 50 at a time |
-| Sync | aza sync data: `settings`, and `songs/<sha256>` for each music file. The files are on the Stream node (`node/`), by hash, up to each aza identity's quota; they stream while they play and download on request. Originals, never transcoded, checked by hash |
-| Library | Spotify and local copies of the same song stay separate items |
-| Likes and toggles | Change on screen at once, and roll back if the core or Spotify refuses |
-
-## Data
-
-| Where | Holds |
-|---|---|
-| `Application Support/network.aza.stream/library.sqlite` | The library: local files, Spotify's library, pins, recents |
-| `Caches/network.aza.stream/` | Artwork, lyrics, Spotify downloads (encrypted by librespot), and the last 2 GB of songs streamed from the Stream node |
-| `Application Support/network.aza.stream/Downloads` | Songs from the Stream node you downloaded |
-| Keychain | Spotify and Last.fm credentials, this device only |
-| Mac music folders | Your files, read in place and never copied or changed |
-
-## Code
-
-```
-Shared/        SwiftUI for both apps: AppModel, views, audio output, Now Playing, artwork
-iOS/, macOS/   Each app's entry point and platform pieces (menu bar, folder watching)
-core/          The Rust core: Spotify (librespot), decoding, queue, SQLite library, lyrics, Last.fm, the Stream node
-node/          The Stream node, at stream.aza.network: your music files, behind an aza sign-in
-Generated/     StreamCore.xcframework and its UniFFI bindings, built by scripts/build-core.sh
-tests/         End-to-end UI tests, a fake Spotify, and a small fixture library
-scripts/       build-core, deploy, testflight, test, demo
+```sh
+brew install xcodegen cmake
 ```
 
-The UniFFI bindings compile as their own module, `StreamBindings`, without main-actor isolation, so calls into the core don't land on the main thread. The app is Swift 6 with the main actor as the default. Sign-in, the profile button and Appearance come from [AzaUI](https://github.com/plarza/ui). Decisions and scope are in [SPEC.md](SPEC.md).
+Build the Rust core, then open the project:
 
-## Develop
+```sh
+scripts/build-core.sh
+xcodegen generate && open Stream.xcodeproj
+```
 
-Xcode 27, Rust, `brew install xcodegen cmake`, and [uv](https://docs.astral.sh/uv/) for the screenshot script.
+To install on this Mac and a connected iPhone, run `scripts/deploy.sh` (`DEVICE=<udid>` picks another iPhone). `scripts/testflight.sh` uploads a build to TestFlight.
 
-| Task | Command |
-|---|---|
-| Build the Rust core | `scripts/build-core.sh` |
-| Open in Xcode | `xcodegen generate && open Stream.xcodeproj` |
-| Install on this Mac and the iPhone | `scripts/deploy.sh` (`DEVICE=<udid>` for another iPhone) |
-| Upload to TestFlight | `scripts/testflight.sh [build]` |
-| UI tests in the Simulator | `scripts/test.sh` |
-| Refresh these screenshots | `python3 -I scripts/demo.py --screenshots` |
+To sign in to Spotify, make an app at [developer.spotify.com](https://developer.spotify.com/dashboard) with the redirect URI `http://127.0.0.1:8989/login` and paste its Client ID in Profile. You approve twice in the sign-in sheet: once for your account, through your app, and once for playback.
 
-Spotify sign-in needs your own app at [developer.spotify.com](https://developer.spotify.com/dashboard) with the redirect URI `http://127.0.0.1:8989/login`; paste its Client ID in Profile.
+### Tests
 
-The UI tests build their own debug core for the Simulator, run against a fake Spotify and the fixture library, and launch the app once, returning to Home between tests with `network-aza-stream://reset`.
+```sh
+scripts/test.sh core   # the core, in about a second
+scripts/test.sh        # the core, then the UI tests in the Simulator
+```
 
-| Launch with | Opens |
-|---|---|
-| `-musicFolder <path>` | That folder as the local library |
-| `-uiTesting YES` | Isolated data, silent output, nothing saved |
-| `-spotifyAccounts <url>`, `-spotifyApi <url>` | A fake Spotify for tests |
-| `-signInAnswered YES`, `SAMPLE_ACCOUNT=1` | Past the sign-in screen; signed in to the sample profile |
+The core tests in `tests/core` drive the same API the apps call: they scan a small fixture library, play it, work the queue and History, and sync pins, History and settings between two devices running in one process. Most tests belong here.
+
+The UI tests are a short smoke run in the Simulator against a fake Spotify, for what only the UI can break. They build their own debug core, launch the app once, and return to Home between tests with `network-aza-stream://reset`. Builds run at low priority, and a second run waits for the first.
+
+These launch arguments are useful while developing:
+
+- `-musicFolder <path>` uses that folder as the local library.
+- `-uiTesting YES` isolates the app's data, silences output and saves nothing.
+- `-spotifyAccounts <url>` and `-spotifyApi <url>` point it at a fake Spotify.
+- `-signInAnswered YES` skips the sign-in screen, and `SAMPLE_ACCOUNT=1` signs in to the sample profile.
+- `-url <link>` runs a deep link once the library is scanned, in order: `play?id=…[&track=<title>]`, `open?id=…`, `pin?id=…`, `seek?ms=…`, `nowplaying[?mode=lyrics|queue]`, `search?q=…`. With `-uiTesting`, the app writes `tmp/links-done` when they're all done.
+
+### Screenshots
+
+```sh
+python3 -I scripts/demo.py --screenshots
+```
+
+This builds a library of real albums with silent audio from `scripts/demo-library.json`, then takes each shot from a fresh launch that deep links straight to the screen, and captures the Mac window. `--cast <name>` picks another set of albums from that file, `--out <dir>` writes the shots somewhere else, and `--only lyrics,album` takes just those.
+
+## How it's built
+
+```
+Shared/        SwiftUI for both apps: views, audio output, Now Playing, artwork
+iOS/, macOS/   Each app's entry point and platform pieces
+core/          The Rust core: Spotify, decoding, queue, library, lyrics, Last.fm, sync
+node/          The Stream node: your music files, behind an aza sign-in
+Generated/     StreamCore.xcframework and its UniFFI bindings
+tests/         Core tests, UI smoke tests, a fake Spotify and a fixture library
+scripts/       Build, deploy, test and screenshots
+```
+
+Every source decodes in Rust into a ring buffer that an `AVAudioSourceNode` pulls from. The core's UniFFI bindings compile as their own module, `StreamBindings`, without main-actor isolation, so calls into the core stay off the main thread. Sign-in, the profile button and Appearance come from [AzaUI](https://github.com/plarza/ui).
+
+The decisions behind all of this, and what Stream deliberately leaves out, are in [SPEC.md](SPEC.md).

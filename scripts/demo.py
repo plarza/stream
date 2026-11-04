@@ -1,28 +1,59 @@
-"""README screenshots on a clean simulator (taps come from tests/iOSUITests/DemoFlow.swift), plus one of the Mac app.
+"""README screenshots on a clean simulator, plus one of the Mac app.
 
-  python3 -I scripts/demo.py --screenshots   docs/screenshots/*.png
+  python3 -I scripts/demo.py --screenshots                          docs/screenshots/*.png
+  python3 -I scripts/demo.py --screenshots --cast NAME --out DIR    another cast, somewhere else
+  python3 -I scripts/demo.py --screenshots --only lyrics,album      just those shots
+
+Each shot is one launch: deep links set the screen up (pins, what's playing, the page,
+the lyric line), the app writes tmp/links-done when they're all done, and the shot is taken
+then. No UI test, no tapping, no fixed waits.
 
 The library they show is built from scripts/demo-library.json: real albums with their
-covers and track lengths, silent audio, and synced lyrics from LRCLIB.
+covers and track lengths, silent audio, and synced lyrics from LRCLIB. A cast there picks
+which albums and artists go where, and which lyric is lit; the first is the README's. A cast
+with a "base" takes the rest from that one.
 """
-import json, os, pty, re, subprocess, sys, tempfile, time, urllib.parse, urllib.request
+import json, os, re, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SIM = os.environ.get("SIM", "4C675D57-6CF7-4DDA-ACF4-4075857B2010")
 BUNDLE = "network.aza.stream"
-DEST = f"platform=iOS Simulator,id={SIM}"
 DATA = os.path.join(ROOT, "scripts", "demo-library.json")
 LIBRARY = os.path.join(ROOT, "build", "demo", "Music")
 OUT = os.path.join(ROOT, "docs", "screenshots")
 
 
+def arg(flag, default=None):
+    return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
+
+
 def run(*cmd, check=True, env=None):
-    return subprocess.run(cmd, cwd=ROOT, check=check, capture_output=True, text=True,
-                          env={**os.environ, **(env or {})})
+    done = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, env={**os.environ, **(env or {})})
+    if check and done.returncode != 0:
+        sys.exit(f"{' '.join(cmd[:2])} failed:\n" + "\n".join((done.stdout + done.stderr).splitlines()[-25:]))
+    return done
 
 
-def simctl(*args, check=True):
-    return run("xcrun", "simctl", *args, check=check)
+def simctl(*args, check=True, env=None):
+    return run("xcrun", "simctl", *args, check=check, env=env)
+
+
+def simulator():
+    """$SIM, or the "Stream Screenshots" iPhone on the newest iOS, made when it's missing."""
+    if os.environ.get("SIM"):
+        return os.environ["SIM"]
+    ios = [r for r in json.loads(simctl("list", "-j", "runtimes").stdout)["runtimes"]
+           if r["platform"] == "iOS" and r["isAvailable"]]
+    runtime = max(ios, key=lambda r: [int(n) for n in r["version"].split(".")])["identifier"]
+    for d in json.loads(simctl("list", "-j", "devices").stdout)["devices"].get(runtime, []):
+        if d["name"] == "Stream Screenshots":
+            return d["udid"]
+    phones = json.loads(simctl("list", "-j", "devicetypes").stdout)["devicetypes"]
+    pro = [t["identifier"] for t in phones if re.fullmatch(r"iPhone \d+ Pro", t["name"])]
+    return simctl("create", "Stream Screenshots", sorted(pro)[-1], runtime).stdout.strip()
+
+
+SIM = simulator()
+DEST = f"platform=iOS Simulator,id={SIM}"
 
 
 def local_ids(names):
@@ -43,8 +74,14 @@ def local_ids(names):
 
 def fetch(url):
     req = urllib.request.Request(url, headers={"User-Agent": "Stream screenshots (network.aza.stream)"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return r.read()
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code < 500 or attempt == 3:
+                raise
+            time.sleep(2 ** attempt)
 
 
 def name(s):
@@ -52,15 +89,19 @@ def name(s):
     return s.replace("/", "∕")
 
 
-def library():
+def library(cast):
     """Writes the albums in demo-library.json as silent FLACs at their real lengths, with
-    covers and a synced .lrc for the lyrics shot, plus demo.json for DemoFlow."""
+    covers and a synced .lrc for the cast's lyrics shot, plus demo.json naming what goes where."""
     data = json.load(open(DATA))
-    if os.path.isdir(LIBRARY):
+    stamp = os.path.join(LIBRARY, ".albums")
+    albums = json.dumps(data["albums"])
+    fresh = os.path.isfile(stamp) and open(stamp).read() == albums
+    if not fresh and os.path.isdir(LIBRARY):
         subprocess.run(["rm", "-rf", LIBRARY], check=True)
-    os.makedirs(LIBRARY)
-    print(f"library: {len(data['albums'])} albums…", flush=True)
-    for a in data["albums"]:
+    os.makedirs(LIBRARY, exist_ok=True)
+    if not fresh:
+        print(f"library: {len(data['albums'])} albums…", flush=True)
+    for a in [] if fresh else data["albums"]:
         folder = os.path.join(LIBRARY, name(f"{a['artist']} - {a['title']}"))
         os.makedirs(folder)
         open(os.path.join(folder, "cover.jpg"), "wb").write(fetch(a["cover"]))
@@ -75,72 +116,83 @@ def library():
                 "-metadata", f"track={t['n']}", "-metadata", f"disc={t['disc']}",
                 *(["-metadata", f"date={a['year']}"] if "year" in a else []), path)
 
+    if not fresh:
+        open(stamp, "w").write(albums)
+
     # A shot names an album by its title, or an artist by name.
     artists = sorted({a["artist"] for a in data["albums"]})
     names = [[a["artist"], a["title"]] for a in data["albums"]] + [[a] for a in artists]
     ids = dict(zip([n[-1] for n in names], local_ids(names)))
     pick = lambda title: {"id": ids[title], "title": title}
-    shots = data["shots"]
+    casts = data["casts"]
+    shots = casts[cast or next(iter(casts))]
+    if "base" in shots:
+        shots = {**casts[shots["base"]], **shots}
     lyrics_album = next(a for a in data["albums"] if a["title"] == shots["lyrics"][0])
     track = next(t for t in lyrics_album["tracks"] if t["title"] == shots["lyrics"][1])
-    q = urllib.parse.urlencode({"artist_name": lyrics_album["artist"], "track_name": track["title"]})
+    q = urllib.parse.urlencode({"artist_name": lyrics_album["artist"], "track_name": track["title"]}, quote_via=urllib.parse.quote)
     lrc = json.loads(fetch("https://lrclib.net/api/get?" + q))["syncedLyrics"]
     open(os.path.join(LIBRARY, name(f"{lyrics_album['artist']} - {lyrics_album['title']}"),
                       name(f"{track['disc']}-{track['n']:02d} {track['title']}.lrc")), "w").write(lrc)
+    # The shot's line: where it starts, less the lyrics view's 250 ms lead, so it's the one lit.
+    line = shots["lyrics"][2]
+    start = next(int(m) * 60000 + round(float(sec) * 1000)
+                 for m, sec, text in re.findall(r"\[(\d+):([\d.]+)\](.*)", lrc) if text.strip() == line)
 
     json.dump({"pins": [pick(t) for t in shots["pins"]], "recents": [pick(t) for t in shots["recents"]],
-               "album": pick(shots["album"]),
-               "playing": pick(shots["playing"]), "lyrics": pick(lyrics_album["title"]),
-               "lyricsTrack": track["title"], "search": shots["search"], "result": shots["result"]},
+               "album": pick(shots["album"]), "playing": pick(shots["playing"]),
+               "nowPlaying": pick(shots.get("nowPlaying", shots["playing"])),
+               "macPlaying": pick(shots.get("macPlaying", shots["playing"])),
+               "lyrics": pick(lyrics_album["title"]), "lyricsTrack": track["title"], "lyricsMs": max(0, start - 150),
+               "search": shots["search"], "result": shots["result"]},
               open(os.path.join(os.path.dirname(LIBRARY), "demo.json"), "w"), indent=2)
 
 
-def prepare():
-    """Builds the app and its tests, and gives the simulator a tidy status bar."""
-    print("building…", flush=True)
-    if not os.path.isdir(os.path.join(ROOT, "Generated", "StreamCore.xcframework")):
-        run("scripts/build-core.sh", env={"PROFILE": "debug"})
-    run("xcodegen", "generate")
-    run("xcodebuild", "-project", "Stream.xcodeproj", "-scheme", "Stream-iOS", "-destination", DEST,
-        "-derivedDataPath", "build", "build-for-testing")
-    run("xcodebuild", "-project", "Stream.xcodeproj", "-scheme", "Stream-macOS", "-destination", "platform=macOS",
-        "-derivedDataPath", "build", "build")
+def changed(stamp, *paths):
+    """True when the stamp is missing or anything under the paths is newer."""
+    if not os.path.isfile(stamp):
+        return True
+    t = os.path.getmtime(stamp)
+    for p in paths:
+        for d, _, files in os.walk(os.path.join(ROOT, p)):
+            if any(os.path.getmtime(os.path.join(d, f)) > t for f in files):
+                return True
+    return False
+
+
+def prepare(mac=True):
+    """Builds the core and the apps when their sources changed, and gives the simulator a tidy status bar."""
+    core_stamp = os.path.join(ROOT, "build", ".demo-core")
+    if not os.path.isdir(os.path.join(ROOT, "Generated", "StreamCore.xcframework")) or changed(core_stamp, "core/src", "core/Cargo.toml"):
+        print("building the core…", flush=True)
+        run("taskpolicy", "-c", "utility", "scripts/build-core.sh", env={"PROFILE": "debug"})
+        open(core_stamp, "w").close()
+    sources = ("project.yml", "Shared", "iOS", "macOS", "Generated")
+    stamp = os.path.join(ROOT, "build", ".demo-ios")
+    if changed(stamp, *sources):
+        print("building…", flush=True)
+        run("xcodegen", "generate")
+        run("taskpolicy", "-c", "utility", "xcodebuild", "-project", "Stream.xcodeproj", "-scheme", "Stream-iOS",
+            "-destination", DEST, "-derivedDataPath", "build", "build")
+        open(stamp, "w").close()
+    mac_stamp = os.path.join(ROOT, "build", ".demo-mac")
+    if mac and changed(mac_stamp, *sources):
+        run("taskpolicy", "-c", "utility", "xcodebuild", "-project", "Stream.xcodeproj", "-scheme", "Stream-macOS",
+            "-destination", "platform=macOS", "-derivedDataPath", "build", "build")
+        open(mac_stamp, "w").close()
     simctl("bootstatus", SIM, "-b")
+    simctl("install", SIM, os.path.join(ROOT, "build/Build/Products/Debug-iphonesimulator/Stream.app"))
     simctl("status_bar", SIM, "override", "--time", "9:41", "--batteryState", "charged", "--batteryLevel", "100",
            "--wifiBars", "3", "--cellularBars", "4")
     simctl("ui", SIM, "appearance", "dark", check=False)
 
 
-def run_flow(method, on_line):
-    """Runs one DemoFlow method, calling on_line for each output line as it happens."""
-    # A pseudo-terminal keeps xcodebuild line-buffered, so marks arrive when they happen.
-    master, slave = pty.openpty()
-    # TEST_RUNNER_ variables reach the test runner without the prefix.
-    test = subprocess.Popen(["xcodebuild", "test-without-building", "-project", "Stream.xcodeproj", "-scheme", "Stream-iOS",
-                             "-destination", DEST, "-derivedDataPath", "build",
-                             f"-only-testing:StreamUITests-iOS/DemoFlow/{method}"],
-                            cwd=ROOT, stdout=slave, stderr=slave, text=True,
-                            env={**os.environ, "TEST_RUNNER_STREAM_LIBRARY": LIBRARY})
-    os.close(slave)
-    log, buf = [], b""
-    while True:
-        try:
-            chunk = os.read(master, 4096)
-        except OSError:
-            break
-        if not chunk:
-            break
-        buf += chunk
-        *lines, buf = buf.split(b"\n")
-        for raw_line in lines:
-            line = raw_line.decode("utf-8", "replace")
-            log.append(line + "\n")
-            on_line(line)
-    test.wait()
-    if test.returncode != 0:
-        path = os.path.join(tempfile.mkdtemp(prefix="stream-demo-"), "flow.log")
-        open(path, "w").writelines(log)
-        sys.exit(f"{method} failed, log in {path}")
+def wait_for(path, what, secs=30):
+    end = time.time() + secs
+    while not os.path.exists(path):
+        if time.time() > end:
+            sys.exit(f"{what}: the app never finished its deep links")
+        time.sleep(0.05)
 
 
 def frame(path, phone=True):
@@ -160,16 +212,20 @@ def frame(path, phone=True):
     run("uv", "run", "--quiet", "--with", "pillow", "python", "-I", "-c", script, path, "phone" if phone else "mac")
 
 
-def mac_window():
+def mac_window(out):
     """Launches the Mac app in the background on the demo library and captures its window, without taking focus."""
-    app = os.path.join(ROOT, "build/Build/Products/Debug/Stream.app")
+    # The real path: build is a symlink to build.noindex, and pgrep sees the resolved one.
+    app = os.path.realpath(os.path.join(ROOT, "build/Build/Products/Debug/Stream.app"))
     subprocess.run(["pkill", "-f", app + "/Contents/MacOS/Stream"], check=False)
     demo = json.load(open(os.path.join(os.path.dirname(LIBRARY), "demo.json")))
+    done = os.path.join(subprocess.run(["getconf", "DARWIN_USER_TEMP_DIR"], capture_output=True, text=True).stdout.strip(), "links-done")
+    if os.path.exists(done):
+        os.remove(done)
     subprocess.run(["open", "-g", "-n", "--env", "SAMPLE_ACCOUNT=1", app, "--args", "-musicFolder", LIBRARY, "-uiTesting", "YES",
                     "-signInAnswered", "YES",
-                    "-url", "network-aza-stream://play?id=" + demo["playing"]["id"],
+                    "-url", "network-aza-stream://play?id=" + demo["macPlaying"]["id"],
                     "-url", "network-aza-stream://open?id=" + demo["album"]["id"]], check=True)
-    time.sleep(8)
+    wait_for(done, "mac")
     pid = subprocess.run(["pgrep", "-n", "-f", app + "/Contents/MacOS/Stream"], capture_output=True, text=True).stdout.split()[0]
     find = ("import CoreGraphics\n"
             "let list = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as! [[String: Any]]\n"
@@ -177,7 +233,7 @@ def mac_window():
             "  if let b = w[kCGWindowBounds as String] as? [String: Any], let h = b[\"Height\"] as? Double, h > 200 { print(w[kCGWindowNumber as String]!); break }\n"
             "}\n")
     wid = subprocess.run(["swift", "-e", find], capture_output=True, text=True).stdout.strip()
-    path = os.path.join(OUT, "mac.png")
+    path = os.path.join(out, "mac.png")
     shot = subprocess.run(["screencapture", "-x", "-o", f"-l{wid}", path])
     subprocess.run(["pkill", "-f", app + "/Contents/MacOS/Stream"], check=False)
     if shot.returncode != 0:
@@ -189,27 +245,53 @@ def mac_window():
 
 
 
-def screenshots():
-    library()
-    prepare()
-    os.makedirs(OUT, exist_ok=True)
+def links(demo):
+    """The deep links that set up each README shot, from a fresh launch."""
+    play = lambda item, **q: "play?" + urllib.parse.urlencode({"id": item["id"], **q}, quote_via=urllib.parse.quote)
+    return {
+        # Pins, then Recents oldest first (each play goes to the top), then what's playing.
+        "home": [f"pin?id={p['id']}" for p in demo["pins"]] + [play(a) for a in demo["recents"]] + [play(demo["playing"])],
+        "now-playing": [play(demo["nowPlaying"]), "nowplaying", "seek?ms=7000"],
+        # On the shot's line, lit and scrolled into place.
+        "lyrics": [play(demo["lyrics"], track=demo["lyricsTrack"]), "nowplaying?mode=lyrics", f"seek?ms={demo['lyricsMs']}"],
+        "album": [play(demo["album"]), f"open?id={demo['album']['id']}"],
+        "search": ["search?" + urllib.parse.urlencode({"q": demo["search"]}, quote_via=urllib.parse.quote)],
+    }
 
-    def on_line(line):
-        m = re.search(r"SHOT_([\w-]+)", line)
-        if m:
-            time.sleep(0.8)  # the flow holds still for 2 s after each mark
-            path = os.path.join(OUT, m.group(1) + ".png")
-            simctl("io", SIM, "screenshot", path)
-            frame(path)
-            print("shot", m.group(1), flush=True)
 
-    run_flow("testScreenshots", on_line)
+def shoot(name, urls, out):
+    """One launch of the installed app, its deep links, one screenshot."""
+    done = os.path.join(simctl("get_app_container", SIM, BUNDLE, "data").stdout.strip(), "tmp", "links-done")
+    if os.path.exists(done):
+        os.remove(done)
+    args = ["-musicFolder", LIBRARY, "-uiTesting", "YES", "-signInAnswered", "YES"]
+    for u in urls:
+        args += ["-url", "network-aza-stream://" + u]
+    simctl("launch", "--terminate-running-process", SIM, BUNDLE, *args, env={"SIMCTL_CHILD_SAMPLE_ACCOUNT": "1"})
+    wait_for(done, name)
+    path = os.path.join(out, name + ".png")
+    simctl("io", SIM, "screenshot", path)
+    frame(path)
+    print("shot", name, flush=True)
+
+
+def screenshots(cast, out, only=None):
+    library(cast)
+    prepare(mac=only is None or "mac" in only)
+    os.makedirs(out, exist_ok=True)
+    demo = json.load(open(os.path.join(os.path.dirname(LIBRARY), "demo.json")))
+    for name, urls in links(demo).items():
+        if only is None or name in only:
+            shoot(name, urls, out)
+    simctl("terminate", SIM, BUNDLE, check=False)
     simctl("status_bar", SIM, "clear", check=False)
-    mac_window()
+    if only is None or "mac" in only:
+        mac_window(out)
 
 
 if __name__ == "__main__":
     if "--screenshots" in sys.argv:
-        screenshots()
+        only = arg("--only")
+        screenshots(arg("--cast"), os.path.abspath(arg("--out", OUT)), only.split(",") if only else None)
     else:
         sys.exit(__doc__)

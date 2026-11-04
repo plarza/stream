@@ -1,30 +1,59 @@
 {
  "source": "Last.fm user moon_man_m00n's 60 most played albums, keeping those with an albumoftheyear.org user score of 80 or more, and in them the songs AOTY users rate 80 or more (albums AOTY has no song ratings for keep every song). Fetched 2026-11-01.",
- "shots": {
-  "pins": [
-   "I LAY DOWN MY LIFE FOR YOU",
-   "Kendrick Lamar",
-   "Imaginal Disk",
-   "Graduation",
-   "Luv(sic) hexalogy",
-   "Tyler, The Creator",
-   "DAMN.",
-   "Die Lit"
-  ],
-  "recents": [
-   "Mr. Morale & the Big Steppers",
-   "Heaven knows",
-   "OFFLINE!",
-   "Late Registration"
-  ],
-  "album": "Madvillainy",
-  "playing": "IGOR",
-  "lyrics": [
-   "DAMN.",
-   "DNA."
-  ],
-  "search": "kanye",
-  "result": "Graduation"
+ "casts": {
+  "readme": {
+   "pins": [
+    "I LAY DOWN MY LIFE FOR YOU",
+    "Kendrick Lamar",
+    "Imaginal Disk",
+    "Graduation",
+    "Luv(sic) hexalogy",
+    "Tyler, The Creator",
+    "DAMN.",
+    "Die Lit"
+   ],
+   "recents": [
+    "Mr. Morale & the Big Steppers",
+    "Heaven knows",
+    "OFFLINE!",
+    "Late Registration"
+   ],
+   "playing": "IGOR",
+   "nowPlaying": "Ants From Up There",
+   "macPlaying": "Chromakopia",
+   "album": "Imaginal Disk",
+   "lyrics": [
+    "Imaginal Disk",
+    "Image",
+    "Meet your brand new image"
+   ],
+   "search": "kanye",
+   "result": "Graduation"
+  },
+  "lyrics-power": {
+   "base": "readme",
+   "lyrics": [
+    "My Beautiful Dark Twisted Fantasy",
+    "POWER",
+    "No one man should have all that power"
+   ]
+  },
+  "lyrics-earfquake": {
+   "base": "readme",
+   "lyrics": [
+    "IGOR",
+    "EARFQUAKE",
+    "Don't leave, it's my fault"
+   ]
+  },
+  "lyrics-liar": {
+   "base": "readme",
+   "lyrics": [
+    "Heaven knows",
+    "Boy's a liar Pt. 2",
+    "The-the boy's a liar, the boy's a liar"
+   ]
+  }
  },
  "albums": [
   {
