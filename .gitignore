@@ -1,8 +1,10 @@
-core/target/
+core/target
+core/target.noindex/
 Generated/
 Stream.xcodeproj/
 StreamTests.xcodeproj/
-build/
+build
+build.noindex/
 iOS/Info.plist
 macOS/Info.plist
 .DS_Store

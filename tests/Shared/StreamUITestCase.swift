@@ -6,11 +6,9 @@ import XCTest
 class StreamUITestCase: XCTestCase {
     var app: XCUIApplication!
 
-    /// The small generated library from tests/make-fixtures.sh, or the one in
-    /// STREAM_LIBRARY (scripts/demo.py passes its screenshot library this way).
+    /// The small generated library from tests/make-fixtures.sh.
     static var library: String {
-        if let path = ProcessInfo.processInfo.environment["STREAM_LIBRARY"] { return path }
-        return URL(fileURLWithPath: #filePath)
+        URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("library/Music")
@@ -27,7 +25,12 @@ class StreamUITestCase: XCTestCase {
             #if os(iOS)
             XCUIDevice.shared.system.open(URL(string: "network-aza-stream://reset")!)
             let home = app.tabBars.buttons["Home"].firstMatch
-            XCTAssertTrue(poll(5) { home.isSelected && home.isHittable }, "reset didn't land on Home")
+            // A fresh simulator asks once before an app opens its own link.
+            let open = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons["Open"]
+            XCTAssertTrue(poll(5) {
+                if open.exists { open.tap() }
+                return home.isSelected && home.isHittable
+            }, "reset didn't land on Home")
             #endif
             return
         }
