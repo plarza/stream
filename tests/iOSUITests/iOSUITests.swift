@@ -10,7 +10,7 @@ final class iOSUITests: StreamUITestCase {
 
     func testTabsAndLibrarySections() {
         app.tabBars.buttons["Library"].tap()
-        for s in ["Playlists", "Artists", "Albums", "Songs", "Liked Songs", "Uploads", "Downloaded"] {
+        for s in ["Playlists", "Artists", "Albums", "Songs", "Liked Songs", "Uploads", "Downloaded", "History"] {
             wait(el("library.\(s)"))
         }
         el("library.Artists").tap()
@@ -124,7 +124,8 @@ final class iOSUITests: StreamUITestCase {
         wait(el("track.Tunnel")).tap()
         waitLabel(el("mini.title"), "Tunnel")
         // Past halfway through a song under 10 seconds, it counts as played.
-        app.tabBars.buttons["History"].tap()
+        app.tabBars.buttons["Library"].tap()
+        wait(el("library.History")).tap()
         wait(text("Today"), 10)
         wait(el("history.Tunnel")).tap()
         waitLabel(el("mini.title"), "Tunnel")

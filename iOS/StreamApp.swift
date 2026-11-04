@@ -32,11 +32,10 @@ struct RootView: View {
     @State private var search = SearchModel()
     @State private var homePath = NavigationPath()
     @State private var libraryPath = NavigationPath()
-    @State private var historyPath = NavigationPath()
     @State private var searchPath = NavigationPath()
     @Namespace private var zoom
 
-    enum TabID: Hashable { case home, library, history, search }
+    enum TabID: Hashable { case home, library, search }
 
     var body: some View {
         @Bindable var model = model
@@ -53,13 +52,6 @@ struct RootView: View {
                 NavigationStack(path: $libraryPath) {
                     LibraryView()
                         .navigationTitle("Library")
-                        .profileButton { model.showSettings = true }
-                        .destinations()
-                }
-            }
-            Tab("History", systemImage: "clock.fill", value: .history) {
-                NavigationStack(path: $historyPath) {
-                    HistoryView()
                         .profileButton { model.showSettings = true }
                         .destinations()
                 }
@@ -104,7 +96,6 @@ struct RootView: View {
             search.query = ""
             homePath = NavigationPath()
             libraryPath = NavigationPath()
-            historyPath = NavigationPath()
             searchPath = NavigationPath()
             tab = .home
         }
@@ -118,7 +109,6 @@ struct RootView: View {
         switch tab {
         case .home: homePath.append(item)
         case .library: libraryPath.append(item)
-        case .history: historyPath.append(item)
         case .search: searchPath.append(item)
         }
     }
@@ -140,6 +130,7 @@ extension View {
     func destinations() -> some View {
         navigationDestination(for: Item.self) { CollectionView(item: $0) }
             .navigationDestination(for: LibrarySection.self) { SectionView(section: $0) }
+            .navigationDestination(for: LibraryPage.self) { _ in HistoryView() }
     }
 }
 

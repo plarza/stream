@@ -36,31 +36,40 @@ extension LibrarySection: Identifiable {
     static let ordered: [LibrarySection] = [.playlists, .artists, .albums, .songs, .likedSongs, .uploads, .downloaded]
 }
 
+/// A Library page that isn't one of the core's sections.
+enum LibraryPage: Hashable { case history }
+
 /// The Library tab, laid out like Apple Music's: a glyph column, the name in
 /// title type, hairlines that start at the text, nothing above the first row.
 struct LibraryView: View {
     var body: some View {
         List {
-            ForEach(LibrarySection.ordered) { s in
-                NavigationLink(value: s) {
-                    HStack(spacing: 0) {
-                        Image(systemName: s.symbol)
-                            .font(.system(size: 22))
-                            .foregroundStyle(.primary)
-                            .frame(width: 30)
-                        Text(s.title)
-                            .font(.title3)
-                            .padding(.leading, 11)
-                            .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
-                    }
-                    .frame(minHeight: 52)
+            Group {
+                ForEach(LibrarySection.ordered) { s in
+                    NavigationLink(value: s) { Self.row(s.title, s.symbol) }
+                        .accessibilityIdentifier("library.\(s.title)")
                 }
-                .listRowInsets(EdgeInsets(top: 0, leading: Metrics.page, bottom: 0, trailing: Metrics.page))
-                .accessibilityIdentifier("library.\(s.title)")
+                NavigationLink(value: LibraryPage.history) { Self.row("History", "clock") }
+                    .accessibilityIdentifier("library.History")
             }
+            .listRowInsets(EdgeInsets(top: 0, leading: Metrics.page, bottom: 0, trailing: Metrics.page))
             .listSectionSeparator(.hidden, edges: .top)
         }
         .listStyle(.plain)
+    }
+
+    private static func row(_ title: String, _ symbol: String) -> some View {
+        HStack(spacing: 0) {
+            Image(systemName: symbol)
+                .font(.system(size: 22))
+                .foregroundStyle(.primary)
+                .frame(width: 30)
+            Text(title)
+                .font(.title3)
+                .padding(.leading, 11)
+                .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+        }
+        .frame(minHeight: 52)
     }
 }
 

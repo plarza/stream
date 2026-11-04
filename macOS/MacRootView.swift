@@ -239,11 +239,11 @@ struct MacRootView: View {
                 Color.clear.frame(height: 30)
                 row(.home, "Home", "house").accessibilityIdentifier("sidebar.home")
                 row(.search, "Search", "magnifyingglass").accessibilityIdentifier("sidebar.search")
-                row(.history, "History", "clock").accessibilityIdentifier("sidebar.history")
                 header("Library")
                 ForEach(LibrarySection.ordered) { s in
                     row(.section(s), s.title, s.symbol).accessibilityIdentifier("sidebar.\(s.title)")
                 }
+                row(.history, "History", "clock").accessibilityIdentifier("sidebar.History")
                 if !model.home.pins.isEmpty {
                     header("Pinned")
                     ForEach(model.home.pins) { p in

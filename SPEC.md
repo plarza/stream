@@ -157,8 +157,8 @@ bottom accessory.
 |---|---|
 | Now Playing | `01` **A Immersive**: blurred full-bleed art, big art, format/quality chip (e.g. FLAC 24/96, OGG 320) |
 | Home | `02` **D Pinned grid + recents**, without the floating search pill. You can pin albums, songs, artists and playlists |
-| Library | Category list: Playlists, Artists, Albums, Songs, Liked Songs, Uploads, Downloaded |
-| History | Every song played on any of your devices, newest first, by day, with the time and device |
+| Library | Category list: Playlists, Artists, Albums, Songs, Liked Songs, Uploads, Downloaded, History |
+| History | Library → History (not a tab): every song played on any of your devices, newest first, by day, with the time and device |
 | Lyrics | `04` **A**: left-aligned, word fill on the active line, distance blur on the others, tap a line to seek |
 | Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, like, pin). Playlists sort from the toolbar (playlist order, title, artist, album, length, reversed), the same for every playlist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |
 | Queue | `06` **A** without the toggle row: "Playing Next" + "Continue from …" |
