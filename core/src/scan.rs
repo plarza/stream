@@ -38,7 +38,8 @@ pub fn scan(db: &Db, roots: &[PathBuf], art_dir: &Path, downloaded: bool, progre
     let mut todo: Vec<(PathBuf, String, i64, i64)> = Vec::new();
 
     for root in roots {
-        for entry in walkdir::WalkDir::new(root).follow_links(true).into_iter().filter_map(Result::ok) {
+        let walk = walkdir::WalkDir::new(root).follow_links(true).into_iter();
+        for entry in walk.filter_entry(|e| e.depth() == 0 || !is_project(e)).filter_map(Result::ok) {
             let path = entry.path();
             if !entry.file_type().is_file() || !is_audio(path) {
                 continue;
@@ -92,6 +93,20 @@ pub fn scan(db: &Db, roots: &[PathBuf], art_dir: &Path, downloaded: bool, progre
         db.rebuild_search()?;
     }
     Ok(changed)
+}
+
+/// Hidden folders and app projects (GarageBand, Logic, ...): their audio is
+/// recordings and stems, not songs.
+fn is_project(entry: &walkdir::DirEntry) -> bool {
+    const PACKAGES: &[&str] = &["band", "logicx", "logic", "app", "bundle", "musiclibrary", "photoslibrary", "tvlibrary", "ptx", "als"];
+    if !entry.file_type().is_dir() {
+        return false;
+    }
+    let name = entry.file_name().to_string_lossy();
+    name.starts_with('.')
+        || name == "GarageBand"
+        || name == "Ableton"
+        || Path::new(&*name).extension().is_some_and(|x| PACKAGES.contains(&x.to_string_lossy().to_lowercase().as_str()))
 }
 
 fn read_file(
