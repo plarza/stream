@@ -8,7 +8,7 @@ options:
 packages:
   AzaUI:
     url: https://github.com/plarza/ui
-    from: 0.8.0
+    from: 0.9.0
 settings:
   base:
     DEVELOPMENT_TEAM: H5A6B4L9W8

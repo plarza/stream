@@ -13,7 +13,7 @@ struct StreamMacApp: App {
     init() {
         // "Pure black in dark mode" was its own switch; it's the OLED Dark theme now.
         let d = UserDefaults.standard
-        if d.bool(forKey: "pureBlack") { d.set("oledDark", forKey: Appearance.key) }
+        if d.bool(forKey: "pureBlack") { d.set(Appearance.oledDark.rawValue, forKey: Appearance.key) }
         d.removeObject(forKey: "pureBlack")
     }
 
