@@ -313,18 +313,18 @@ impl Db {
     }
 
     /// Songs from the node (aza sync data), by SHA-256. One that's also a file on this device
-    /// is left out: the file is the same song.
-    pub fn upsert_remote(&self, songs: &[(String, LocalTrack)], downloaded: &dyn Fn(&str, &str) -> bool) -> anyhow::Result<()> {
+    /// is left out: the file is the same song. Each comes with whether it's downloaded here.
+    pub fn upsert_remote(&self, songs: &[(String, LocalTrack, bool)]) -> anyhow::Result<()> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         let now = now();
-        for (hash, t) in songs {
+        for (hash, t, downloaded) in songs {
             let own: i64 = tx.query_row("SELECT COUNT(*) FROM tracks WHERE remote = 0 AND hash = ?1", [hash], |r| r.get(0))?;
             if own > 0 {
                 continue;
             }
             let id = remote_id(hash);
-            Self::write_track(&tx, &id, t, None, true, downloaded(hash, &t.rel_path), now)?;
+            Self::write_track(&tx, &id, t, None, true, *downloaded, now)?;
             tx.execute("UPDATE tracks SET hash = ?2 WHERE id = ?1", params![id, hash])?;
         }
         Self::prune_local(&tx)?;

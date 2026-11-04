@@ -415,6 +415,7 @@ impl Node {
                 continue;
             }
             let Ok(song) = serde_json::from_slice::<Song>(&item.data) else { continue };
+            let downloaded = self.adopt_download(hash, &song.path, song.size);
             let art_key = song.art.as_ref().map(|a| self.db.get_kv(&format!("art_key:{a}")).unwrap_or_else(|| format!("node:{a}")));
             add.push((
                 hash.to_string(),
@@ -436,13 +437,13 @@ impl Node {
                     mtime: 0,
                     size: song.size as i64,
                 },
+                downloaded,
             ));
         }
         if add.is_empty() && remove.is_empty() {
             return false;
         }
-        let downloaded = |hash: &str, rel: &str| self.adopt_download(hash, rel);
-        if let Err(e) = self.db.upsert_remote(&add, &downloaded) {
+        if let Err(e) = self.db.upsert_remote(&add) {
             log::warn!("adding songs from the node: {e:#}");
         }
         if !remove.is_empty() {
@@ -455,18 +456,13 @@ impl Node {
     }
 
     /// Whether a song is downloaded here, moving in a copy the old Wi-Fi sync left.
-    fn adopt_download(&self, hash: &str, rel: &str) -> bool {
+    fn adopt_download(&self, hash: &str, rel: &str, size: u64) -> bool {
         let dest = self.download_path(hash, rel);
         if dest.exists() {
             return true;
         }
         let Some(old) = self.legacy_dir.as_ref().map(|d| d.join(rel)) else { return false };
-        let size = self
-            .db
-            .sync_item(&format!("songs/{hash}"))
-            .and_then(|(_, _, d)| serde_json::from_slice::<Song>(&d?).ok())
-            .map(|s| s.size);
-        if size.is_some() && std::fs::metadata(&old).map(|m| m.len()).ok() == size {
+        if std::fs::metadata(&old).is_ok_and(|m| m.len() == size) {
             return std::fs::rename(&old, &dest).is_ok();
         }
         false

@@ -80,7 +80,9 @@ final class StreamSync {
         do {
             try await connect(client, identity: identity)
             let items = try await client.readChanges()
-            core.syncApply(items: items.map { StreamBindings.SyncItem(name: $0.name, version: $0.version, data: $0.data) })
+            let incoming = items.map { StreamBindings.SyncItem(name: $0.name, version: $0.version, data: $0.data) }
+            // Applying writes the library: keep it off the main thread.
+            await Task.detached { core.syncApply(items: incoming) }.value
             for item in core.syncOutgoing() {
                 do {
                     try await client.write(name: item.name, version: item.version, data: item.data)
