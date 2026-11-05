@@ -2,8 +2,8 @@ import StreamBindings
 import AzaUI
 import SwiftUI
 
-/// Your account, Services (your music, Spotify, SoundCloud: their order, switches and each
-/// one's own page), Last.fm, playback, then Appearance.
+/// Your account, Services (your music, Spotify, SoundCloud: their order and each one's own
+/// page, where it's switched off), Last.fm, playback, then Appearance.
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
     @State private var clientId = ""
@@ -26,11 +26,8 @@ struct ProfileView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     AccountRow().padding(.top, 8)
-                    SettingsCard("Services") {
-                        ServicesList(settings: $settings, soundCloudSignIn: $soundCloudSignIn)
-                    } footer: {
-                        Text("Search and playback go in this order. A song on more than one plays from the first.")
-                    }
+                    heading("Services")
+                    ServicesList(settings: $settings)
                     lastfm
                     SettingsCard("Playback") {
                         Toggle("Normalize loudness", isOn: $settings.normalization)

@@ -2,15 +2,14 @@ import StreamBindings
 import SwiftUI
 import WebKit
 
-/// Settings → Services: one row per service in the order search and playback try them. Drag
-/// a row to reorder it; the switch turns a service off without signing out; the row opens
-/// its own page.
+/// Settings → Services: one row per service in the order search and playback try them, as a
+/// native inset list. Hold and drag a row to reorder it; the row opens its own page, where it
+/// can be turned off.
 struct ServicesList: View {
     @Binding var settings: Preferences
-    @Binding var soundCloudSignIn: Bool
     @Environment(AppModel.self) private var model
 
-    private static let rowHeight: CGFloat = 58
+    private static let rowHeight: CGFloat = 52
 
     /// Every service, in order; one an older version didn't list goes last.
     private var order: [Service] {
@@ -19,19 +18,26 @@ struct ServicesList: View {
 
     var body: some View {
         List {
-            ForEach(order) { s in
-                NavigationLink(value: s) { row(s) }
+            Section {
+                ForEach(order) { s in
+                    NavigationLink(value: s) {
+                        LabeledContent {
+                            Text(status(s))
+                        } label: {
+                            Label { Text(s.title) } icon: { ServiceIcon(service: s) }
+                        }
+                    }
                     .listRowBackground(Color.clear)
-                    .listRowSeparator(s == order.last ? .hidden : .visible, edges: .bottom)
                     .listRowSeparator(s == order.first ? .hidden : .visible, edges: .top)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    .listRowSeparator(s == order.last ? .hidden : .visible, edges: .bottom)
                     .accessibilityIdentifier("settings.service.\(s.title)")
-            }
-            .onMove { from, to in
-                var o = order
-                o.move(fromOffsets: from, toOffset: to)
-                Haptics.tap()
-                withAnimation(.snappy) { settings.services = o }
+                }
+                .onMove { from, to in
+                    var o = order
+                    o.move(fromOffsets: from, toOffset: to)
+                    Haptics.tap()
+                    withAnimation(.snappy) { settings.services = o }
+                }
             }
         }
         .listStyle(.plain)
@@ -39,93 +45,60 @@ struct ServicesList: View {
         .scrollDisabled(true)
         .frame(height: Self.rowHeight * CGFloat(order.count))
         .environment(\.defaultMinListRowHeight, Self.rowHeight)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: .rect(cornerRadius: 24))
     }
 
-    private func row(_ s: Service) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "line.3.horizontal")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.tertiary)
-                .accessibilityHidden(true)
-            ServiceIcon(service: s)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(s.title)
-                    .foregroundStyle(on(s) ? .primary : .secondary)
-                status(s)
-            }
-            Spacer(minLength: 8)
-            trailing(s)
-        }
-        .frame(height: Self.rowHeight)
-        .contentShape(Rectangle())
-    }
-
-    private func on(_ s: Service) -> Bool { !settings.servicesOff.contains(s) }
-
-    private func status(_ s: Service) -> some View {
+    /// The row's value: who it's signed in as, or that it's off.
+    private func status(_ s: Service) -> String {
         let a = model.account
-        let (text, connected): (String, Bool) = switch s {
-        case .files: ("Your files and Uploads", true)
+        if settings.servicesOff.contains(s) { return "Off" }
+        return switch s {
+        case .files: ""
         case .spotify:
-            model.signingIn ? ("Signing in…", false)
-                : a.spotifyWeb ? ([a.spotifyUser, a.spotifyPremium ? "Premium" : "Free"].compactMap { $0 }.joined(separator: " · "), a.spotifyPlayback)
-                : ("Not connected", false)
-        case .soundCloud: (a.soundcloudUser ?? "Not signed in", a.soundcloudUser != nil)
-        }
-        return HStack(spacing: 5) {
-            if s != .files {
-                Circle().fill(connected ? Color.green : Color.secondary.opacity(0.6)).frame(width: 6, height: 6)
-            }
-            Text(text).lineLimit(1)
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
-
-    @ViewBuilder
-    private func trailing(_ s: Service) -> some View {
-        switch s {
-        case .files:
-            EmptyView()
-        case .spotify where !model.account.spotifyWeb:
-            // Not connected yet: the row's own page signs in.
-            Text("Connect")
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .foregroundStyle(.white)
-                .background(Color.accentColor, in: .capsule)
-        default:
-            // SoundCloud searches and plays without an account, so it can always be on.
-            Toggle(s.title, isOn: Binding(get: { on(s) }, set: { v in
-                withAnimation(.snappy) {
-                    settings.servicesOff.removeAll { $0 == s }
-                    if !v { settings.servicesOff.append(s) }
-                }
-            }))
-            .labelsHidden()
-            .accessibilityIdentifier("settings.toggle.\(s.title)")
+            model.signingIn ? "Signing in…"
+                : a.spotifyWeb ? (a.spotifyUser ?? (a.spotifyPremium ? "Premium" : "Free"))
+                : "Not connected"
+        case .soundCloud: a.soundcloudUser ?? ""
         }
     }
 }
 
-/// A service's mark: its colour and a symbol, the same size as Settings' own icons.
+/// A service's mark, the size of Settings' own icons: Stream's own icon for your music, and
+/// Spotify's and SoundCloud's real logos on their app icons' colours.
 struct ServiceIcon: View {
     let service: Service
     var size: CGFloat = 30
 
     var body: some View {
-        let (symbol, colors): (String, [Color]) = switch service {
-        case .files: ("music.note", [Color(red: 0.98, green: 0.35, blue: 0.42), Color(red: 0.98, green: 0.18, blue: 0.28)])
-        case .spotify: ("waveform", [Color(red: 0.12, green: 0.84, blue: 0.38), Color(red: 0.08, green: 0.66, blue: 0.29)])
-        case .soundCloud: ("cloud.fill", [Color(red: 1, green: 0.47, blue: 0), Color(red: 1, green: 0.2, blue: 0)])
+        Group {
+            switch service {
+            case .files:
+                Image("Icon").resizable().scaledToFill()
+                    .background(.white)
+            case .spotify:
+                Image("Spotify").resizable().scaledToFit()
+                    .foregroundStyle(Color(red: 0.12, green: 0.84, blue: 0.38))
+                    .padding(size * 0.17)
+                    .background(.black)
+            case .soundCloud:
+                Image("SoundCloud").resizable().scaledToFit()
+                    .foregroundStyle(.white)
+                    .padding(size * 0.15)
+                    .background(LinearGradient(colors: [Color(red: 1, green: 0.47, blue: 0), Color(red: 1, green: 0.2, blue: 0)],
+                                               startPoint: .top, endPoint: .bottom))
+            }
         }
-        Image(systemName: symbol)
-            .font(.system(size: size * 0.46, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom), in: .rect(cornerRadius: size * 0.26))
-            .accessibilityHidden(true)
+        .frame(width: size, height: size)
+        .clipShape(.rect(cornerRadius: size * 0.225, style: .continuous))
+        .overlay {
+            // Stream's white icon keeps its edge on a white page, as Settings does.
+            if service == .files {
+                RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
+                    .strokeBorder(.separator, lineWidth: 0.5)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 
