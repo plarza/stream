@@ -1,13 +1,13 @@
 {
   "fill": {
-    "solid": "srgb:1.00000,1.00000,1.00000,1.00000"
+    "automatic-gradient": "srgb:1.00000,0.21569,0.37255,1.00000"
   },
   "groups": [
     {
       "layers": [
         {
-          "image-name": "record.png",
-          "name": "record",
+          "image-name": "note.png",
+          "name": "note",
           "glass": false
         }
       ],
