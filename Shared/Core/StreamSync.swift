@@ -6,9 +6,9 @@ import StreamBindings
 /// aza sync for Stream, and the Stream node at stream.aza.network.
 ///
 /// Signed in with aza, Stream signs in to the node too (its certificate and a signed challenge, for a
-/// bearer token), and moves aza sync items between the aza client and the core: `settings` (the
-/// Spotify client ID, the Last.fm key and sign-in) and `songs/<sha256>`, one per music file on the
-/// node. The core decides what each item means and what to write; this only carries them.
+/// bearer token), and moves aza sync items between the aza client and the core (`settings`, `pins`,
+/// `playing`, History and `songs/<sha256>`; see core/src/sync.rs). The core decides what each item
+/// means and what to write; this only carries them.
 @MainActor
 final class StreamSync {
     static let shared = StreamSync()
@@ -139,5 +139,51 @@ final class StreamSync {
     struct NodeError: LocalizedError {
         var message: String
         var errorDescription: String? { message }
+    }
+}
+
+/// The apps' own preferences that follow you to your other devices: kept in UserDefaults (for
+/// `@AppStorage`), synced by the core in the `settings` item. Volume and the Mac's zoom stay per device.
+@MainActor
+enum SyncedDefaults {
+    static let keys = [Appearance.key, Accent.key, "visualizer", "playlistSort", "playlistSortReversed"]
+    /// Each key's value in UserDefaults as last sent to the core or taken from it, as JSON.
+    private static var known: [String: String] = [:]
+
+    static func start(_ core: StreamCore) {
+        known = core.appPrefs()
+        send(core)
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { send(core) }
+        }
+    }
+
+    /// What changed here, to the core.
+    private static func send(_ core: StreamCore) {
+        for key in keys {
+            let value = json(UserDefaults.standard.object(forKey: key))
+            guard value != known[key] else { continue }
+            known[key] = value
+            core.setAppPref(key: key, value: value)
+        }
+    }
+
+    /// What another device changed, from the core.
+    static func take(_ core: StreamCore) {
+        let prefs = core.appPrefs()
+        for key in keys where prefs[key] != known[key] {
+            var value = prefs[key].flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8), options: .fragmentsAllowed) }
+            #if os(iOS)
+            // OLED Dark is the Mac's; the iPhone's Dark is already black.
+            if key == Appearance.key, value as? String == Appearance.oledDark.rawValue { value = Appearance.dark.rawValue }
+            #endif
+            known[key] = json(value)
+            UserDefaults.standard.set(value, forKey: key)
+        }
+    }
+
+    private static func json(_ value: Any?) -> String? {
+        guard let value, let data = try? JSONSerialization.data(withJSONObject: value, options: .fragmentsAllowed) else { return nil }
+        return String(decoding: data, as: UTF8.self)
     }
 }

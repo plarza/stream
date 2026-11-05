@@ -2,14 +2,17 @@ import StreamBindings
 import AzaUI
 import SwiftUI
 
-/// Your account, Spotify, music folders (Mac), the Stream node, Last.fm, playback, then Appearance.
+/// Your account, Services (your music, Spotify, SoundCloud: their order, switches and each
+/// one's own page), Last.fm, playback, then Appearance.
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
-    /// Aurora behind Now Playing; this device only.
     @State private var clientId = ""
     @State private var lastfmKey = ""
     @State private var lastfmSecret = ""
-    @State private var settings = Preferences(normalization: true, crossfadeSeconds: 0, autoplay: true, bitPerfect: false, scrobbling: true)
+    @State private var settings = Preferences(normalization: true, autoplay: true, scrobbling: true,
+                                              services: [.files, .spotify, .soundCloud], servicesOff: [])
+    @State private var soundCloudSignIn = false
+    @State private var path: [Service] = []
     @State private var node: NodeStatus?
     @Environment(Account.self) private var aza
     @State private var refreshing = false
@@ -19,15 +22,15 @@ struct ProfileView: View {
 
     var body: some View {
         @Bindable var model = model
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     AccountRow().padding(.top, 8)
-                    spotify
-                    #if os(macOS)
-                    musicFolders
-                    #endif
-                    nodeSection
+                    SettingsCard("Services") {
+                        ServicesList(settings: $settings, soundCloudSignIn: $soundCloudSignIn)
+                    } footer: {
+                        Text("Search and playback go in this order. A song on more than one plays from the first.")
+                    }
                     lastfm
                     SettingsCard("Playback") {
                         Toggle("Normalize loudness", isOn: $settings.normalization)
@@ -35,13 +38,27 @@ struct ProfileView: View {
                             .accessibilityIdentifier("settings.autoplay")
                         Toggle("Scrobble to Last.fm", isOn: $settings.scrobbling)
                     }
-                    .onChange(of: settings) { model.core.setSettings(s: settings) }
                     heading("Appearance")
                     AppearanceSection()
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 30)
             }
+            .onChange(of: settings) { model.core.setSettings(s: settings) }
+            .onChange(of: model.settingsPage) {
+                if let page = model.settingsPage { path = [page]; model.settingsPage = nil }
+            }
+            .onChange(of: model.settingsVersion) { settings = model.core.settings() }
+            .navigationDestination(for: Service.self) { s in
+                ServicePage(service: s) {
+                    switch s {
+                    case .files: filesPage
+                    case .spotify: spotify
+                    case .soundCloud: soundCloud
+                    }
+                }
+            }
+            .sheet(isPresented: $soundCloudSignIn) { SoundCloudSignInSheet() }
             .navigationTitle("Profile")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -53,6 +70,7 @@ struct ProfileView: View {
             #endif
         }
         .onAppear {
+            if let page = model.settingsPage { path = [page]; model.settingsPage = nil }
             clientId = model.account.spotifyClientId ?? ""
             settings = model.core.settings()
             #if os(macOS)
@@ -67,11 +85,51 @@ struct ProfileView: View {
         }
     }
 
+    /// Whether a service is on: off, it stays signed in but leaves search, Library and playback.
+    private func use(_ s: Service) -> some View {
+        Toggle("Use \(s.title)", isOn: Binding(
+            get: { !settings.servicesOff.contains(s) },
+            set: { on in
+                settings.servicesOff.removeAll { $0 == s }
+                if !on { settings.servicesOff.append(s) }
+            }))
+            .accessibilityIdentifier("settings.use.\(s.title)")
+    }
+
+    /// Your own music: the Mac's folders and the Stream node they go up to.
+    @ViewBuilder
+    private var filesPage: some View {
+        #if os(macOS)
+        musicFolders
+        #endif
+        nodeSection
+    }
+
+    private var soundCloud: some View {
+        SettingsCard("Account") {
+            use(.soundCloud)
+            if let user = model.account.soundcloudUser {
+                LabeledContent("Account", value: user)
+                    .accessibilityIdentifier("settings.soundcloud.account")
+                Button("Sign out", role: .destructive) { model.core.soundcloudSignOut() }
+                    .accessibilityIdentifier("settings.soundcloud.signOut")
+            } else {
+                Button("Sign in to SoundCloud") { soundCloudSignIn = true }
+                    .accessibilityIdentifier("settings.soundcloud.signIn")
+            }
+        } footer: {
+            Text(model.account.soundcloudUser == nil
+                 ? "Search and play work without an account. Sign in for your likes and playlists, and to keep playlists there."
+                 : "Songs a label has only made available encrypted play from Spotify or your files instead.")
+        }
+    }
+
     /// The same on iPhone and Mac: everything shown comes from the core's sign-in step.
     private var spotify: some View {
         let a = model.account
         let done = a.spotifyWeb && a.spotifyPlayback
-        return SettingsCard("Spotify") {
+        return SettingsCard("Account") {
+            if a.spotifyWeb { use(.spotify) }
             if a.spotifyWeb {
                 LabeledContent("Account", value: a.spotifyUser ?? "Signed in")
                     .accessibilityIdentifier("settings.spotify.account")

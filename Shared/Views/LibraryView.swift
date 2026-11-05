@@ -88,6 +88,9 @@ struct SectionView: View {
     /// Every item in the section, loaded the first time someone searches it.
     @State private var everything: [Item]?
     @State private var typed = ""
+    #if os(macOS)
+    @State private var selection = SongSelection()
+    #endif
     private let pageSize: UInt32 = 120
 
     init(section: LibrarySection, filter: String = "") {
@@ -112,6 +115,11 @@ struct SectionView: View {
         }
         .navigationTitle(section.title)
         #if os(iOS)
+        .toolbar {
+            if section == .playlists {
+                ToolbarItem(placement: .primaryAction) { NewPlaylistMenu() }
+            }
+        }
         // Always showing, not tucked away until you pull the list down.
         .searchable(text: $typed, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search \(section.title)")
         #endif
@@ -139,13 +147,16 @@ struct SectionView: View {
     /// and these rows bring their own hover highlight.
     private var list: some View {
         ScrollView {
+            let rows = shown
+            let order = Array(rows.indices)
             LazyVStack(alignment: .leading, spacing: 2) {
                 PageTitle(text: section.title).padding(.horizontal, 10)
-                ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
-                    row(item)
+                ForEach(Array(rows.enumerated()), id: \.element.id) { i, item in
+                    pickableRow(item, key: i, order: order, all: rows)
                         .onAppear { if query.isEmpty, i == items.count - 20 { loadMore() } }
                 }
             }
+            .songClipboard(selection, order: order, tracks: { keys in keys.compactMap { rows.indices.contains($0) ? model.track(rows[$0].id) : nil } })
             .padding(.leading, Metrics.page - 10)
             .padding(.trailing, Metrics.pageTrailing - 10)
             .padding(.bottom, 120)
@@ -168,7 +179,18 @@ struct SectionView: View {
     private var grid: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                PageTitle(text: section.title)
+                HStack(alignment: .firstTextBaseline) {
+                    PageTitle(text: section.title)
+                    #if os(macOS)
+                    if section == .playlists {
+                        NewPlaylistMenu()
+                            .labelStyle(.iconOnly)
+                            .menuIndicator(.hidden)
+                            .font(.title3.weight(.semibold))
+                            .fixedSize()
+                    }
+                    #endif
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.tileMinimum, maximum: 240), spacing: 16, alignment: .top)], spacing: 22) {
                     ForEach(Array(shown.enumerated()), id: \.element.id) { i, item in
                         NavigationLink(value: item) { GridTile(item: item) }
@@ -189,6 +211,26 @@ struct SectionView: View {
     private static let tileMinimum: CGFloat = 160
     #else
     private static let tileMinimum: CGFloat = 150
+    #endif
+
+    #if os(macOS)
+    /// A song row picks on click and plays on double-click; other rows open their page.
+    @ViewBuilder
+    private func pickableRow(_ item: Item, key: Int, order: [Int], all: [Item]) -> some View {
+        if item.kind == .track {
+            ItemRow(item: item, showAlbum: true)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .pickable(key, in: selection, order: order) { play(item) }
+                .accessibilityIdentifier("row.\(item.title)")
+                .itemMenu(item, tracks: {
+                    guard selection.keys.contains(key), selection.keys.count > 1 else { return model.track(item.id).map { [$0] } ?? [] }
+                    return order.filter(selection.keys.contains).compactMap { all.indices.contains($0) ? model.track(all[$0].id) : nil }
+                })
+        } else {
+            row(item)
+        }
+    }
     #endif
 
     @ViewBuilder

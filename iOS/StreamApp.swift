@@ -88,6 +88,7 @@ struct RootView: View {
                 .navigationTransition(.zoom(sourceID: "nowplaying", in: zoom))
         }
         .sheet(isPresented: $model.showSettings) { ProfileView() }
+        .sheet(item: $model.newPlaylist) { NewPlaylistSheet(request: $0) }
         .overlay(alignment: .top) {
             if let t = model.toast { Toast(text: t).padding(.top, 8) }
         }

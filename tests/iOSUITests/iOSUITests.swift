@@ -120,7 +120,7 @@ final class iOSUITests: StreamUITestCase {
         field.typeText("tunnel")
         wait(el("result.Tunnel"))
         // Signed out of Spotify: search says so rather than looking like Spotify found nothing.
-        wait(el("search.spotifyError"))
+        wait(el("search.problem"))
         el("result.Tunnel").tap()
         waitLabel(el("mini.title"), "Tunnel")
     }
@@ -140,7 +140,10 @@ final class iOSUITests: StreamUITestCase {
 
     func testProfileOpens() {
         wait(el("profile")).tap()
+        // Services in their order, each opening its own page.
+        wait(el("settings.service.Spotify")).tap()
         wait(el("settings.spotify.signIn"))
+        app.navigationBars.buttons.firstMatch.tap()
         let normalize = text("Normalize loudness")
         for _ in 0..<4 where !normalize.isHittable { app.swipeUp() }
         wait(normalize)

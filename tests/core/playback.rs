@@ -11,10 +11,10 @@ unsafe extern "C" {
 }
 
 /// There's one audio output per process, so one playing device at a time.
-static OUTPUT: Mutex<()> = Mutex::new(());
+pub static OUTPUT: Mutex<()> = Mutex::new(());
 
 /// Plays `ms` of audio through the output, faster than real time.
-fn listen(ms: u32) {
+pub fn listen(ms: u32) {
     let (mut l, mut r) = (vec![0f32; 4096], vec![0f32; 4096]);
     let mut frames = 0u64;
     let want = 44_100 * ms as u64 / 1000;
@@ -29,7 +29,7 @@ fn listen(ms: u32) {
     }
 }
 
-fn playing(d: &Device) -> String {
+pub fn playing(d: &Device) -> String {
     d.core.player_state().track.map(|t| t.title).unwrap_or_default()
 }
 

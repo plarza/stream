@@ -98,7 +98,7 @@ pub struct Node {
     streams: Arc<Mutex<HashMap<String, Arc<Progressive>>>>,
 }
 
-fn sha256_file(path: &Path) -> Result<String> {
+pub(crate) fn sha256_file(path: &Path) -> Result<String> {
     let mut f = std::fs::File::open(path)?;
     let mut h = Sha256::new();
     let mut buf = vec![0u8; 1 << 20];

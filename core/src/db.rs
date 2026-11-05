@@ -128,6 +128,13 @@ CREATE TABLE IF NOT EXISTS scrobbles (
     duration  INTEGER NOT NULL
 );
 
+-- Your own playlists: each one's synced document (sync.rs, playlists.rs).
+CREATE TABLE IF NOT EXISTS own_playlists (
+    id       TEXT PRIMARY KEY,          -- the bare ID in stream:playlist:<id>
+    doc      TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS kv (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -157,13 +164,18 @@ pub fn hash_id(parts: &[&str]) -> String {
 }
 
 fn source_of(n: i64) -> Source {
-    if n == 0 { Source::Local } else { Source::Spotify }
+    match n {
+        0 => Source::Local,
+        2 => Source::SoundCloud,
+        _ => Source::Spotify,
+    }
 }
 
-fn source_num(s: Source) -> i64 {
+pub fn source_num(s: Source) -> i64 {
     match s {
         Source::Local => 0,
         Source::Spotify => 1,
+        Source::SoundCloud => 2,
     }
 }
 
@@ -294,6 +306,15 @@ impl Db {
             .optional()
             .ok()
             .flatten()
+    }
+
+    /// Every key starting with `prefix`, with its value.
+    pub fn kv_prefixed(&self, prefix: &str) -> Vec<(String, String)> {
+        let conn = self.conn.lock();
+        let Ok(mut stmt) = conn.prepare_cached("SELECT key, value FROM kv WHERE substr(key, 1, ?2) = ?1") else { return vec![] };
+        stmt.query_map(params![prefix, prefix.len() as i64], |r| Ok((r.get(0)?, r.get(1)?)))
+            .map(|rows| rows.filter_map(Result::ok).collect())
+            .unwrap_or_default()
     }
 
     pub fn set_kv(&self, key: &str, value: &str) {
@@ -748,6 +769,11 @@ impl Db {
     // ---- spotify cache -----------------------------------------------------
 
     pub fn upsert_spotify_tracks(&self, tracks: &[SpotifyTrackRow], saved: Option<bool>) -> anyhow::Result<()> {
+        self.upsert_streamed_tracks(Source::Spotify, "OGG 320", tracks, saved)
+    }
+
+    /// Songs from a streaming service, keeping whether they're liked unless `saved` says.
+    pub fn upsert_streamed_tracks(&self, source: Source, quality: &str, tracks: &[SpotifyTrackRow], saved: Option<bool>) -> anyhow::Result<()> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         let now = now();
@@ -755,7 +781,7 @@ impl Db {
             tx.execute(
                 "INSERT INTO tracks(id, source, title, artist, artist_id, album, album_id, track_no, disc_no,
                     duration_ms, quality, art, added_at, saved, artists)
-                 VALUES(?1, 1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'OGG 320', ?10, ?11, COALESCE(?12, 0), ?13)
+                 VALUES(?1, ?14, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?15, ?10, ?11, COALESCE(?12, 0), ?13)
                  ON CONFLICT(id) DO UPDATE SET title=excluded.title, artist=excluded.artist, artist_id=excluded.artist_id,
                     artists=COALESCE(excluded.artists, tracks.artists),
                     album=COALESCE(NULLIF(excluded.album, ''), tracks.album), album_id=COALESCE(excluded.album_id, tracks.album_id),
@@ -765,7 +791,8 @@ impl Db {
                 params![
                     t.id, t.title, t.artist, t.artist_id, t.album, t.album_id, t.track_no, t.disc_no,
                     t.duration_ms, t.art, now, saved.map(|s| s as i64),
-                    (t.artists.len() > 1).then(|| serde_json::to_string(&t.artists).ok()).flatten()
+                    (t.artists.len() > 1).then(|| serde_json::to_string(&t.artists).ok()).flatten(),
+                    source_num(source), quality
                 ],
             )?;
         }
@@ -774,9 +801,14 @@ impl Db {
     }
 
     pub fn set_saved_tracks(&self, ids: &[String]) -> anyhow::Result<()> {
+        self.set_saved_from(Source::Spotify, ids)
+    }
+
+    /// The songs liked on one service: exactly these.
+    pub fn set_saved_from(&self, source: Source, ids: &[String]) -> anyhow::Result<()> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
-        tx.execute("UPDATE tracks SET saved = 0 WHERE source = 1", [])?;
+        tx.execute("UPDATE tracks SET saved = 0 WHERE source = ?1", [source_num(source)])?;
         for id in ids {
             tx.execute("UPDATE tracks SET saved = 1 WHERE id = ?1", [id])?;
         }
@@ -888,12 +920,17 @@ impl Db {
     }
 
     pub fn replace_playlists(&self, lists: &[(Item, String, Option<String>, u32, Option<String>, bool)]) {
+        self.replace_playlists_from("spotify:", lists)
+    }
+
+    /// One service's playlists (their IDs start with `prefix`): exactly these, in this order.
+    pub fn replace_playlists_from(&self, prefix: &str, lists: &[(Item, String, Option<String>, u32, Option<String>, bool)]) {
         let mut conn = self.conn.lock();
         let Ok(tx) = conn.transaction() else { return };
         let ids: Vec<&str> = lists.iter().map(|l| l.0.id.as_str()).collect();
         let existing: Vec<String> = {
-            let mut stmt = tx.prepare("SELECT id FROM playlists").unwrap();
-            stmt.query_map([], |r| r.get(0)).unwrap().filter_map(Result::ok).collect()
+            let mut stmt = tx.prepare("SELECT id FROM playlists WHERE id LIKE ?1 || '%'").unwrap();
+            stmt.query_map([prefix], |r| r.get(0)).unwrap().filter_map(Result::ok).collect()
         };
         for id in existing {
             if !ids.contains(&id.as_str()) {
@@ -942,6 +979,35 @@ impl Db {
             let _ = tx.execute("UPDATE playlists SET tracks_snapshot = ?2 WHERE id = ?1", params![id, s]);
         }
         let _ = tx.commit();
+    }
+
+    /// Your own playlists' documents, in Library order.
+    pub fn own_playlists(&self) -> Vec<(String, String)> {
+        let conn = self.conn.lock();
+        let Ok(mut stmt) = conn.prepare_cached("SELECT id, doc FROM own_playlists ORDER BY position, id") else { return vec![] };
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).map(|rows| rows.filter_map(Result::ok).collect()).unwrap_or_default()
+    }
+
+    pub fn own_playlist(&self, id: &str) -> Option<String> {
+        self.conn.lock().query_row("SELECT doc FROM own_playlists WHERE id = ?1", [id], |r| r.get(0)).optional().ok().flatten()
+    }
+
+    /// Stores a playlist's document; a new one goes to the top of Library.
+    pub fn set_own_playlist(&self, id: &str, doc: &str) {
+        let _ = self.conn.lock().execute(
+            "INSERT INTO own_playlists(id, doc, position) VALUES(?1, ?2, (SELECT COALESCE(MIN(position), 0) - 1 FROM own_playlists))
+             ON CONFLICT(id) DO UPDATE SET doc = excluded.doc",
+            params![id, doc],
+        );
+    }
+
+    pub fn remove_own_playlist(&self, id: &str) {
+        let _ = self.conn.lock().execute("DELETE FROM own_playlists WHERE id = ?1", [id]);
+    }
+
+    /// Songs in your library that might be `title` by `artist`: by title, any source.
+    pub fn tracks_titled(&self, title: &str, limit: u32) -> Vec<Track> {
+        self.tracks_where("WHERE t.title = ?1 COLLATE NOCASE LIMIT ?2", &[&title, &limit])
     }
 
     pub fn set_downloaded(&self, track_ids: &[String], downloaded: bool) {
@@ -1098,9 +1164,9 @@ impl Db {
             |r| {
                 Ok((
                     Item {
+                        source: if r.get::<_, String>(0)?.starts_with("soundcloud:") { Source::SoundCloud } else { Source::Spotify },
                         id: r.get(0)?,
                         kind: ItemKind::Playlist,
-                        source: Source::Spotify,
                         title: r.get(1)?,
                         subtitle: r.get(2)?,
                         art: self.art_url(r.get(3)?),
@@ -1137,7 +1203,7 @@ impl Db {
     pub fn section(&self, section: LibrarySection, offset: u32, limit: u32) -> Vec<Item> {
         match section {
             LibrarySection::Playlists => self.items(
-                "SELECT id, 'playlist', 1, name, owner, art, downloaded FROM playlists
+                "SELECT id, 'playlist', CASE WHEN id LIKE 'soundcloud:%' THEN 2 ELSE 1 END, name, owner, art, downloaded FROM playlists
                  ORDER BY made_for_you, position LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
@@ -1242,16 +1308,6 @@ impl Db {
         self.json_items("SELECT item FROM pins ORDER BY position")
     }
 
-    pub fn is_pinned(&self, id: &str) -> bool {
-        self.conn
-            .lock()
-            .query_row("SELECT 1 FROM pins WHERE id = ?1", [id], |_| Ok(()))
-            .optional()
-            .ok()
-            .flatten()
-            .is_some()
-    }
-
     pub fn pin(&self, item: &Item) {
         let json = serde_json::to_string(item).unwrap_or_default();
         let _ = self.conn.lock().execute(
@@ -1259,10 +1315,6 @@ impl Db {
              ON CONFLICT(id) DO UPDATE SET item = excluded.item",
             params![item.id, json],
         );
-    }
-
-    pub fn unpin(&self, id: &str) {
-        let _ = self.conn.lock().execute("DELETE FROM pins WHERE id = ?1", [id]);
     }
 
     /// Every pin, in this order, in place of what was pinned.
@@ -1273,15 +1325,6 @@ impl Db {
         for (i, item) in items.iter().enumerate() {
             let json = serde_json::to_string(item).unwrap_or_default();
             let _ = tx.execute("INSERT OR IGNORE INTO pins(id, item, position) VALUES(?1, ?2, ?3)", params![item.id, json, i as i64]);
-        }
-        let _ = tx.commit();
-    }
-
-    pub fn move_pin(&self, ids: &[String]) {
-        let mut conn = self.conn.lock();
-        let Ok(tx) = conn.transaction() else { return };
-        for (i, id) in ids.iter().enumerate() {
-            let _ = tx.execute("UPDATE pins SET position = ?2 WHERE id = ?1", params![id, i as i64]);
         }
         let _ = tx.commit();
     }

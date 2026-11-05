@@ -37,6 +37,39 @@ impl ItemKind {
 pub enum Source {
     Local,
     Spotify,
+    SoundCloud,
+}
+
+/// Where music comes from, in the order search and playback try them (Settings → Services).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, uniffi::Enum, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Service {
+    /// Your own music files: this device's and the Stream node's.
+    Files,
+    Spotify,
+    SoundCloud,
+}
+
+impl Service {
+    pub fn all() -> [Service; 3] {
+        [Service::Files, Service::Spotify, Service::SoundCloud]
+    }
+
+    pub fn of(source: Source) -> Service {
+        match source {
+            Source::Local => Service::Files,
+            Source::Spotify => Service::Spotify,
+            Source::SoundCloud => Service::SoundCloud,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Service::Files => "your music",
+            Service::Spotify => "Spotify",
+            Service::SoundCloud => "SoundCloud",
+        }
+    }
 }
 
 /// Anything that can appear in a list: a song, album, artist or playlist.
@@ -296,6 +329,8 @@ pub struct AccountState {
     pub spotify_premium: bool,
     pub lastfm_user: Option<String>,
     pub spotify_client_id: Option<String>,
+    /// Signed in to SoundCloud as this user. Search and playback work without it.
+    pub soundcloud_user: Option<String>,
 }
 
 /// One Spotify sign-in, step by step. It takes two approvals in the browser sheet: the
@@ -312,25 +347,74 @@ pub enum SignInStep {
     Failed { message: String },
 }
 
-#[derive(Debug, Clone, uniffi::Record)]
+/// The playback switches in Settings, the same on every device.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize, uniffi::Record)]
+#[serde(default)]
 pub struct Preferences {
     pub normalization: bool,
-    pub crossfade_seconds: u32,
+    /// Its own key: `autoplay` was saved as `false` before there was a switch for it.
+    #[serde(rename = "autoplay_similar")]
     pub autoplay: bool,
-    pub bit_perfect: bool,
     pub scrobbling: bool,
+    /// Every service, in the order search and playback try them.
+    pub services: Vec<Service>,
+    /// Services turned off: still signed in, but out of search, Library and playback.
+    #[serde(rename = "servicesOff")]
+    pub services_off: Vec<Service>,
 }
 
 impl Default for Preferences {
     fn default() -> Self {
-        Self {
-            normalization: true,
-            crossfade_seconds: 0,
-            autoplay: true,
-            bit_perfect: false,
-            scrobbling: true,
-        }
+        Self { normalization: true, autoplay: true, scrobbling: true, services: Service::all().to_vec(), services_off: vec![] }
     }
+}
+
+impl Preferences {
+    /// The services that are on, in order. One missing from the list (from an older version)
+    /// goes last.
+    pub fn services_on(&self) -> Vec<Service> {
+        let mut order: Vec<Service> = self.services.iter().copied().filter(|s| !self.services_off.contains(s)).collect();
+        order.dedup();
+        for s in Service::all() {
+            if !self.services.contains(&s) && !self.services_off.contains(&s) {
+                order.push(s);
+            }
+        }
+        order
+    }
+
+    pub fn is_on(&self, service: Service) -> bool {
+        !self.services_off.contains(&service)
+    }
+}
+
+/// Search across every service that's on, in their order.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct SearchResults {
+    pub items: Vec<Item>,
+    /// A service that couldn't answer, and why, in words for people.
+    pub problems: Vec<ServiceProblem>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ServiceProblem {
+    pub service: Service,
+    pub message: String,
+}
+
+/// One of your playlists' copies on another service.
+#[derive(Debug, Clone, PartialEq, uniffi::Record)]
+pub struct PlaylistCopy {
+    pub service: Service,
+    pub on: bool,
+    /// The copy there, once it's made.
+    pub id: Option<String>,
+    /// Songs found there, of `total`.
+    pub found: u32,
+    pub total: u32,
+    pub syncing: bool,
+    /// Why the last sync failed, in words for people.
+    pub problem: Option<String>,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]

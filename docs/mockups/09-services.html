@@ -1,0 +1,166 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Services</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"SF Pro Text","Inter",system-ui,sans-serif;background:#1c1c1f;color:#f2f2f2;padding:24px 16px}
+h1{font-size:17px;font-weight:700;text-align:center;margin-bottom:4px}
+.sub{font-size:12.5px;color:#9a9aa2;text-align:center;margin-bottom:22px}
+.grid{display:flex;flex-wrap:wrap;justify-content:center;gap:34px 22px}
+.opt{display:flex;flex-direction:column;align-items:center;gap:12px}
+.pair{display:flex;gap:14px}
+.label{font-size:13px;font-weight:600;text-align:center;max-width:620px}.label span{display:block;font-weight:400;color:#9a9aa2;font-size:11.5px;margin-top:3px;line-height:1.4}
+.phone{width:300px;height:640px;border-radius:48px;position:relative;overflow:hidden;color:#fff;background:#000;box-shadow:0 0 0 9px #111,0 0 0 10px #333,0 20px 50px rgba(0,0,0,.45);flex:none}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:92px;height:27px;background:#000;border-radius:20px;z-index:9}
+.homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:110px;height:4px;border-radius:3px;background:rgba(255,255,255,.7);z-index:9}
+.page{position:absolute;top:50px;left:0;right:0;bottom:0;padding:0 16px;overflow:hidden}
+.nav{display:flex;align-items:center;justify-content:space-between;height:36px;font-size:15px;font-weight:600}
+.nav .b{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:13px}
+.glass{background:rgba(255,255,255,.075);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),inset 0 0 0 .5px rgba(255,255,255,.12)}
+.card{border-radius:22px;padding:4px 14px}
+.h{font-size:17px;font-weight:700;margin:16px 0 8px 4px}
+.foot{font-size:10.5px;color:#8e8e96;margin:7px 4px 0;line-height:1.35}
+.acct{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:22px;margin-top:6px}
+.av{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#7f7fd5,#86a8e7,#91eae4)}
+.small{font-size:10.5px;color:#9a9aa2}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:13.5px}
+.row+.row{border-top:.5px solid rgba(255,255,255,.09)}
+.grip{color:#6c6c73;font-size:13px;letter-spacing:-1px;width:12px;text-align:center}
+.logo{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:13px;font-weight:800;flex:none}
+.sp{background:#1ed760;color:#000}.sc{background:linear-gradient(180deg,#ff7700,#ff3300);color:#fff}.me{background:#fa2d48;color:#fff}.lf{background:#d51007;color:#fff}
+.grow{flex:1;min-width:0}.grow .s{font-size:11px;color:#9a9aa2;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sw{width:42px;height:25px;border-radius:13px;background:#34c759;position:relative;flex:none}.sw:after{content:"";position:absolute;top:2px;right:2px;width:21px;height:21px;border-radius:50%;background:#fff}
+.sw.off{background:rgba(255,255,255,.18)}.sw.off:after{right:auto;left:2px}
+.chev{color:#6c6c73;font-size:14px}
+.pill{font-size:11.5px;font-weight:600;padding:6px 12px;border-radius:15px;background:#fa2d48;color:#fff;flex:none}
+.pill.ghost{background:rgba(255,255,255,.12)}
+.dot{width:7px;height:7px;border-radius:50%;background:#34c759;display:inline-block;margin-right:5px;vertical-align:1px}
+.dot.no{background:#8e8e96}
+.lift{transform:scale(1.03) rotate(-.6deg);box-shadow:0 14px 30px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.2);background:rgba(60,60,66,.95)!important;border-radius:16px;margin:0 -8px;padding:10px 8px!important;border-top:0!important;position:relative;z-index:2}
+.rank{font-size:11px;font-weight:700;color:#8e8e96;width:12px;text-align:center}
+.big{border-radius:22px;padding:14px;margin-bottom:10px;position:relative;overflow:hidden}
+.stripe{position:absolute;left:0;top:0;bottom:0;width:4px}
+.kv{display:flex;justify-content:space-between;font-size:12.5px;padding:7px 0;border-top:.5px solid rgba(255,255,255,.08)}.kv span:last-child{color:#a8a8b0}
+.btn{font-size:12.5px;color:#fa586a;padding:8px 0 4px}
+.order{display:flex;align-items:center;gap:5px;padding:12px 0 6px;flex-wrap:nowrap}
+.tok{display:flex;align-items:center;gap:4px;padding:4px 7px 4px 4px;border-radius:16px;font-size:10.5px;font-weight:600;background:rgba(255,255,255,.1);flex:none}
+.tok .logo{width:17px;height:17px;border-radius:5px;font-size:8px}
+.tok.offt{opacity:.38;text-decoration:line-through}
+.arrow{color:#6c6c73;font-size:10px}
+.seg{display:flex;background:rgba(255,255,255,.08);border-radius:10px;padding:2px;margin:10px 0 2px}
+.seg div{flex:1;text-align:center;font-size:11.5px;padding:6px 0;border-radius:8px;color:#c8c8cf}.seg .on{background:rgba(255,255,255,.2);color:#fff;font-weight:600}
+.step{display:flex;gap:9px;align-items:center;font-size:12.5px;padding:7px 0}
+.ck{width:18px;height:18px;border-radius:50%;background:#34c759;color:#000;font-size:10px;display:grid;place-items:center;font-weight:800}
+.ck.todo{background:none;box-shadow:inset 0 0 0 1.5px #6c6c73}
+.field{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#8e8e96;padding:9px 11px;border-radius:10px;background:rgba(255,255,255,.07);margin:6px 0}
+.cta{text-align:center;font-size:13.5px;font-weight:600;padding:11px;border-radius:14px;background:#fa2d48;margin-top:8px}
+.cta.sc{background:linear-gradient(180deg,#ff7700,#ff3300)}
+.hint{font-size:10.5px;color:#8e8e96;text-align:center;margin-top:8px;line-height:1.35}
+</style></head><body>
+<h1>Settings → Services</h1>
+<div class="sub">Search order, on/off switches and connecting Spotify and SoundCloud. Each option shows Profile and the Spotify page behind it. Drag ≡ to reorder.</div>
+<div class="grid">
+
+<!-- ===================== A ===================== -->
+<div class="opt"><div class="pair">
+<div class="phone"><div class="island"></div><div class="page">
+ <div class="nav"><span class="b"></span>Profile<span class="b glass">✓</span></div>
+ <div class="acct glass"><div class="av"></div><div class="grow"><b style="font-size:13.5px">aiden</b><div class="s">aza · iPhone and Mac</div></div><span class="chev">›</span></div>
+ <div class="h">Services</div>
+ <div class="card glass">
+  <div class="row"><span class="grip">≡</span><div class="logo me">♪</div><div class="grow">Your music<div class="s">1,284 songs · Uploads</div></div><span class="chev">›</span></div>
+  <div class="row lift"><span class="grip">≡</span><div class="logo sp">●</div><div class="grow">Spotify<div class="s"><span class="dot"></span>aiden · Premium</div></div><div class="sw"></div></div>
+  <div class="row"><span class="grip">≡</span><div class="logo sc">☁</div><div class="grow">SoundCloud<div class="s"><span class="dot no"></span>Not connected</div></div><span class="pill">Connect</span></div>
+ </div>
+ <div class="foot">Search and playback try these in order. A song on more than one plays from the first.</div>
+ <div class="h">Last.fm</div>
+ <div class="card glass"><div class="row"><div class="logo lf">as</div><div class="grow">Scrobbling as aidensid<div class="s">Spotify and your files</div></div><span class="chev">›</span></div></div>
+ <div class="h">Playback</div>
+ <div class="card glass"><div class="row"><div class="grow">Normalize loudness</div><div class="sw"></div></div><div class="row"><div class="grow">Autoplay similar songs</div><div class="sw"></div></div></div>
+</div><div class="homebar"></div></div>
+
+<div class="phone"><div class="island"></div><div class="page">
+ <div class="nav"><span class="b glass">‹</span>Spotify<span class="b"></span></div>
+ <div style="text-align:center;margin:14px 0 16px"><div class="logo sp" style="width:58px;height:58px;border-radius:16px;font-size:26px;margin:0 auto 8px">●</div><b style="font-size:16px">aiden</b><div class="small">Premium · OGG 320</div></div>
+ <div class="card glass">
+  <div class="row"><div class="grow">Use Spotify</div><div class="sw"></div></div>
+  <div class="row"><div class="grow">Library<div class="s">Updated 4 min ago</div></div><span style="font-size:12.5px;color:#fa586a">Refresh</span></div>
+  <div class="row"><div class="grow">Playback</div><span class="small"><span class="dot"></span>Connected</span></div>
+ </div>
+ <div class="h" style="font-size:14px">Developer app</div>
+ <div class="card glass"><div class="row"><div class="grow">Client ID</div><span class="small" style="font-family:ui-monospace,Menlo">5f2c…a91e</span></div></div>
+ <div class="foot">Synced with aza, so your other devices only approve.</div>
+ <div class="card glass" style="margin-top:18px"><div class="row" style="justify-content:center;color:#ff453a">Sign out</div></div>
+</div><div class="homebar"></div></div>
+</div>
+<div class="label">A · One Services list (recommended)<span>Settings-app style: one card, a row per service with its status under the name. Drag the row to reorder, the switch turns it off without signing out, “Connect” when it isn’t yet. Tap a row for its own page: account, refresh, client ID, sign out. Profile stays short.</span></div></div>
+
+<!-- ===================== B ===================== -->
+<div class="opt"><div class="pair">
+<div class="phone"><div class="island"></div><div class="page">
+ <div class="nav"><span class="b"></span>Profile<span class="b glass">✓</span></div>
+ <div class="h" style="margin-top:8px">Services <span class="small" style="font-weight:400">· first plays first</span></div>
+ <div class="big glass"><div class="stripe" style="background:#fa2d48"></div>
+  <div style="display:flex;align-items:center;gap:10px"><span class="rank">1</span><div class="logo me">♪</div><div class="grow"><b style="font-size:13.5px">Your music</b><div class="s">1,284 songs · 38 GB on the node</div></div><span class="grip">≡</span></div>
+ </div>
+ <div class="big glass lift" style="margin:0 -4px 10px;padding:14px!important"><div class="stripe" style="background:#1ed760"></div>
+  <div style="display:flex;align-items:center;gap:10px"><span class="rank">2</span><div class="logo sp">●</div><div class="grow"><b style="font-size:13.5px">Spotify</b><div class="s">aiden · Premium</div></div><div class="sw"></div></div>
+  <div class="kv" style="margin-top:10px"><span>Playback</span><span><span class="dot"></span>Connected</span></div>
+  <div class="kv"><span>Library</span><span style="color:#fa586a!important">Refresh</span></div>
+ </div>
+ <div class="big glass"><div class="stripe" style="background:#ff5500"></div>
+  <div style="display:flex;align-items:center;gap:10px"><span class="rank">3</span><div class="logo sc">☁</div><div class="grow"><b style="font-size:13.5px">SoundCloud</b><div class="s">Search works without an account</div></div><div class="sw off"></div></div>
+  <div class="cta sc" style="padding:9px;font-size:12.5px;margin-top:12px">Sign in to SoundCloud</div>
+ </div>
+ <div class="foot">Turned off, a service stays signed in but leaves search, Library and playback.</div>
+</div><div class="homebar"></div></div>
+
+<div class="phone"><div class="island"></div><div class="page">
+ <div class="nav"><span class="b"></span>Profile<span class="b glass">✓</span></div>
+ <div class="h" style="margin-top:8px">Services</div>
+ <div class="big glass"><div class="stripe" style="background:#1ed760"></div>
+  <div style="display:flex;align-items:center;gap:10px"><span class="rank">2</span><div class="logo sp">●</div><div class="grow"><b style="font-size:13.5px">Spotify</b><div class="s">Signing in · 1 of 2</div></div><div class="sw"></div></div>
+  <div class="step" style="margin-top:8px"><div class="ck">✓</div>Spotify account</div>
+  <div class="step"><div class="ck todo"></div><div>Playback<div class="small">Approve in the Spotify sheet</div></div></div>
+  <div class="cta ghost" style="background:rgba(255,255,255,.1);padding:9px;font-size:12.5px">Cancel</div>
+ </div>
+ <div class="foot">Before signing in, the card asks for your developer app’s Client ID in place of the steps.</div>
+</div><div class="homebar"></div></div>
+</div>
+<div class="label">B · Stacked service cards<span>Each service is its own glass card with a rank, a colour edge, its switch, and its account details and sign-in steps inline, with no page to push. Drag a card to reorder. Everything is on one screen, but the page gets long.</span></div></div>
+
+<!-- ===================== C ===================== -->
+<div class="opt"><div class="pair">
+<div class="phone"><div class="island"></div><div class="page">
+ <div class="nav"><span class="b"></span>Profile<span class="b glass">✓</span></div>
+ <div class="h" style="margin-top:8px">Search order</div>
+ <div class="card glass" style="padding:4px 12px 12px">
+  <div class="order"><div class="tok"><div class="logo me">♪</div>Yours</div><div class="tok lift" style="margin:0;padding:4px 7px 4px 4px!important;border-radius:16px"><div class="logo sp">●</div>Spotify</div><div class="tok offt"><div class="logo sc">☁</div>SoundCloud</div></div>
+  <div class="small">Drag to reorder. Tap one to turn it off.</div>
+ </div>
+ <div class="h">Accounts</div>
+ <div class="seg"><div class="on">Spotify</div><div>SoundCloud</div><div>Last.fm</div></div>
+ <div class="card glass" style="margin-top:8px">
+  <div class="row"><div class="logo sp">●</div><div class="grow">aiden<div class="s">Premium · playback connected</div></div></div>
+  <div class="row"><div class="grow">Refresh library</div><span class="chev">↻</span></div>
+  <div class="row"><div class="grow">Client ID</div><span class="small" style="font-family:ui-monospace,Menlo">5f2c…a91e</span></div>
+  <div class="row" style="color:#ff453a">Sign out</div>
+ </div>
+</div><div class="homebar"></div></div>
+
+<div class="phone"><div class="island"></div><div class="page">
+ <div class="nav"><span class="b"></span>Profile<span class="b glass">✓</span></div>
+ <div class="h" style="margin-top:8px">Search order</div>
+ <div class="card glass" style="padding:4px 12px 12px">
+  <div class="order"><div class="tok"><div class="logo me">♪</div>Yours</div><div class="tok"><div class="logo sp">●</div>Spotify</div><div class="tok offt"><div class="logo sc">☁</div>SoundCloud</div></div>
+  <div class="small">Drag to reorder. Tap one to turn it off.</div>
+ </div>
+ <div class="h">Accounts</div>
+ <div class="seg"><div>Spotify</div><div class="on">SoundCloud</div><div>Last.fm</div></div>
+ <div class="card glass" style="margin-top:8px;padding:16px 14px">
+  <div style="text-align:center"><div class="logo sc" style="width:48px;height:48px;border-radius:14px;font-size:22px;margin:0 auto 8px">☁</div><b>SoundCloud</b>
+  <div class="small" style="margin-top:4px;line-height:1.4">Search and play without an account.<br>Sign in for your likes and playlists.</div></div>
+  <div class="cta sc">Sign in</div>
+ </div>
+</div><div class="homebar"></div></div>
+</div>
+<div class="label">C · Order strip + account tabs<span>Search order is a compact strip of draggable tokens; tapping a token turns that service off (struck through). Accounts sit below in a Spotify / SoundCloud / Last.fm switcher. The densest option, but the on/off switch is less discoverable.</span></div></div>
+
+</div></body></html>

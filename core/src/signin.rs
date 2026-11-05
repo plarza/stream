@@ -173,6 +173,9 @@ impl StreamCore {
     /// Reconnects playback from saved credentials when it isn't up (launch, coming back
     /// to the app). Refused credentials are dropped, so the app asks to sign in again.
     pub(crate) fn reconnect_playback(self: Arc<Self>) {
+        if !self.settings().is_on(Service::Spotify) {
+            return;
+        }
         let busy = self.sign_in_task.lock().as_ref().is_some_and(|h| !h.is_finished());
         if busy || self.playback.read().is_some() || RECONNECTING.swap(true, Ordering::SeqCst) {
             return;
@@ -207,6 +210,13 @@ impl StreamCore {
             && let Ok(v) = serde_json::from_str::<serde_json::Value>(&s)
         {
             self.account.lock().lastfm_user = v["name"].as_str().map(str::to_string);
+        }
+        if let Some(s) = self.delegate.secret_get(SECRET_SOUNDCLOUD.into())
+            && let Ok(v) = serde_json::from_str::<serde_json::Value>(&s)
+            && let Some(token) = v["token"].as_str()
+        {
+            self.soundcloud.set_token(Some(token.to_string()));
+            self.account.lock().soundcloud_user = v["name"].as_str().map(str::to_string).or(Some("SoundCloud".into()));
         }
         if let (Some(cid), Some(tokens)) = (
             client_id,

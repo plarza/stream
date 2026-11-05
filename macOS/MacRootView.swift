@@ -116,6 +116,7 @@ struct MacRootView: View {
                 .keyboardShortcut("f", modifiers: .command)
                 .hidden()
         }
+        .sheet(item: Bindable(model).newPlaylist) { NewPlaylistSheet(request: $0).environment(model) }
         .sheet(isPresented: $showPalette) {
             CommandPalette { item in
                 showPalette = false

@@ -30,4 +30,11 @@ cat > "$D/Loose Song.lrc" <<'LRC'
 [00:02.00]Second line comes in
 [00:04.00]Third line to finish
 LRC
+# What SoundCloud serves: AAC in fragmented MP4 over HLS, for the core tests' fake SoundCloud.
+SC=library/SoundCloud
+rm -rf $SC && mkdir -p $SC
+ffmpeg -loglevel error -f lavfi -i "sine=frequency=523:duration=6" -af "volume=-30dB" -ac 2 -ar 44100 -c:a aac -b:a 160k \
+  -f hls -hls_time 2 -hls_playlist_type vod -hls_segment_type fmp4 -hls_fmp4_init_filename init.mp4 \
+  -hls_segment_filename "$SC/seg%d.m4s" "$SC/playlist.m3u8"
+
 du -sh library

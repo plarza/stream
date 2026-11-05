@@ -38,6 +38,15 @@ pub enum EngineEvent {
     Error(String),
 }
 
+/// A SoundCloud song's audio: a file to play, or the same song from somewhere else when
+/// SoundCloud only has it encrypted.
+pub enum SoundCloudAudio {
+    File(std::path::PathBuf, &'static str),
+    Instead(Track),
+}
+
+pub type SoundCloudOpen = Arc<dyn Fn(&Track) -> anyhow::Result<SoundCloudAudio> + Send + Sync>;
+
 pub struct Engine {
     out: Arc<Output>,
     pub queue: Mutex<Queue>,
@@ -47,6 +56,7 @@ pub struct Engine {
     node: Arc<crate::node::Node>,
     pub spotify: Arc<RwLock<Option<Arc<Playback>>>>,
     notify: Arc<dyn Fn(EngineEvent) + Send + Sync>,
+    soundcloud: SoundCloudOpen,
     feeder_done: AtomicU64,
     pub normalization: AtomicBool,
     /// Last audible segment, for change detection.
@@ -74,6 +84,7 @@ impl Engine {
         node: Arc<crate::node::Node>,
         spotify: Arc<RwLock<Option<Arc<Playback>>>>,
         notify: Arc<dyn Fn(EngineEvent) + Send + Sync>,
+        soundcloud: SoundCloudOpen,
     ) -> Arc<Self> {
         let engine = Arc::new(Self {
             out: Output::shared(),
@@ -84,6 +95,7 @@ impl Engine {
             node,
             spotify,
             notify,
+            soundcloud,
             feeder_done: AtomicU64::new(u64::MAX),
             normalization: AtomicBool::new(true),
             audible: Mutex::new(None),
@@ -361,29 +373,7 @@ impl Engine {
                 key: entry.key,
                 start_ms: ms,
             });
-            let result = match entry.track.source {
-                Source::Local => match self.db.local_source(&entry.track.id) {
-                    Some(LocalSource::File { path, gain, peak }) => {
-                        let gain = if self.normalization.load(Ordering::Relaxed) { local::replaygain(gain, peak) } else { 1.0 };
-                        let path = std::path::Path::new(&path);
-                        std::fs::File::open(path).map_err(anyhow::Error::from).and_then(|f| {
-                            local::play(Box::new(f), path.extension().and_then(|e| e.to_str()), ms, self.out.clone(), generation, gain)
-                        })
-                    }
-                    Some(LocalSource::Remote { hash, rel_path, size, gain, peak }) => {
-                        let gain = if self.normalization.load(Ordering::Relaxed) { local::replaygain(gain, peak) } else { 1.0 };
-                        let ext = std::path::Path::new(&rel_path).extension().and_then(|e| e.to_str()).map(str::to_string);
-                        self.node
-                            .open(&hash, &rel_path, size)
-                            .and_then(|src| local::play(src, ext.as_deref(), ms, self.out.clone(), generation, gain))
-                    }
-                    None => Err(anyhow::anyhow!("the file for “{}” is missing", entry.track.title)),
-                },
-                Source::Spotify => match self.spotify_soon(generation) {
-                    Some(sp) => sp.play(&entry.track.id, ms, self.out.clone(), generation, next_uri.as_deref()),
-                    None => Err(anyhow::anyhow!("sign in to Spotify to play “{}”", entry.track.title)),
-                },
-            };
+            let result = self.play_one(&entry.track, ms, generation, next_uri.as_deref(), true);
             match result {
                 Ok(Outcome::Cancelled) => return,
                 Ok(Outcome::Finished) => {
@@ -416,6 +406,42 @@ impl Engine {
             }
         }
         self.feeder_done.store(generation, Ordering::Release);
+    }
+
+    /// Decodes one song into the output from `ms`, wherever its audio is.
+    fn play_one(&self, track: &Track, ms: u32, generation: u64, next_uri: Option<&str>, elsewhere: bool) -> anyhow::Result<Outcome> {
+        let normalize = self.normalization.load(Ordering::Relaxed);
+        match track.source {
+            Source::Local => match self.db.local_source(&track.id) {
+                Some(LocalSource::File { path, gain, peak }) => {
+                    let gain = if normalize { local::replaygain(gain, peak) } else { 1.0 };
+                    let path = std::path::Path::new(&path);
+                    let f = std::fs::File::open(path)?;
+                    local::play(Box::new(f), path.extension().and_then(|e| e.to_str()), ms, self.out.clone(), generation, gain)
+                }
+                Some(LocalSource::Remote { hash, rel_path, size, gain, peak }) => {
+                    let gain = if normalize { local::replaygain(gain, peak) } else { 1.0 };
+                    let ext = std::path::Path::new(&rel_path).extension().and_then(|e| e.to_str()).map(str::to_string);
+                    let src = self.node.open(&hash, &rel_path, size)?;
+                    local::play(src, ext.as_deref(), ms, self.out.clone(), generation, gain)
+                }
+                None => Err(anyhow::anyhow!("the file for “{}” is missing", track.title)),
+            },
+            Source::Spotify => match self.spotify_soon(generation) {
+                Some(sp) => sp.play(&track.id, ms, self.out.clone(), generation, next_uri),
+                None => Err(anyhow::anyhow!("sign in to Spotify to play “{}”", track.title)),
+            },
+            Source::SoundCloud => match (self.soundcloud)(track)? {
+                SoundCloudAudio::File(path, ext) => {
+                    let f = std::fs::File::open(&path)?;
+                    local::play(Box::new(f), Some(ext), ms, self.out.clone(), generation, 1.0)
+                }
+                SoundCloudAudio::Instead(other) if elsewhere && other.source != Source::SoundCloud => {
+                    self.play_one(&other, ms, generation, None, false)
+                }
+                SoundCloudAudio::Instead(_) => Err(anyhow::anyhow!("“{}” can't play here", track.title)),
+            },
+        }
     }
 
     /// The Spotify session, waiting a little for one still connecting at launch

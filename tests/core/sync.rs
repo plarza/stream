@@ -64,3 +64,89 @@ fn nothing_to_sync_writes_nothing() {
     let again: Vec<String> = a.core.sync_outgoing().into_iter().map(|i| i.name).filter(|n| !n.starts_with("songs/")).collect();
     assert!(again.is_empty(), "{again:?}");
 }
+
+#[test]
+fn pins_made_on_both_devices_between_syncs_are_all_kept() {
+    let a = Device::mac();
+    let b = Device::mac();
+    a.core.pin(a.item(LibrarySection::Albums, "Night Drive"));
+    a.sync_to(&b);
+    // Both pin something before hearing from the other.
+    a.core.pin(a.item(LibrarySection::Albums, "Morning Light"));
+    b.core.pin(b.item(LibrarySection::Albums, "Singles"));
+    a.sync_to(&b);
+    b.sync_to(&a);
+    assert_eq!(a.pins(), b.pins());
+    let mut pins = a.pins();
+    pins.sort();
+    assert_eq!(pins, ["Morning Light", "Night Drive", "Singles"]);
+}
+
+#[test]
+fn a_song_pinned_elsewhere_unpins_here() {
+    let a = Device::mac();
+    let b = Device::mac();
+    let song = a.core.section_tracks(LibrarySection::Songs).into_iter().find(|t| t.title == "Dew").unwrap();
+    a.core.pin(song.as_item());
+    a.sync_to(&b);
+    let shown = b.core.home().pins.into_iter().find(|p| p.title == "Dew").unwrap();
+    assert!(b.core.is_pinned(shown.id.clone()));
+    b.core.unpin(shown.id);
+    assert!(b.pins().is_empty());
+    b.sync_to(&a);
+    assert!(a.pins().is_empty());
+}
+
+#[test]
+fn playback_switches_and_app_preferences_follow_you() {
+    let a = Device::mac();
+    let b = Device::mac();
+    a.core.set_settings(Preferences { autoplay: false, ..a.core.settings() });
+    a.core.set_app_pref("appearance".into(), Some("\"dark\"".into()));
+    a.core.set_app_pref("visualizer".into(), Some("false".into()));
+    // Meanwhile the other device changed something else.
+    b.core.set_settings(Preferences { scrobbling: false, ..b.core.settings() });
+    a.sync_to(&b);
+    b.sync_to(&a);
+    for d in [&a, &b] {
+        let s = d.core.settings();
+        assert!(!s.autoplay && !s.scrobbling && s.normalization, "{s:?}");
+        let prefs = d.core.app_prefs();
+        assert_eq!(prefs.get("appearance").map(String::as_str), Some("\"dark\""));
+        assert_eq!(prefs.get("visualizer").map(String::as_str), Some("false"));
+    }
+
+    // Back to the default on one device is back to the default on the other.
+    b.core.set_settings(Preferences { autoplay: true, ..b.core.settings() });
+    b.core.set_app_pref("appearance".into(), None);
+    b.sync_to(&a);
+    assert!(a.core.settings().autoplay);
+    assert_eq!(a.core.app_prefs().get("appearance"), None);
+    assert_eq!(a.core.app_prefs().get("visualizer").map(String::as_str), Some("false"));
+}
+
+#[test]
+fn a_new_device_takes_your_settings_instead_of_its_defaults() {
+    let a = Device::mac();
+    a.core.set_settings(Preferences { normalization: false, ..a.core.settings() });
+    let b = Device::mac();
+    a.sync_to(&b);
+    assert!(!b.core.settings().normalization);
+    // And has nothing of its own to write back.
+    assert!(b.core.sync_outgoing().iter().all(|i| i.name != "settings"));
+}
+
+#[test]
+fn signing_out_of_lastfm_signs_out_everywhere() {
+    let a = Device::mac();
+    let b = Device::mac();
+    a.core.set_lastfm_api("key".into(), "secret".into());
+    a.events.set_secret("lastfm.session", r#"{"key":"sk","name":"ada"}"#);
+    a.sync_to(&b);
+    assert_eq!(b.core.account().lastfm_user.as_deref(), Some("ada"));
+    assert!(b.core.has_lastfm_api());
+    b.core.lastfm_sign_out();
+    b.sync_to(&a);
+    assert_eq!(a.events.secret("lastfm.session"), None);
+    assert!(a.core.has_lastfm_api(), "the API account stays");
+}

@@ -8,12 +8,16 @@ mod db;
 mod lastfm;
 mod local;
 mod lyrics;
+mod matching;
 mod node;
 mod player;
+mod playlists;
 mod queue;
 mod scan;
 mod signin;
+mod soundcloud;
 mod spotify;
+mod sync;
 mod types;
 
 use std::path::PathBuf;
@@ -24,7 +28,7 @@ use std::time::Duration;
 use parking_lot::{Mutex, RwLock};
 use tokio::runtime::Runtime;
 
-use db::{Db, PlayRow};
+use db::Db;
 use player::{Engine, EngineEvent};
 use spotify::api::{self, WebApi};
 use spotify::auth::{self, Tokens};
@@ -36,6 +40,8 @@ const SECRET_WEB_TOKENS: &str = "spotify.web";
 const SECRET_PLAYBACK: &str = "spotify.playback";
 const SECRET_LASTFM: &str = "lastfm.session";
 const SECRET_LASTFM_API: &str = "lastfm.api";
+/// `{ "token": …, "name": … }`: the SoundCloud web player's sign-in.
+const SECRET_SOUNDCLOUD: &str = "soundcloud.session";
 
 #[uniffi::export(with_foreign)]
 pub trait CoreDelegate: Send + Sync {
@@ -51,6 +57,8 @@ pub trait CoreDelegate: Send + Sync {
     fn sync_needed(&self);
     /// A play was added to History, here or from another device.
     fn history_changed(&self);
+    /// Another device changed a synced setting: `settings` and `app_prefs` have it.
+    fn settings_changed(&self);
 }
 
 #[derive(uniffi::Record)]
@@ -68,11 +76,15 @@ pub struct CoreConfig {
     pub spotify_api_url: Option<String>,
     /// UI tests and screenshots only: LRCLIB's address, so lyrics never wait on the internet.
     pub lyrics_url: Option<String>,
+    /// Tests only: stand-ins for soundcloud.com and its API.
+    pub soundcloud_url: Option<String>,
+    pub soundcloud_api_url: Option<String>,
 }
 
 #[derive(uniffi::Object)]
 pub struct StreamCore {
-    rt: Runtime,
+    /// Shut down in the background on drop: the last reference can go on one of its own threads.
+    rt: std::mem::ManuallyDrop<Runtime>,
     http: reqwest::Client,
     db: Arc<Db>,
     delegate: Arc<dyn CoreDelegate>,
@@ -100,6 +112,19 @@ pub struct StreamCore {
     /// The browser sign-in in flight; a new one replaces it so its ports free up.
     sign_in_task: Mutex<Option<tokio::task::AbortHandle>>,
     endpoints: auth::Endpoints,
+    soundcloud: Arc<soundcloud::SoundCloud>,
+    /// Your playlists' copies on other services: syncing, or why they couldn't.
+    copy_states: Mutex<playlists::CopyStates>,
+    /// Edits per playlist, so a burst of them syncs its copies once.
+    copy_edits: Mutex<std::collections::HashMap<String, u64>>,
+    copy_locks: Mutex<playlists::CopyLocks>,
+}
+
+impl Drop for StreamCore {
+    fn drop(&mut self) {
+        // SAFETY: taken once, here, and never used again.
+        unsafe { std::mem::ManuallyDrop::take(&mut self.rt) }.shutdown_background();
+    }
 }
 
 fn err(e: impl std::fmt::Display) -> CoreError {
@@ -141,8 +166,7 @@ impl StreamCore {
         });
         let settings: Preferences = db
             .get_kv("settings")
-            .and_then(|s| serde_json::from_str::<SettingsJson>(&s).ok())
-            .map(Into::into)
+            .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
         let folders: Vec<PathBuf> = db
             .get_kv("folders")
@@ -174,11 +198,23 @@ impl StreamCore {
             )
             .map_err(err)?,
         );
-        let engine = Engine::new(db.clone(), node.clone(), playback.clone(), notify);
+        let soundcloud = Arc::new(soundcloud::SoundCloud::new(
+            http.clone(),
+            db.clone(),
+            config.soundcloud_url.clone(),
+            config.soundcloud_api_url.clone(),
+            cache.join("soundcloud-audio"),
+        ));
+        let slot3 = slot.clone();
+        let open_soundcloud: player::SoundCloudOpen = Arc::new(move |t: &Track| {
+            let core = slot3.read().as_ref().and_then(|w| w.upgrade()).ok_or_else(|| anyhow::anyhow!("shutting down"))?;
+            core.soundcloud_audio(t)
+        });
+        let engine = Engine::new(db.clone(), node.clone(), playback.clone(), notify, open_soundcloud);
         engine.normalization.store(settings.normalization, Ordering::Relaxed);
 
         let core = Arc::new(StreamCore {
-            rt,
+            rt: std::mem::ManuallyDrop::new(rt),
             http,
             db,
             delegate,
@@ -193,6 +229,7 @@ impl StreamCore {
                 spotify_premium: false,
                 lastfm_user: None,
                 spotify_client_id: None,
+                soundcloud_user: None,
                 sign_in: SignInStep::Idle,
             }),
             settings: Mutex::new(settings),
@@ -214,6 +251,10 @@ impl StreamCore {
                 accounts: config.spotify_accounts_url.unwrap_or_else(|| auth::Endpoints::default().accounts),
                 api: config.spotify_api_url.unwrap_or_else(|| auth::Endpoints::default().api),
             },
+            soundcloud,
+            copy_states: Mutex::new(Default::default()),
+            copy_edits: Mutex::new(Default::default()),
+            copy_locks: Mutex::new(Default::default()),
         });
         *slot.write() = Some(Arc::downgrade(&core));
         core.restore_accounts();
@@ -251,6 +292,7 @@ impl StreamCore {
         self.db.set_kv("spotify_client_id", &id);
         self.account.lock().spotify_client_id = (!id.is_empty()).then_some(id);
         self.emit_account();
+        self.delegate.sync_needed();
     }
 
     pub fn spotify_sign_out(&self) {
@@ -275,6 +317,7 @@ impl StreamCore {
         let v = serde_json::json!({ "key": key.trim(), "secret": secret.trim() }).to_string();
         self.delegate.secret_set(SECRET_LASTFM_API.into(), Some(v));
         *self.lastfm.write() = Some(Arc::new(lastfm::LastFm::new(self.http.clone(), key.trim().into(), secret.trim().into())));
+        self.delegate.sync_needed();
     }
 
     pub fn has_lastfm_api(&self) -> bool {
@@ -296,6 +339,7 @@ impl StreamCore {
                         me.delegate.secret_set(SECRET_LASTFM.into(), Some(v));
                         me.account.lock().lastfm_user = Some(name);
                         me.emit_account();
+                        me.delegate.sync_needed();
                         return Ok(());
                     }
                 }
@@ -309,6 +353,7 @@ impl StreamCore {
         self.delegate.secret_set(SECRET_LASTFM.into(), None);
         self.account.lock().lastfm_user = None;
         self.emit_account();
+        self.delegate.sync_needed();
     }
 
     // ---- settings ----------------------------------------------------------
@@ -317,10 +362,77 @@ impl StreamCore {
         self.settings.lock().clone()
     }
 
+    /// Synced to your other devices.
     pub fn set_settings(&self, s: Preferences) {
+        if *self.settings.lock() == s {
+            return;
+        }
         self.engine.normalization.store(s.normalization, Ordering::Relaxed);
-        self.db.set_kv("settings", &serde_json::to_string(&SettingsJson::from(&s)).unwrap_or_default());
+        self.db.set_kv("settings", &serde_json::to_string(&s).unwrap_or_default());
+        let spotify_on = s.is_on(Service::Spotify);
+        let services_changed = self.settings.lock().services_on() != s.services_on();
         *self.settings.lock() = s;
+        if !spotify_on {
+            // Off: no connection to Spotify's servers, though the sign-in is kept.
+            *self.playback.write() = None;
+        }
+        if services_changed {
+            self.delegate.library_changed();
+        }
+        self.delegate.settings_changed();
+        self.delegate.sync_needed();
+    }
+
+    // ---- SoundCloud --------------------------------------------------------
+
+    /// Signed in on soundcloud.com in the sign-in sheet: the web player's `oauth_token`
+    /// cookie. Checked, then kept (and synced, so other devices are signed in too).
+    pub async fn soundcloud_sign_in(self: Arc<Self>, token: String) -> Result<(), CoreError> {
+        let sc = self.soundcloud.clone();
+        let token = token.trim().to_string();
+        sc.set_token(Some(token.clone()));
+        let me = sc.clone();
+        let who = self.rt.spawn(async move { me.me().await }).await.map_err(err)?;
+        match who {
+            Ok(v) => {
+                let name = v["username"].as_str().map(str::to_string);
+                self.use_soundcloud(token, name);
+                self.delegate.sync_needed();
+                let me = self.clone();
+                self.rt.spawn(async move {
+                    if me.soundcloud.refresh_library().await.is_ok() {
+                        let _ = me.db.rebuild_search();
+                        me.delegate.library_changed();
+                    }
+                });
+                Ok(())
+            }
+            Err(e) => {
+                sc.set_token(None);
+                Err(err(e))
+            }
+        }
+    }
+
+    pub fn soundcloud_sign_out(&self) {
+        self.soundcloud.set_token(None);
+        self.delegate.secret_set(SECRET_SOUNDCLOUD.into(), None);
+        self.account.lock().soundcloud_user = None;
+        let _ = self.db.set_saved_from(Source::SoundCloud, &[]);
+        self.db.replace_playlists_from("soundcloud:", &[]);
+        self.emit_account();
+        self.delegate.library_changed();
+        self.delegate.sync_needed();
+    }
+
+    /// Search across every service that's on, in their order: what's in your library from
+    /// each first, then the rest of what it found.
+    pub async fn search(self: Arc<Self>, query: String, filter: SearchFilter) -> SearchResults {
+        let me = self.clone();
+        self.rt
+            .spawn(async move { me.search_inner(&query, filter).await })
+            .await
+            .unwrap_or(SearchResults { items: vec![], problems: vec![] })
     }
 
     // ---- local library -----------------------------------------------------
@@ -390,21 +502,49 @@ impl StreamCore {
         // Coming back to the app is also when a dropped playback session reconnects.
         self.clone().reconnect_playback();
         let me = self.clone();
-        self.rt.spawn(async move { me.refresh_spotify_inner().await }).await.map_err(err)?
+        self.rt.spawn(async move {
+            if me.soundcloud.signed_in() && me.settings().is_on(Service::SoundCloud) {
+                match me.soundcloud.refresh_library().await {
+                    Ok(()) => me.delegate.library_changed(),
+                    Err(e) => log::warn!("SoundCloud library: {e:#}"),
+                }
+            }
+            let spotify = if me.settings().is_on(Service::Spotify) { me.clone().refresh_spotify_inner().await } else { Ok(()) };
+            me.clone().sync_playlists().await;
+            spotify
+        })
+        .await
+        .map_err(err)?
     }
 
     // ---- browsing ----------------------------------------------------------
 
     pub fn home(&self) -> Home {
-        Home { pins: self.db.pins().into_iter().map(|p| self.pin_here(p)).collect(), recents: self.db.recents(24) }
+        let on = self.settings();
+        let shown = |i: &Item| on.is_on(Service::of(i.source));
+        Home {
+            pins: self.db.pins().into_iter().map(|p| self.pin_here(p)).filter(shown).collect(),
+            recents: self.db.recents(24).into_iter().filter(shown).collect(),
+        }
     }
 
+    /// Your own playlists come first in Playlists; the copies of them on Spotify and SoundCloud
+    /// don't show again. Nothing from a service that's off.
     pub fn section(&self, section: LibrarySection, offset: u32, limit: u32) -> Vec<Item> {
-        self.db.section(section, offset, limit)
+        let on = self.settings();
+        if section == LibrarySection::Playlists {
+            let own = self.own_playlists();
+            let copies = playlists::copy_ids(self);
+            let skip = (offset as usize).saturating_sub(own.len()) as u32;
+            let theirs = self.db.section(section, skip, limit).into_iter().filter(|i| !copies.contains(&i.id) && on.is_on(Service::of(i.source)));
+            return own.into_iter().skip(offset as usize).chain(theirs).take(limit as usize).collect();
+        }
+        self.db.section(section, offset, limit).into_iter().filter(|i| on.is_on(Service::of(i.source))).collect()
     }
 
     pub fn section_tracks(&self, section: LibrarySection) -> Vec<Track> {
-        self.db.section_tracks(section)
+        let on = self.settings();
+        self.db.section_tracks(section).into_iter().filter(|t| on.is_on(Service::of(t.source))).collect()
     }
 
     /// An album, playlist or artist page. Uses the cache when it can, then the network.
@@ -417,7 +557,10 @@ impl StreamCore {
     /// seen before open at once while `collection` refreshes them. None when nothing
     /// complete is stored (a Spotify album only some of whose songs are saved).
     pub fn cached_collection(&self, id: String) -> Option<CollectionPage> {
-        let pinned = self.db.is_pinned(&id);
+        let pinned = self.is_pinned(id.clone());
+        if id.starts_with(playlists::PREFIX) {
+            return self.own_page(&id, pinned);
+        }
         if id.starts_with("local:album:") || id.starts_with("spotify:album:") {
             let label = self.db.get_kv(&album_key(&id));
             if id.starts_with("spotify:") && label.is_none() {
@@ -458,8 +601,20 @@ impl StreamCore {
             .collect()
     }
 
+    /// Instant results from what's stored here, while `search` asks the services.
     pub fn search_library(&self, query: String, filter: SearchFilter) -> Vec<Item> {
-        self.db.search(&query, filter, 40)
+        let on = self.settings();
+        let q = query.trim().to_lowercase();
+        let own = if matches!(filter, SearchFilter::All | SearchFilter::Playlists) && !q.is_empty() {
+            self.own_playlists().into_iter().filter(|p| p.title.to_lowercase().contains(&q)).collect()
+        } else {
+            vec![]
+        };
+        let mut found: Vec<Item> = own.into_iter().chain(self.db.search(&query, filter, 40)).filter(|i| on.is_on(Service::of(i.source))).collect();
+        // In service order, keeping each service's own ranking.
+        let order = on.services_on();
+        found.sort_by_key(|i| if i.id.starts_with(playlists::PREFIX) { 0 } else { 1 + order.iter().position(|s| *s == Service::of(i.source)).unwrap_or(9) });
+        found
     }
 
     pub async fn search_spotify(self: Arc<Self>, query: String, filter: SearchFilter) -> Result<Vec<Item>, CoreError> {
@@ -482,30 +637,35 @@ impl StreamCore {
     }
 
     pub fn pin(&self, item: Item) {
+        if self.is_pinned(item.id.clone()) {
+            return;
+        }
         self.db.pin(&item);
         self.delegate.library_changed();
         self.delegate.sync_needed();
     }
 
+    /// `id` as Home shows it: a pin from another device may be stored by its ID there.
     pub fn unpin(&self, id: String) {
-        self.db.unpin(&id);
+        let pins: Vec<Item> = self.db.pins().into_iter().filter(|p| p.id != id && self.pin_here(p.clone()).id != id).collect();
+        self.db.set_pins(&pins);
         self.delegate.library_changed();
         self.delegate.sync_needed();
     }
 
     pub fn is_pinned(&self, id: String) -> bool {
-        self.db.is_pinned(&id)
-    }
-
-    pub fn reorder_pins(&self, ids: Vec<String>) {
-        self.db.move_pin(&ids);
-        self.delegate.sync_needed();
+        self.db.pins().into_iter().any(|p| p.id == id || self.pin_here(p).id == id)
     }
 
     /// Heart: Spotify Like (any Spotify song/album/playlist), a local flag for local songs.
     pub async fn set_liked(self: Arc<Self>, track_id: String, liked: bool) -> Result<(), CoreError> {
         if track_id.starts_with("local:") {
             self.db.set_local_liked(&track_id, liked);
+        } else if let Some(n) = track_id.strip_prefix("soundcloud:track:").and_then(|n| n.parse::<u64>().ok()) {
+            let sc = self.soundcloud.clone();
+            self.rt.spawn(async move { sc.set_liked(n, liked).await }).await.map_err(err)?.map_err(err)?;
+            self.db.set_spotify_saved(&track_id, liked);
+            self.delegate.library_changed();
         } else {
             let web = self.web.read().clone().ok_or(CoreError::NotSignedIn)?;
             let id = track_id.clone();
@@ -715,107 +875,6 @@ impl StreamCore {
         Ok(())
     }
 
-    // ---- the Stream node and aza sync --------------------------------------------
-
-    /// Signed in to the Stream node as `identity`. A different aza account than before starts
-    /// the synced library afresh.
-    pub fn node_connect(self: Arc<Self>, url: String, token: String, identity: String) {
-        if self.db.get_kv("aza_identity").as_deref() != Some(identity.as_str()) {
-            self.db.clear_sync();
-            self.db.set_kv("aza_identity", &identity);
-            self.delegate.library_changed();
-        }
-        self.node.connect(url, token);
-        self.clone().upload_now();
-        let me = self.clone();
-        self.rt.spawn(async move { me.fetch_art().await });
-    }
-
-    /// Signed out of aza: songs from the node go, this device's own files stay.
-    pub fn node_disconnect(&self) {
-        self.node.disconnect();
-        self.db.clear_sync();
-        self.db.set_kv("aza_identity", "");
-        self.delegate.library_changed();
-    }
-
-    pub fn node_status(&self) -> NodeStatus {
-        self.node.status()
-    }
-
-    /// Uploads this device's files the node doesn't have yet, in the background.
-    pub fn upload_now(self: Arc<Self>) {
-        let me = self.clone();
-        let ready: Arc<dyn Fn() + Send + Sync> = Arc::new(move || me.delegate.sync_needed());
-        let node = self.node.clone();
-        self.rt.spawn(async move { node.upload(ready).await });
-    }
-
-    /// Items read from aza sync data, newest version of each.
-    pub fn sync_apply(self: Arc<Self>, items: Vec<SyncItem>) {
-        for item in items.iter().filter(|i| i.name == "settings") {
-            self.apply_settings_item(item);
-        }
-        if items.iter().filter(|i| i.name.starts_with("history/")).fold(false, |any, i| self.apply_history_item(i) || any) {
-            self.delegate.history_changed();
-        }
-        for item in items.iter().filter(|i| i.name == PINS_ITEM) {
-            if self.apply_pins_item(item) {
-                self.delegate.library_changed();
-            }
-        }
-        for item in items.iter().filter(|i| i.name == PLAYING_ITEM) {
-            self.apply_playing_item(item);
-        }
-        if self.node.apply_songs(&items) {
-            self.delegate.library_changed();
-            let me = self.clone();
-            self.rt.spawn(async move { me.fetch_art().await });
-        }
-    }
-
-    /// Items to write: each one's version is one more than the last read or written.
-    pub fn sync_outgoing(&self) -> Vec<SyncItem> {
-        let mut out = Vec::new();
-        let current = serde_json::to_vec(&self.synced_settings()).unwrap_or_default();
-        let known = self.db.sync_item("settings");
-        let synced = known.as_ref().and_then(|(_, _, d)| d.clone());
-        if synced.as_deref() != Some(current.as_slice()) && self.synced_settings() != SyncedSettings::default() {
-            out.push(SyncItem { name: "settings".into(), version: known.map_or(0, |(v, ..)| v) + 1, data: current });
-        }
-        let pins = self.synced_pins();
-        let known = self.db.sync_item(PINS_ITEM);
-        if known.as_ref().and_then(|(_, _, d)| d.as_deref()) != Some(pins.as_slice()) && (known.is_some() || pins != b"[]") {
-            out.push(SyncItem { name: PINS_ITEM.into(), version: known.map_or(0, |(v, ..)| v) + 1, data: pins });
-        }
-        out.extend(self.node.outgoing_songs());
-        out.extend(self.outgoing_history());
-        let state = self.engine.state();
-        if let Some(p) = self.playing_snapshot(&state).filter(|p| self.playing_dirty(p)) {
-            let version = self.db.sync_item(PLAYING_ITEM).map_or(0, |(v, ..)| v) + 1;
-            out.push(SyncItem { name: PLAYING_ITEM.into(), version, data: serde_json::to_vec(&p).unwrap_or_default() });
-        }
-        out
-    }
-
-    /// An item `sync_outgoing` gave was written.
-    pub fn sync_written(&self, item: SyncItem) {
-        self.db.set_sync_item(&item.name, item.version, true, Some(&item.data));
-        if item.name == PLAYING_ITEM {
-            self.db.set_kv(PLAYING_LAST, &String::from_utf8_lossy(&item.data));
-        }
-        if item.data.is_empty()
-            && let Some(hash) = item.name.strip_prefix("songs/")
-        {
-            let (node, hash) = (self.node.clone(), hash.to_string());
-            self.rt.spawn(async move {
-                if let Err(e) = node.delete(&hash).await {
-                    log::warn!("deleting {hash} from the Stream node: {e:#}");
-                }
-            });
-        }
-    }
-
     // ---- downloads ------------------------------------------------------------------
 
     /// Keeps an album or playlist playable offline.
@@ -890,366 +949,7 @@ impl StreamCore {
     }
 }
 
-/// The `settings` item: what you'd otherwise type in again on each device.
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Default, Debug)]
-struct SyncedSettings {
-    #[serde(rename = "spotifyClientId", default, skip_serializing_if = "Option::is_none")]
-    spotify_client_id: Option<String>,
-    /// Your Last.fm API account: `{key, secret}`.
-    #[serde(rename = "lastfmApi", default, skip_serializing_if = "Option::is_none")]
-    lastfm_api: Option<serde_json::Value>,
-    /// The Last.fm sign-in: `{key, name}`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    lastfm: Option<serde_json::Value>,
-}
-
-/// aza sync item holding the song playing (or last played) on any device, and where it was.
-const PLAYING_ITEM: &str = "playing";
-
-/// Pins, in order: one `pins` item for every device.
-const PINS_ITEM: &str = "pins";
-
-/// Songs pinned on another device, by ID there, to their file's hash, until the file is here.
-const PIN_HASHES: &str = "pins.hashes";
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct SyncedPin {
-    item: Item,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    hash: Option<String>,
-}
-/// kv: the `playing` item this device last wrote or took up.
-const PLAYING_LAST: &str = "playing.last";
-/// History items each device writes: one per UTC day, `history/<device>/<day>`.
-const HISTORY_DAYS_RESENT: i64 = 14;
-
-/// The `playing` item.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-struct NowPlaying {
-    track: Track,
-    /// A file's hash, so other devices find the same song.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    hash: Option<String>,
-    position_ms: u32,
-    /// Unix milliseconds the position was taken.
-    at_ms: i64,
-    playing: bool,
-    device: String,
-}
-
-/// A day's plays on one device: the `history/<device>/<day>` item.
-#[derive(serde::Serialize, serde::Deserialize)]
-struct HistoryDay {
-    device: String,
-    plays: Vec<PlayRow>,
-}
-
-fn now_ms() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as i64).unwrap_or(0)
-}
-
-impl StreamCore {
-    /// This install's own ID in synced History and the `playing` item.
-    fn device_id(&self) -> String {
-        if let Some(id) = self.db.get_kv("device.id") {
-            return id;
-        }
-        let id = format!("{:016x}", rand::random::<u64>());
-        self.db.set_kv("device.id", &id);
-        id
-    }
-
-    fn device_name(&self) -> &'static str {
-        if self.is_phone { "iPhone" } else { "Mac" }
-    }
-
-    fn add_play(&self, track: Track, started_at: i64) {
-        let hash = if track.source == Source::Local { self.db.track_hash(&track.id) } else { None };
-        let Ok(json) = serde_json::to_string(&track) else { return };
-        self.db.add_play(&PlayRow { device: self.device_id(), device_name: self.device_name().into(), at: started_at, track: json, hash });
-        self.delegate.history_changed();
-        self.delegate.sync_needed();
-    }
-
-    /// The song as played, as it is on this device: Spotify's by its ID, a file by its hash
-    /// (this device's own, else the node's). A file found nowhere stays as it was, unplayable.
-    fn resolve_played(&self, json: &str, hash: Option<&str>, mine: bool) -> Option<(Track, bool)> {
-        let played: Track = serde_json::from_str(json).ok()?;
-        if played.source == Source::Spotify {
-            return Some((self.db.track(&played.id).unwrap_or(played), true));
-        }
-        if let Some(t) = hash.and_then(|h| self.db.track_for_hash(h)) {
-            return Some((t, true));
-        }
-        if mine && let Some(t) = self.db.track(&played.id) {
-            return Some((t, true));
-        }
-        Some((played, false))
-    }
-
-    fn outgoing_history(&self) -> Vec<SyncItem> {
-        let mine = self.device_id();
-        let from = (db::now() / 86400 - HISTORY_DAYS_RESENT) * 86400;
-        self.db
-            .play_days(&mine, from)
-            .into_iter()
-            .filter_map(|day| {
-                let plays = self.db.plays(Some(&mine), day * 86400, (day + 1) * 86400, 0, u32::MAX);
-                let data = serde_json::to_vec(&HistoryDay { device: self.device_name().into(), plays }).ok()?;
-                let name = format!("history/{mine}/{day}");
-                let known = self.db.sync_item(&name);
-                if known.as_ref().and_then(|(_, _, d)| d.as_deref()) == Some(data.as_slice()) {
-                    return None;
-                }
-                Some(SyncItem { name, version: known.map_or(0, |(v, ..)| v) + 1, data })
-            })
-            .collect()
-    }
-
-    /// Another device's day of plays. True when it added any.
-    fn apply_history_item(&self, item: &SyncItem) -> bool {
-        let Some(device) = item.name.strip_prefix("history/").and_then(|r| r.split('/').next()) else { return false };
-        if device == self.device_id() || self.db.sync_item(&item.name).is_some_and(|(v, ..)| v >= item.version) {
-            return false;
-        }
-        self.db.set_sync_item(&item.name, item.version, false, Some(&item.data));
-        let Ok(day) = serde_json::from_slice::<HistoryDay>(&item.data) else { return false };
-        for mut play in day.plays {
-            play.device = device.to_string();
-            play.device_name = day.device.clone();
-            self.db.add_play(&play);
-        }
-        true
-    }
-
-    fn playing_snapshot(&self, state: &PlayerState) -> Option<NowPlaying> {
-        let track = state.track.clone()?;
-        let hash = if track.source == Source::Local { self.db.track_hash(&track.id) } else { None };
-        Some(NowPlaying {
-            track,
-            hash,
-            position_ms: state.position_ms,
-            at_ms: now_ms(),
-            playing: state.status == PlaybackStatus::Playing,
-            device: self.device_id(),
-        })
-    }
-
-    /// Whether what's playing here moved on from the `playing` item last written or taken up:
-    /// another song, play or pause, or a seek.
-    fn playing_dirty(&self, now: &NowPlaying) -> bool {
-        let Some(last) = self.db.get_kv(PLAYING_LAST).and_then(|s| serde_json::from_str::<NowPlaying>(&s).ok()) else {
-            return true;
-        };
-        let expected = last.position_ms as i64 + if last.playing { now.at_ms - last.at_ms } else { 0 };
-        last.track.id != now.track.id || last.playing != now.playing || (expected - now.position_ms as i64).abs() > 4000
-    }
-
-    /// Another device's song: taken up here, paused where that device is, unless this one is playing.
-    fn apply_playing_item(&self, item: &SyncItem) {
-        if self.db.sync_item(PLAYING_ITEM).is_some_and(|(v, ..)| v >= item.version) {
-            return;
-        }
-        self.db.set_sync_item(PLAYING_ITEM, item.version, false, Some(&item.data));
-        let Ok(theirs) = serde_json::from_slice::<NowPlaying>(&item.data) else { return };
-        let last_at = self.db.get_kv(PLAYING_LAST).and_then(|s| serde_json::from_str::<NowPlaying>(&s).ok()).map_or(0, |l| l.at_ms);
-        if theirs.device == self.device_id() || theirs.at_ms <= last_at || self.engine.status() == PlaybackStatus::Playing {
-            return;
-        }
-        let json = serde_json::to_string(&theirs.track).unwrap_or_default();
-        let Some((track, true)) = self.resolve_played(&json, theirs.hash.as_deref(), false) else { return };
-        let elapsed = if theirs.playing { (now_ms() - theirs.at_ms).max(0) as u32 } else { 0 };
-        let ms = theirs.position_ms.saturating_add(elapsed).min(track.duration_ms.saturating_sub(1000));
-        // Taken up, it's what this device last had: nothing to write back.
-        let taken = NowPlaying { track: track.clone(), hash: theirs.hash.clone(), position_ms: ms, at_ms: now_ms(), playing: false, device: self.device_id() };
-        self.db.set_kv(PLAYING_LAST, &serde_json::to_string(&taken).unwrap_or_default());
-        self.engine.cue(track, ms);
-    }
-
-    /// The pins as synced: what's the same on every device (no artwork path or downloaded
-    /// flag), and a file's hash for a song that's a file, since its ID differs per device.
-    fn synced_pins(&self) -> Vec<u8> {
-        let hashes = self.pin_hashes();
-        let pins: Vec<SyncedPin> = self
-            .db
-            .pins()
-            .into_iter()
-            .map(|mut item| {
-                let hash = (item.kind == ItemKind::Track && item.source == Source::Local)
-                    .then(|| self.db.track_hash(&item.id).or_else(|| hashes.get(&item.id).cloned()))
-                    .flatten();
-                item.art = item.art.filter(|a| a.starts_with("http"));
-                item.downloaded = false;
-                SyncedPin { item, hash }
-            })
-            .collect();
-        serde_json::to_vec(&pins).unwrap_or_default()
-    }
-
-    fn pin_hashes(&self) -> std::collections::HashMap<String, String> {
-        self.db.get_kv(PIN_HASHES).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
-    }
-
-    /// A pin as it is on this device: its artwork, whether it's downloaded, and for a song from
-    /// another device, the same file here.
-    fn pin_here(&self, pin: Item) -> Item {
-        let here = match pin.kind {
-            ItemKind::Album => self.db.album_item(&pin.id).map(|(i, ..)| i),
-            ItemKind::Artist => self.db.artist_item(&pin.id),
-            ItemKind::Playlist => self.db.playlist_item(&pin.id).map(|(i, _)| i),
-            ItemKind::Show => self.db.show_item(&pin.id).map(|(i, ..)| i),
-            ItemKind::Track => self
-                .db
-                .track(&pin.id)
-                .or_else(|| self.pin_hashes().get(&pin.id).and_then(|h| self.db.track_for_hash(h)))
-                .map(|t| t.as_item()),
-        };
-        here.map(|mut i| {
-            // Keep Spotify's art when the library's copy has none.
-            if i.art.is_none() {
-                i.art = pin.art.clone().filter(|a| a.starts_with("http"));
-            }
-            i
-        })
-        .unwrap_or_else(|| Item { art: pin.art.filter(|a| a.starts_with("http")), ..pin })
-    }
-
-    /// Takes the synced pins unless this device changed its own since the last sync, in which
-    /// case its own are written over them next. The first time, this device's pins join theirs.
-    fn apply_pins_item(&self, item: &SyncItem) -> bool {
-        let known = self.db.sync_item(PINS_ITEM);
-        if known.as_ref().is_some_and(|(v, ..)| *v >= item.version) {
-            return false;
-        }
-        let synced = known.and_then(|(_, _, d)| d);
-        let current = self.synced_pins();
-        if synced.as_ref().is_some_and(|s| *s != current) {
-            self.db.set_sync_item(PINS_ITEM, item.version, false, synced.as_deref());
-            return false;
-        }
-        let Ok(theirs) = serde_json::from_slice::<Vec<SyncedPin>>(&item.data) else { return false };
-        let mut hashes = self.pin_hashes();
-        let mut pins: Vec<Item> = theirs
-            .into_iter()
-            .map(|p| {
-                let here = p.hash.as_ref().and_then(|h| self.db.track_for_hash(h));
-                if let (Some(h), None) = (&p.hash, &here) {
-                    hashes.insert(p.item.id.clone(), h.clone());
-                }
-                here.map(|t| t.as_item()).unwrap_or(p.item)
-            })
-            .collect();
-        let mine: Vec<Item> = if synced.is_none() {
-            self.db.pins().into_iter().filter(|m| !pins.iter().any(|p| p.id == m.id)).collect()
-        } else {
-            vec![]
-        };
-        let joined = !mine.is_empty();
-        pins.extend(mine);
-        self.db.set_kv(PIN_HASHES, &serde_json::to_string(&hashes).unwrap_or_default());
-        self.db.set_pins(&pins);
-        // Joined with this device's own, the pins differ from what's synced: written next.
-        let now = if joined { item.data.clone() } else { self.synced_pins() };
-        self.db.set_sync_item(PINS_ITEM, item.version, false, Some(&now));
-        if joined {
-            self.delegate.sync_needed();
-        }
-        true
-    }
-
-    fn synced_settings(&self) -> SyncedSettings {
-        let json = |k: &str| self.delegate.secret_get(k.into()).and_then(|s| serde_json::from_str(&s).ok());
-        SyncedSettings {
-            spotify_client_id: self.db.get_kv("spotify_client_id").filter(|s| !s.is_empty()),
-            lastfm_api: json(SECRET_LASTFM_API),
-            lastfm: json(SECRET_LASTFM),
-        }
-    }
-
-    /// Takes the synced settings unless this device changed its own since the last sync, in
-    /// which case its own are written over them next. What the item leaves out stays as it is.
-    fn apply_settings_item(&self, item: &SyncItem) {
-        let known = self.db.sync_item("settings");
-        if known.as_ref().is_some_and(|(v, ..)| *v >= item.version) {
-            return;
-        }
-        let synced = known.as_ref().and_then(|(_, _, d)| d.clone());
-        let current = serde_json::to_vec(&self.synced_settings()).unwrap_or_default();
-        let dirty = synced.is_some() && synced.as_deref() != Some(current.as_slice());
-        if dirty {
-            self.db.set_sync_item("settings", item.version, false, synced.as_deref());
-            return;
-        }
-        let Ok(s) = serde_json::from_slice::<SyncedSettings>(&item.data) else { return };
-        if let Some(id) = &s.spotify_client_id
-            && self.db.get_kv("spotify_client_id").as_deref() != Some(id)
-        {
-            self.set_spotify_client_id(id.clone());
-        }
-        if let Some(api) = &s.lastfm_api
-            && let (Some(k), Some(sec)) = (api["key"].as_str(), api["secret"].as_str())
-            && self.synced_settings().lastfm_api.as_ref() != Some(api)
-        {
-            self.set_lastfm_api(k.into(), sec.into());
-        }
-        if let Some(session) = &s.lastfm
-            && self.synced_settings().lastfm.as_ref() != Some(session)
-        {
-            self.delegate.secret_set(SECRET_LASTFM.into(), Some(session.to_string()));
-            self.account.lock().lastfm_user = session["name"].as_str().map(str::to_string);
-            self.emit_account();
-        }
-        let now = serde_json::to_vec(&self.synced_settings()).unwrap_or_default();
-        self.db.set_sync_item("settings", item.version, false, Some(&now));
-    }
-
-    async fn fetch_art(self: Arc<Self>) {
-        let me = self.clone();
-        let changed: Arc<dyn Fn() + Send + Sync> = Arc::new(move || me.delegate.library_changed());
-        self.node.clone().fetch_art(changed).await;
-    }
-}
-
 // ---- internals ----------------------------------------------------------------
-
-#[derive(serde::Serialize, serde::Deserialize)]
-struct SettingsJson {
-    normalization: bool,
-    crossfade_seconds: u32,
-    /// Its own key: `autoplay` was saved as `false` before there was a switch for it.
-    #[serde(rename = "autoplay_similar", default = "yes")]
-    autoplay: bool,
-    bit_perfect: bool,
-    scrobbling: bool,
-}
-
-fn yes() -> bool {
-    true
-}
-
-impl From<SettingsJson> for Preferences {
-    fn from(s: SettingsJson) -> Self {
-        Preferences {
-            normalization: s.normalization,
-            crossfade_seconds: s.crossfade_seconds,
-            autoplay: s.autoplay,
-            bit_perfect: s.bit_perfect,
-            scrobbling: s.scrobbling,
-        }
-    }
-}
-
-impl From<&Preferences> for SettingsJson {
-    fn from(s: &Preferences) -> Self {
-        SettingsJson {
-            normalization: s.normalization,
-            crossfade_seconds: s.crossfade_seconds,
-            autoplay: s.autoplay,
-            bit_perfect: s.bit_perfect,
-            scrobbling: s.scrobbling,
-        }
-    }
-}
 
 impl StreamCore {
     fn emit_account(&self) {
@@ -1261,7 +961,7 @@ impl StreamCore {
             EngineEvent::Changed => {
                 self.engine.persist();
                 let state = self.engine.state();
-                if self.playing_snapshot(&state).is_some_and(|p| self.playing_dirty(&p)) {
+                if self.playing_changed(&state) {
                     self.delegate.sync_needed();
                 }
                 self.delegate.player_changed(state);
@@ -1470,7 +1170,7 @@ impl StreamCore {
     }
 
     async fn collection_inner(self: Arc<Self>, id: &str) -> Result<CollectionPage, CoreError> {
-        let pinned = self.db.is_pinned(id);
+        let pinned = self.is_pinned(id.to_string());
         if id.starts_with("local:album:") {
             let (item, year, _) = self.db.album_item(id).ok_or(CoreError::NotFound)?;
             let tracks = self.db.album_tracks(id);
@@ -1533,6 +1233,30 @@ impl StreamCore {
         }
         if id.starts_with("spotify:playlist:") {
             return self.playlist(id, pinned).await;
+        }
+        if id.starts_with(playlists::PREFIX) {
+            return self.own_page(id, pinned).ok_or(CoreError::NotFound);
+        }
+        if let Some(n) = id.strip_prefix("soundcloud:playlist:").and_then(|n| n.parse::<u64>().ok()) {
+            let (item, description, tracks) = match self.soundcloud.playlist(n).await {
+                Ok(p) => p,
+                Err(e) => {
+                    let (item, description) = self.db.playlist_item(id).ok_or_else(|| err(&e))?;
+                    (item, description, self.db.playlist_track_list(id))
+                }
+            };
+            return Ok(CollectionPage { detail: list_detail(&tracks), item, description, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
+        }
+        if let Some(n) = id.strip_prefix("soundcloud:artist:").and_then(|n| n.parse::<u64>().ok()) {
+            let user = self.soundcloud.get(&format!("/users/{n}"), &[]).await.map_err(err)?;
+            let item = soundcloud::user_item(&user).ok_or(CoreError::NotFound)?;
+            let songs = self.soundcloud.all_pages(&format!("/users/{n}/tracks"), &[("limit", "50".into())], 200).await.map_err(err)?;
+            let rows: Vec<_> = songs.iter().filter_map(soundcloud::track_row).collect();
+            self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows, None).map_err(err)?;
+            let tracks: Vec<Track> = rows.iter().filter_map(|r| self.db.track(&r.id)).collect();
+            let description = user["description"].as_str().filter(|d| !d.is_empty()).map(str::to_string);
+            let followers = user["followers_count"].as_u64().unwrap_or(0);
+            return Ok(CollectionPage { detail: format!("{} followers on SoundCloud", group_thousands(followers)), item, description, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
         }
         if id.starts_with("spotify:artist:") {
             return self.artist(id, pinned).await;
@@ -1736,7 +1460,11 @@ impl StreamCore {
         let item = api::playlist_item(&meta).ok_or(CoreError::NotFound)?;
         let snapshot = meta["snapshot_id"].as_str();
         self.db.set_playlist_tracks(id, &ids, snapshot);
-        let tracks = self.db.playlist_track_list(id);
+        let mut tracks = self.db.playlist_track_list(id);
+        // Not one of your playlists, so not stored: its songs as they came.
+        if tracks.is_empty() {
+            tracks = ids.iter().filter_map(|t| self.db.track(t)).collect();
+        }
         Ok(CollectionPage {
             detail: list_detail(&tracks),
             item,
@@ -1746,6 +1474,61 @@ impl StreamCore {
             liked: false,
             pinned, episodes: vec![],
         })
+    }
+
+    async fn search_inner(&self, q: &str, filter: SearchFilter) -> SearchResults {
+        let prefs = self.settings();
+        let order = prefs.services_on();
+        let library = self.search_library(q.to_string(), filter);
+        let spotify_on = prefs.is_on(Service::Spotify);
+        let soundcloud_on = prefs.is_on(Service::SoundCloud);
+        let (spotify, soundcloud) = tokio::join!(
+            async { if spotify_on { Some(self.search_spotify_inner(q, filter).await) } else { None } },
+            async { if soundcloud_on { Some(self.soundcloud.search(q, filter).await) } else { None } },
+        );
+        let mut problems = Vec::new();
+        let mut found: std::collections::HashMap<Service, Vec<Item>> = Default::default();
+        match spotify {
+            Some(Ok(items)) => drop(found.insert(Service::Spotify, items)),
+            Some(Err(CoreError::NotSignedIn)) => problems.push(ServiceProblem { service: Service::Spotify, message: "Connect Spotify to search it too".into() }),
+            Some(Err(e)) => problems.push(ServiceProblem { service: Service::Spotify, message: e.to_string() }),
+            None => {}
+        }
+        match soundcloud {
+            Some(Ok(items)) => drop(found.insert(Service::SoundCloud, items)),
+            Some(Err(e)) => problems.push(ServiceProblem { service: Service::SoundCloud, message: format!("{e:#}") }),
+            None => {}
+        }
+        let mut seen: std::collections::HashSet<String> = library.iter().map(|i| i.id.clone()).collect();
+        let mut items = library;
+        for s in order {
+            for i in found.remove(&s).unwrap_or_default() {
+                if seen.insert(i.id.clone()) {
+                    items.push(i);
+                }
+            }
+        }
+        SearchResults { items, problems }
+    }
+
+    /// A SoundCloud song's audio, or the same song elsewhere when SoundCloud only has it
+    /// encrypted. Called on the player's thread.
+    fn soundcloud_audio(self: &Arc<Self>, t: &Track) -> anyhow::Result<player::SoundCloudAudio> {
+        match self.soundcloud.audio(self.rt.handle(), &t.id) {
+            Ok((path, ext)) => Ok(player::SoundCloudAudio::File(path, ext)),
+            Err(e) if e.is::<soundcloud::Encrypted>() => match self.playable_elsewhere(t) {
+                Some(other) => Ok(player::SoundCloudAudio::Instead(other)),
+                None => Err(e),
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    pub(crate) fn use_soundcloud(&self, token: String, name: Option<String>) {
+        self.soundcloud.set_token(Some(token.clone()));
+        self.delegate.secret_set(SECRET_SOUNDCLOUD.into(), Some(serde_json::json!({ "token": token, "name": name }).to_string()));
+        self.account.lock().soundcloud_user = name.or(Some("SoundCloud".into()));
+        self.emit_account();
     }
 
     async fn search_spotify_inner(&self, q: &str, filter: SearchFilter) -> Result<Vec<Item>, CoreError> {

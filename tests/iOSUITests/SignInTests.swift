@@ -17,6 +17,7 @@ final class SignInTests: StreamUITestCase {
     func testSpotifySignIn() {
         let approvals = FakeSpotify.shared.approvals
         wait(el("profile")).tap()
+        wait(el("settings.service.Spotify")).tap()
         let clientId = wait(el("settings.spotify.clientId"))
         clientId.tap()
         clientId.typeText("test-client-id")

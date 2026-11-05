@@ -45,11 +45,9 @@ fn pins_show_on_home_in_order() {
     mac.core.pin(morning.clone());
     mac.core.pin(night.clone());
     assert!(mac.core.is_pinned(morning.id.clone()));
-    let mut pins = mac.pins();
-    pins.sort();
-    assert_eq!(pins, ["Morning Light", "Night Drive"]);
-    mac.core.reorder_pins(vec![night.id.clone(), morning.id.clone()]);
-    assert_eq!(mac.pins(), ["Night Drive", "Morning Light"]);
+    assert_eq!(mac.pins(), ["Morning Light", "Night Drive"]);
+    mac.core.pin(morning.clone());
+    assert_eq!(mac.pins(), ["Morning Light", "Night Drive"], "pinning twice keeps one pin");
     mac.core.unpin(night.id);
     assert_eq!(mac.pins(), ["Morning Light"]);
 }

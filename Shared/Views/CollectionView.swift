@@ -22,6 +22,10 @@ struct CollectionView: View {
     @AppStorage("playlistSort") private var sort: TrackSort = .playlist
     @AppStorage("playlistSortReversed") private var reversed = false
     @Namespace private var coverZoom
+    @Environment(\.dismiss) private var dismiss
+    #if os(macOS)
+    @State private var selection = SongSelection()
+    #endif
 
     init(item: Item) {
         self.item = item
@@ -104,6 +108,8 @@ struct CollectionView: View {
         .onAppear { model.currentPage = item.id }
         .onDisappear { if model.currentPage == item.id { model.currentPage = nil } }
         .task(id: item.id) { await load() }
+        // Your own playlists change from here, other devices and the services they're kept on.
+        .onChange(of: model.libraryVersion) { if item.isOwnPlaylist { Task { await load() } } }
         .task(id: page?.item.art ?? item.art) {
             let p = await Palette.extract(from: page?.item.art ?? item.art)
             withAnimation(.smooth(duration: 0.6)) { palette = p }
@@ -133,12 +139,16 @@ struct CollectionView: View {
                         }
                         .buttonStyle(.textLink)
                         .accessibilityIdentifier("collection.artist")
-                    } else {
+                    } else if !item.isOwnPlaylist {
+                        // Your own playlist's subtitle is its song count, which the detail has.
                         Text(shown.subtitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 if let page {
                     Text(page.detail).font(.caption).foregroundStyle(.tertiary)
+                    if item.isOwnPlaylist {
+                        PlaylistCopiesRow(id: item.id).padding(.top, 4)
+                    }
                     if item.kind == .artist, let d = page.description {
                         Text(d).font(.caption).foregroundStyle(.tertiary).lineLimit(1)
                     }
@@ -228,6 +238,7 @@ struct CollectionView: View {
             Spacer()
             // In the page, not the toolbar: the Mac window has none to show it in.
             if item.kind == .playlist { sortMenu }
+            if item.isOwnPlaylist { OwnPlaylistMenu(item: shown) { dismiss() } }
         }
         .foregroundStyle(.primary)
     }
@@ -263,27 +274,65 @@ struct CollectionView: View {
         if item.kind == .artist, !page.tracks.isEmpty {
             Text("Popular").font(.title3.weight(.bold)).padding(.horizontal, Metrics.page).padding(.bottom, 4)
         }
+        let rows = orderedRows(page)
+        let order = rows.map(\.0)
         LazyVStack(spacing: 0) {
-            let tracks = ordered(page)
-            ForEach(Array(tracks.prefix(item.kind == .artist ? 10 : .max).enumerated()), id: \.element.id) { i, t in
-                Button { model.play(tracks, at: i, from: page.item) } label: {
-                    TrackRow(track: t, showArt: item.kind != .album, number: item.kind == .album ? Int(t.trackNumber == 0 ? UInt32(i + 1) : t.trackNumber) : nil, showArtist: item.kind != .album || t.artist != page.item.subtitle)
-                        .padding(.leading, Metrics.page)
-                        .padding(.trailing, Metrics.pageTrailing)
-                        .padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("track.\(t.title)")
-                .trackMenu(t)
+            let tracks = rows.map(\.1)
+            ForEach(Array(rows.prefix(item.kind == .artist ? 10 : .max).enumerated()), id: \.element.0) { i, row in
+                let t = row.1
+                let label = TrackRow(track: t, showArt: item.kind != .album, number: item.kind == .album ? Int(t.trackNumber == 0 ? UInt32(i + 1) : t.trackNumber) : nil, showArtist: item.kind != .album || t.artist != page.item.subtitle)
+                    .padding(.leading, Metrics.page)
+                    .padding(.trailing, Metrics.pageTrailing)
+                    .padding(.vertical, 8)
+                #if os(macOS)
+                label
+                    .pickable(row.0, in: selection, order: order) { model.play(tracks, at: i, from: page.item) }
+                    .accessibilityIdentifier("track.\(t.title)")
+                    .modifier(ItemMenu(item: t.item, tracks: { menuTracks(row.0, page) }, remove: removal(row.0)))
+                #else
+                Button { model.play(tracks, at: i, from: page.item) } label: { label }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("track.\(t.title)")
+                    .trackMenu(t, remove: removal(row.0))
+                #endif
             }
+        }
+        #if os(macOS)
+        .songClipboard(selection, order: order, tracks: { keys in keys.map { page.tracks[$0] } },
+                       remove: item.isOwnPlaylist ? { keys in model.core.removeFromPlaylist(id: item.id, positions: keys.map(UInt32.init)) } : nil,
+                       paste: item.isOwnPlaylist ? { model.core.addToPlaylist(id: item.id, tracks: $0) } : nil)
+        #endif
+    }
+
+    /// A long-press on a picked song acts on every picked song.
+    private func menuTracks(_ key: Int, _ page: CollectionPage) -> [Track] {
+        #if os(macOS)
+        if selection.keys.contains(key), selection.keys.count > 1 {
+            return orderedRows(page).filter { selection.keys.contains($0.0) }.map(\.1)
+        }
+        #endif
+        return [page.tracks[key]]
+    }
+
+    /// In your own playlist: taking the song (or every picked song) out of it.
+    private func removal(_ key: Int) -> (() -> Void)? {
+        guard item.isOwnPlaylist else { return nil }
+        return {
+            var keys = [key]
+            #if os(macOS)
+            if selection.keys.contains(key) { keys = Array(selection.keys); selection.clear() }
+            #endif
+            model.core.removeFromPlaylist(id: item.id, positions: keys.map(UInt32.init))
         }
     }
 
     private var sortMenu: some View {
         Menu {
+            // Inline, as on iPhone: the Mac would otherwise tuck the choices into a submenu.
             Picker("Sort By", selection: $sort.animation(.smooth)) {
                 ForEach(TrackSort.allCases, id: \.self) { Text($0.title).tag($0) }
             }
+            .pickerStyle(.inline)
             Divider()
             Toggle("Reverse", isOn: $reversed.animation(.smooth))
         } label: {
@@ -298,8 +347,12 @@ struct CollectionView: View {
     }
 
     /// The page's songs, sorted as picked when it's a playlist.
-    private func ordered(_ page: CollectionPage) -> [Track] {
-        guard item.kind == .playlist else { return page.tracks }
+    private func ordered(_ page: CollectionPage) -> [Track] { orderedRows(page).map(\.1) }
+
+    /// The songs as shown, each with its place in the page as the core gave it.
+    private func orderedRows(_ page: CollectionPage) -> [(Int, Track)] {
+        let rows = Array(page.tracks.enumerated()).map { ($0.offset, $0.element) }
+        guard item.kind == .playlist else { return rows }
         let less: (Track, Track) -> Bool = switch sort {
         case .playlist: { _, _ in false }
         case .title: { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
@@ -307,7 +360,7 @@ struct CollectionView: View {
         case .album: { ($0.album, $0.discNumber, $0.trackNumber) < ($1.album, $1.discNumber, $1.trackNumber) }
         case .length: { $0.durationMs < $1.durationMs }
         }
-        let sorted = sort == .playlist ? page.tracks : page.tracks.sorted(by: less)
+        let sorted = sort == .playlist ? rows : rows.sorted { less($0.1, $1.1) }
         return reversed ? sorted.reversed() : sorted
     }
 

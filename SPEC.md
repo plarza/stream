@@ -20,10 +20,13 @@ SwiftUI app (iOS + macOS, one shared codebase)
 Rust core  (static lib, packed as StreamCore.xcframework)
   ├─ spotify   librespot 0.8 session + Web API client + PKCE sign-in
   ├─ library   SQLite (FTS5) index of local files + cached Spotify library
-  ├─ engine    decoding (symphonia / librespot), queue, gapless, crossfade, normalization
+  ├─ engine    decoding (symphonia / librespot), queue, gapless, normalization
   ├─ lyrics    Spotify synced lyrics + embedded lyrics + LRCLIB, "best sync wins"
   ├─ scrobble  Last.fm (Spotify and local files), offline queue
-  └─ node      your own files on the Stream node, streamed or downloaded; aza sync items
+  ├─ soundcloud  search, HLS playback, likes and playlists through api-v2
+  ├─ playlists your own playlists, kept with aza and copied to Spotify and SoundCloud
+  ├─ node      your own files on the Stream node, streamed or downloaded
+  └─ sync      aza sync items: settings, pins, what's playing, History
   │  C ABI render callback (lock-free ring buffer)
   ▼
 AVAudioEngine (AVAudioSourceNode) → system output, Now Playing, AirPlay
@@ -33,7 +36,7 @@ AVAudioEngine (AVAudioSourceNode) → system output, Now Playing, AirPlay
   remote commands, App Intents (Siri/Shortcuts), Handoff (NSUserActivity), the Mac menu bar
   item, and sign-in browser sheets.
 - **Rust** owns everything else. There is one audio pipeline for every source, so gapless
-  playback, crossfade and loudness normalization behave the same for Spotify and local files.
+  playback and loudness normalization behave the same for Spotify and local files.
 - Audio crosses the FFI as interleaved `f32` frames pulled by the render callback. No
   allocation and no locks on the audio thread.
 - **Memory:** artwork goes through a size-bounded on-disk cache and is downsampled with ImageIO
@@ -74,6 +77,53 @@ Rules:
 - Heart = Spotify Like (Liked Songs). Hearting a local track sets a local "liked" flag so it
   shows up in Liked Songs.
 
+## SoundCloud
+
+Through soundcloud.com's own web player API (api-v2), with no developer app (core `soundcloud.rs`):
+
+- The web player's public client ID is read from soundcloud.com's scripts and found again when
+  SoundCloud turns it over (a 401/403). Search and playback need nothing else.
+- Signing in (Settings → Services → SoundCloud) opens soundcloud.com in a private web sheet and
+  takes the web player's `oauth_token` cookie. It's checked against `/me`, kept in the Keychain and
+  synced in `settings`, so other devices are signed in too. It brings your likes (Liked Songs)
+  and playlists, and lets Stream keep playlists there.
+- Audio is HLS: AAC 160 in fragmented MP4 (or MP3), fetched whole into a 1 GB cache and played
+  like a file. Songs SoundCloud only offers encrypted (most major-label releases) play from the
+  same song found elsewhere (your files, then Spotify, by ISRC or tags) instead.
+
+## Services
+
+Settings → Services lists your music (files and Uploads), Spotify and SoundCloud. Drag to set the
+order: search shows what's in your library first, then each service's results in this order, and
+a song in one of your playlists that's on more than one plays from the first. A switch turns a
+service off without signing out: it leaves search, Library, Home and playback, and Spotify drops
+its playback connection. The order and switches are synced `settings` (`services`, `servicesOff`).
+
+## Your playlists
+
+New Playlist (Library → Playlists +, or Add to Playlist in any long-press menu) makes a playlist
+kept with aza: the `playlists/<id>` item, merged three ways like `pins` with each song its own
+entry, and written empty when deleted. Each one can also be kept on Spotify and SoundCloud
+(core `playlists.rs`, `matching.rs`):
+
+- A song remembers where it was found on each service and a file's hash, so finding it happens
+  once, on whichever device gets there first. Found means the same ISRC, or the title, first
+  artist and length agreeing, with the same version (a remix, live take or edit is another song).
+  A song not found is looked for again after a week.
+- Stream writes the whole list to its copy there (private on both). What was added or taken out
+  there since Stream last wrote it comes back first. A copy deleted there stops being kept; turning
+  a service off for the playlist leaves the copy there as yours.
+- **Import from Link** (Library → Playlists +) takes a Spotify playlist or album link
+  (`open.spotify.com/…`, `spotify:…`) or a SoundCloud set (`soundcloud.com/…/sets/…`, short
+  `on.soundcloud.com` links too) and makes it one of your playlists, with its name and songs.
+  `network-aza-stream://newplaylist?import=<link>` does the same.
+- **Mac:** song lists pick like Finder's: click, ⇧-click a run, ⌘-click one more, ⌘A all; double-click
+  plays. ⌘C copies the picked songs (as Spotify links or "title — artist" elsewhere), ⌘X cuts them out
+  of your own playlist, ⌘V pastes copied songs into one, and Delete takes them out. A right-click
+  on a picked song acts on all of them. Playlist sort choices show inline in the sort menu, as on iPhone.
+- Copies don't show again in Library. The playlist's page shows where it's kept (aza, Spotify
+  12/14…) and its … menu renames, deletes, and picks the services.
+
 ## Local files
 
 - **Mac:** watched folders (FSEvents), linked in place and never copied. Formats: FLAC, ALAC,
@@ -96,17 +146,22 @@ Rules:
 Stream signs in with aza (app ID `stream.aza.network`, scopes `sign-in`, `read`, `write`). The
 iPhone approves in the aza app on the same phone; the Mac shows a QR code that the aza app scans.
 
-- **aza sync data** (encrypted on your aza home node): `settings` holds the Spotify client ID and
-  the Last.fm API key and sign-in, so you enter them once. Spotify's own sign-in stays per
-  device: its tokens rotate and are tied to the device that asked. `songs/<sha256>` is one item
+- **aza sync data** (encrypted on your aza home node): `settings` holds the Spotify client ID,
+  the Last.fm API key and sign-in, the playback switches (normalization, autoplay, scrobbling)
+  and the apps' own preferences (theme, accent, the Now Playing visualizer, how playlists sort),
+  so you set them once. A switch or preference is there only when it isn't the default.
+  Spotify's own sign-in stays per device: its tokens rotate and are tied to the device that
+  asked. So do volume, the Mac's zoom and its music folders. `songs/<sha256>` is one item
   per music file: its tags, path, size, ReplayGain and cover hash, written by the device that has
   the file and written empty when the file goes.
 - **History** is synced as `history/<device>/<day>` items, one per device per UTC day, written only
   by that device. A song counts once it's 10 seconds in (past halfway, for a song shorter than 10 seconds). Files are
   matched across devices by their hash.
-- **Pins** are the `pins` item: every pin in order, a file's hash for a pinned song that's a file.
-  Each device keeps its own change over a newer one it hasn't seen yet and writes it next; the
-  first time a device syncs, its pins join the ones already synced.
+- **Pins** are the `pins` item: every pin in order. A pinned song that's a file goes by its hash.
+- `settings` and `pins` are merged three ways: what a device changed since the version it last
+  read or wrote (added, changed, taken out) is kept, the rest comes from the newer version, and
+  where both changed the same entry the newer version wins. The first time a device syncs, its
+  pins join the ones already synced and it takes your settings over its defaults.
 - **What's playing** is the `playing` item: the song, its position, when that was, and whether it
   was playing. Each device writes it when it changes song, plays, pauses or seeks. A device that
   isn't playing takes up a newer one, paused where the other device is (or would be by now).
@@ -166,6 +221,7 @@ bottom accessory.
 | Lyrics | `04` **A**: left-aligned, word fill on the active line, distance blur on the others, tap a line to seek |
 | Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, like, pin). Playlists sort from the toolbar (playlist order, title, artist, album, length, reversed), the same for every playlist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |
 | Queue | `06` **A** without the toggle row: "Playing Next" + "Continue from …" |
+| Settings → Services | `09` **A** One Services list: a reorderable row per service with its status and switch, each opening its own page |
 | Search | `07` **C**: one relevance-ranked list across library + Spotify, type chips (All, Songs, Albums, Artists, Playlists); the empty state shows recent searches |
 
 **Mac**

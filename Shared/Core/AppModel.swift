@@ -22,10 +22,16 @@ final class AppModel {
     var libraryVersion = 0
     /// Bumped whenever History gains a play, here or from another device.
     var historyVersion = 0
+    /// Bumped whenever the playback settings change, here or from another device.
+    var settingsVersion = 0
     var toast: String?
     var showNowPlaying = false
     /// iPhone's Settings sheet (the account button, and prompts to connect Spotify).
     var showSettings = false
+    /// "New Playlist" was asked for, with the songs to start it with.
+    var newPlaylist: NewPlaylistRequest?
+    /// A service's own page to open in Settings (a deep link).
+    var settingsPage: Service?
     var nowPlayingMode: NowPlayingMode = .artwork
     /// Colors derived from the current artwork (backgrounds, Now Playing).
     var accent: Palette = .fallback
@@ -81,7 +87,10 @@ final class AppModel {
                                 spotifyAccountsUrl: Self.isTesting ? Self.argument("-spotifyAccounts") : nil,
                                 spotifyApiUrl: Self.isTesting ? Self.argument("-spotifyApi") : nil,
                                 // Tests and screenshots: lyrics come from the songs' own .lrc files, never the internet.
-                                lyricsUrl: Self.isTesting ? "http://127.0.0.1:9" : nil)
+                                lyricsUrl: Self.isTesting ? "http://127.0.0.1:9" : nil,
+                                // Tests never reach SoundCloud: nothing listens here.
+                                soundcloudUrl: Self.isTesting ? "http://127.0.0.1:9" : nil,
+                                soundcloudApiUrl: Self.isTesting ? "http://127.0.0.1:9" : nil)
         // A failure here means the disk is unusable; nothing sensible to show.
         core = try! StreamCore(config: config, delegate: bridge)
         player = core.playerState()
@@ -102,6 +111,7 @@ final class AppModel {
         audio.onRateChange = { [weak self] rate in self?.core.setOutputRate(rate: rate) }
         audio.start()
         nowPlaying.attach(model: self)
+        if !Self.isTesting { SyncedDefaults.start(core) }
         handleLaunchArguments()
     }
 
@@ -117,6 +127,11 @@ final class AppModel {
             h.userInfo = handoffInfo()
             h.needsSave = true
         }
+    }
+
+    func settingsChanged() {
+        settingsVersion &+= 1
+        if !Self.isTesting { SyncedDefaults.take(core) }
     }
 
     func libraryChanged() {
@@ -335,7 +350,7 @@ final class AppModel {
             resetRequested &+= 1
         case "play":
             guard let id = value("id") else { return }
-            let item = Item(id: id, kind: Self.kind(of: id), source: id.hasPrefix("local:") ? .local : .spotify, title: "", subtitle: "", art: nil, downloaded: false)
+            let item = Item(id: id, kind: Self.kind(of: id), source: Self.source(of: id), title: "", subtitle: "", art: nil, downloaded: false)
             let before = core.playerState().queueVersion
             if let title = value("track") {
                 // An album or playlist from one of its songs.
@@ -349,7 +364,7 @@ final class AppModel {
             await until { let p = self.core.playerState(); return p.queueVersion != before && p.status == .playing }
         case "open":
             guard let id = value("id") else { return }
-            pendingNavigation = Item(id: id, kind: Self.kind(of: id), source: id.hasPrefix("local:") ? .local : .spotify, title: "", subtitle: "", art: nil, downloaded: false)
+            pendingNavigation = Item(id: id, kind: Self.kind(of: id), source: Self.source(of: id), title: "", subtitle: "", art: nil, downloaded: false)
             openRequested &+= 1
         case "pin":
             guard let id = value("id") else { return }
@@ -362,6 +377,32 @@ final class AppModel {
         case "search":
             searchRequest = value("q") ?? ""
             showNowPlaying = false
+        case "settings":
+            // `page=Spotify` opens that service's own page.
+            settingsPage = [Service.files, .spotify, .soundCloud].first { $0.title == value("page") }
+            showNowPlaying = false
+            showSettings = true
+        case "newplaylist" where value("import") != nil:
+            // `import=<link>` imports it straight away; `import=` alone asks for the link.
+            guard let link = value("import"), !link.isEmpty else {
+                newPlaylist = NewPlaylistRequest(importing: true)
+                return
+            }
+            do {
+                pendingNavigation = try await core.importPlaylist(link: link, copies: [])
+                openRequested &+= 1
+            } catch { show(Self.message(error)) }
+        case "newplaylist":
+            // With a name, made straight away (with an album's or playlist's songs from `from`) and opened.
+            let from = value("from")
+            let tracks = from == nil ? [] : ((try? await core.collection(id: from!))?.tracks ?? [])
+            guard let name = value("name") else {
+                newPlaylist = NewPlaylistRequest(tracks: tracks)
+                return
+            }
+            let copies = (value("copies") ?? "").split(separator: ",").compactMap { c in [Service.spotify, .soundCloud].first { $0.title == c } }
+            pendingNavigation = core.createPlaylist(name: name, copies: copies, tracks: tracks)
+            openRequested &+= 1
         case "nowplaying":
             nowPlayingMode = switch value("mode") { case "lyrics": .lyrics; case "queue": .queue; default: .artwork }
             showNowPlaying = true
@@ -409,6 +450,12 @@ final class AppModel {
 
     /// Bumped when UI tests reset the app between tests.
     var resetRequested = 0
+
+    static func source(of id: String) -> Source {
+        if id.hasPrefix("local:") || id.hasPrefix("stream:") { return .local }
+        if id.hasPrefix("soundcloud:") { return .soundCloud }
+        return .spotify
+    }
 
     static func kind(of id: String) -> ItemKind {
         if id.contains(":album:") { return .album }
@@ -497,5 +544,9 @@ final class CoreBridge: CoreDelegate, @unchecked Sendable {
 
     func syncNeeded() {
         Task { @MainActor in StreamSync.shared.run() }
+    }
+
+    func settingsChanged() {
+        Task { @MainActor in self.model?.settingsChanged() }
     }
 }

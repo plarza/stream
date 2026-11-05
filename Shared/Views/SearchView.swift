@@ -23,41 +23,34 @@ extension SearchFilter: Identifiable, CaseIterable {
 final class SearchModel {
     var query = ""
     var filter: SearchFilter = .all
+    /// Instant results from what's stored here.
     var library: [Item] = []
-    var spotify: [Item] = []
+    /// Everything, from every service that's on, in your order (Settings → Services).
+    var everything: [Item]?
     var loading = false
-    /// Why Spotify gave nothing, when it failed rather than found nothing.
-    var spotifyError: String?
+    /// A service that couldn't answer, and why, rather than looking like it found nothing.
+    var problem: ServiceProblem?
     private var task: Task<Void, Never>?
 
-    /// Library hits first (instant), then Spotify's, without duplicates.
-    var results: [Item] {
-        let ids = Set(library.map(\.id))
-        return library + spotify.filter { !ids.contains($0.id) }
-    }
+    var results: [Item] { everything ?? library }
 
     func run(_ model: AppModel) {
         task?.cancel()
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else {
-            library = []; spotify = []; loading = false; spotifyError = nil
+            library = []; everything = nil; loading = false; problem = nil
             return
         }
         library = model.core.searchLibrary(query: q, filter: filter)
+        everything = nil
         let filter = self.filter
         task = Task {
             try? await Task.sleep(for: .milliseconds(220))
             guard !Task.isCancelled else { return }
             loading = true
-            var found: [Item] = []
-            var failure: String?
-            do { found = try await model.core.searchSpotify(query: q, filter: filter) } catch CoreError.NotSignedIn {
-                failure = "Connect Spotify to search it too"
-            } catch {
-                failure = AppModel.message(error)
-            }
+            let found = await model.core.search(query: q, filter: filter)
             guard !Task.isCancelled else { return }
-            withAnimation(.smooth) { spotify = found; spotifyError = failure; loading = false }
+            withAnimation(.smooth) { everything = found.items; problem = found.problems.first; loading = false }
         }
     }
 }
@@ -96,8 +89,8 @@ struct SearchResultsView: View {
                     }
                     if search.loading {
                         ProgressView().controlSize(.small).frame(maxWidth: .infinity).padding(.vertical, 12)
-                    } else if let e = search.spotifyError {
-                        spotifyFailure(e).padding(.horizontal, 10).padding(.vertical, 12)
+                    } else if let p = search.problem {
+                        failure(p).padding(.horizontal, 10).padding(.vertical, 12)
                     }
                 }
             }
@@ -121,8 +114,8 @@ struct SearchResultsView: View {
                 }
                 if search.loading {
                     HStack { Spacer(); ProgressView(); Spacer() }.listRowSeparator(.hidden)
-                } else if let e = search.spotifyError {
-                    spotifyFailure(e).listRowSeparator(.hidden)
+                } else if let p = search.problem {
+                    failure(p).listRowSeparator(.hidden)
                 }
             }
         }
@@ -158,7 +151,7 @@ struct SearchResultsView: View {
     @ViewBuilder
     private var recentSection: some View {
         if recents.isEmpty {
-            ContentUnavailableView("Search Spotify and your Uploads", systemImage: "magnifyingglass")
+            ContentUnavailableView("Search your music, Spotify and SoundCloud", systemImage: "magnifyingglass")
                 .listRowSeparator(.hidden)
         } else {
             #if os(macOS)
@@ -203,13 +196,13 @@ struct SearchResultsView: View {
         }
     }
 
-    /// Spotify's half of the results didn't come: say why, rather than looking like it found nothing.
-    private func spotifyFailure(_ message: String) -> some View {
+    /// A service's results didn't come: say why, rather than looking like it found nothing.
+    private func failure(_ problem: ServiceProblem) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.circle")
-            Text(message)
+            Text(problem.message)
             #if os(iOS)
-            if !model.account.spotifyWeb {
+            if problem.service == .spotify, !model.account.spotifyWeb {
                 Spacer(minLength: 0)
                 Button("Connect") { model.showSettings = true }
                     .font(.subheadline.weight(.semibold))
@@ -220,7 +213,7 @@ struct SearchResultsView: View {
         .font(.subheadline)
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("search.spotifyError")
+        .accessibilityIdentifier("search.problem")
     }
 
     private var clearButton: some View {

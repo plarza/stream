@@ -204,6 +204,8 @@ final class BarMotion {
 struct ItemMenu: ViewModifier {
     let item: Item
     var tracks: (() async -> [Track])?
+    /// In one of your playlists: takes it out.
+    var remove: (() -> Void)?
     @Environment(AppModel.self) private var model
 
     func body(content: Content) -> some View {
@@ -218,6 +220,13 @@ struct ItemMenu: ViewModifier {
                 .accessibilityIdentifier("menu.playNext")
             Button { Task { model.playLater(await resolve()) } } label: { Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward") }
                 .accessibilityIdentifier("menu.playLater")
+            if item.kind != .artist, item.kind != .show {
+                AddToPlaylistMenu(tracks: resolve)
+            }
+            if let remove {
+                Button(role: .destructive, action: remove) { Label("Remove from Playlist", systemImage: "minus.circle") }
+                    .accessibilityIdentifier("menu.removeFromPlaylist")
+            }
             if item.kind == .track, let t = model.track(item.id) {
                 Divider()
                 if t.artists.count > 1 {
@@ -270,8 +279,8 @@ extension View {
         modifier(ItemMenu(item: item, tracks: tracks))
     }
 
-    func trackMenu(_ track: Track) -> some View {
-        modifier(ItemMenu(item: track.item, tracks: { [track] }))
+    func trackMenu(_ track: Track, remove: (() -> Void)? = nil) -> some View {
+        modifier(ItemMenu(item: track.item, tracks: { [track] }, remove: remove))
     }
 }
 

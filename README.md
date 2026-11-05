@@ -20,7 +20,11 @@ Because it uses librespot, Stream isn't for the App Store. Install it with `scri
 
 - **One library.** Spotify and your own files side by side in Playlists, Artists, Albums, Songs, Uploads and Downloaded, with Made For You, Discover Weekly and the Daily Mixes in Playlists.
 - **Home** is a grid of pins above your recents. Long-press any album, song, artist or playlist to pin it.
-- **One search** across your library and Spotify, ranked together, with type chips and recent searches.
+- **One search** across your library, Spotify and SoundCloud, in the order you set in Settings → Services, with type chips and recent searches.
+- **SoundCloud** with no developer account: search and play straight away; sign in for your likes and playlists. Songs a label only offers encrypted play from Spotify or your files instead.
+- **Your own playlists**, kept with aza on every device, and if you like on Spotify and SoundCloud too: the same songs on each, found by ISRC or by title, artist and length. Changes made there come back.
+- **Import a playlist from a link**: paste a Spotify or SoundCloud playlist or album link and it becomes one of your playlists.
+- **Services** in Settings: drag to set the order search and playback try them in, and switch any off without signing out.
 - **Now Playing** is tinted from the album art and shows the format and quality, like FLAC 24/96 or OGG 320. Behind it, Aurora melts the cover's colours into a mesh that moves with the music; the waveform button beside AirPlay turns it off.
 - **Synced lyrics**, word by word where the source has it. Tap a line to seek.
 - **A queue** of Play Next and Play Later above the rest of the album or playlist.
@@ -33,15 +37,15 @@ Because it uses librespot, Stream isn't for the App Store. Install it with `scri
 - **Last.fm scrobbling** for Spotify and your own files alike.
 - Lock Screen, Control Center, AirPlay, and Siri and Shortcuts.
 
-On the Mac there's a floating glass sidebar and player, ⌘K to play or go to anything, and a menu bar mini player that keeps the music going after you close the window. Its music folders go up to the Stream node, so the iPhone can stream them or download them for offline.
+On the Mac there's a floating glass sidebar and player, ⌘K to play or go to anything, songs picked like Finder's (⇧-click, ⌘-click, ⌘A) and copied, cut and pasted between playlists, and a menu bar mini player that keeps the music going after you close the window. Its music folders go up to the Stream node, so the iPhone can stream them or download them for offline.
 
 ## Your data
 
 Everything stays on your devices unless you sign in with aza. The library is a SQLite database in the app's container, and your Spotify and Last.fm credentials are in the Keychain, on that device only. Stream reads your music folders in place and never copies or changes them.
 
-Signed in with aza, your settings, history and the list of your own songs sync through aza sync, and the files themselves go to the Stream node at `stream.aza.network`. They are stored by hash, never transcoded, and stream while they play.
+Signed in with aza, your settings, pins, history and the list of your own songs sync through aza sync, and the files themselves go to the Stream node at `stream.aza.network`. They are stored by hash, never transcoded, and stream while they play.
 
-Stream talks to Spotify, [LRCLIB](https://lrclib.net) for lyrics, Last.fm if you sign in, and with aza your aza home node and the Stream node. It asks for no permissions.
+Stream talks to Spotify, SoundCloud, [LRCLIB](https://lrclib.net) for lyrics, Last.fm if you sign in, and with aza your aza home node and the Stream node. It asks for no permissions.
 
 ## Building
 

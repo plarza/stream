@@ -6,6 +6,8 @@ use std::time::{Duration, Instant};
 use parking_lot::Mutex;
 use stream_core::*;
 
+use crate::fake::Fake;
+
 /// Waits until `f` is true, checking every 10ms; panics with `what` after `secs`.
 pub fn until(secs: u64, what: &str, mut f: impl FnMut() -> bool) {
     let end = Instant::now() + Duration::from_secs(secs);
@@ -19,6 +21,16 @@ pub fn until(secs: u64, what: &str, mut f: impl FnMut() -> bool) {
 pub struct Events {
     secrets: Mutex<HashMap<String, String>>,
     pub messages: Mutex<Vec<String>>,
+}
+
+impl Events {
+    pub fn secret(&self, key: &str) -> Option<String> {
+        self.secrets.lock().get(key).cloned()
+    }
+
+    pub fn set_secret(&self, key: &str, value: &str) {
+        self.secrets.lock().insert(key.into(), value.into());
+    }
 }
 
 impl CoreDelegate for Events {
@@ -41,6 +53,7 @@ impl CoreDelegate for Events {
     }
     fn sync_needed(&self) {}
     fn history_changed(&self) {}
+    fn settings_changed(&self) {}
 }
 
 /// One device running Stream: a core with its own data, and the fixture library scanned.
@@ -66,21 +79,44 @@ impl Device {
     pub fn empty(is_phone: bool) -> Device {
         let dir = tempfile::tempdir().unwrap();
         let events = Arc::new(Events::default());
-        let core = StreamCore::new(
+        let core = Device::open(&dir, events.clone(), is_phone, None);
+        Device { core, events, _dir: dir }
+    }
+
+    /// A Mac with the fixture library, signed in to Spotify (the fake one at `fake`), and
+    /// able to reach SoundCloud there too.
+    pub fn online(fake: &Fake) -> Device {
+        let dir = tempfile::tempdir().unwrap();
+        let events = Arc::new(Events::default());
+        events.set_secret("spotify.web", r#"{"access_token":"token","refresh_token":null,"expires_at":4000000000}"#);
+        // The Spotify app's client ID is in the database: set it, then start again as at launch.
+        Device::open(&dir, events.clone(), false, Some(&fake.url)).set_spotify_client_id("fakeclientid".into());
+        let core = Device::open(&dir, events.clone(), false, Some(&fake.url));
+        let d = Device { core, events, _dir: dir };
+        until(5, "Spotify to sign in", || d.core.account().spotify_user.is_some());
+        d.core.clone().set_music_folders(vec![library()]);
+        until(10, "the library scan", || d.core.scan_progress().finished && !d.albums().is_empty());
+        d
+    }
+
+    fn open(dir: &tempfile::TempDir, events: Arc<Events>, is_phone: bool, fake: Option<&str>) -> Arc<StreamCore> {
+        // Without a fake, nothing listens: anything that reaches for the internet fails fast.
+        let at = |path: &str| Some(fake.map_or("http://127.0.0.1:9".to_string(), |f| format!("{f}{path}")));
+        StreamCore::new(
             CoreConfig {
                 data_dir: dir.path().join("data").display().to_string(),
                 cache_dir: dir.path().join("cache").display().to_string(),
                 music_dir: None,
                 is_phone,
-                // Nothing listens here: anything that reaches for Spotify fails fast.
-                spotify_accounts_url: Some("http://127.0.0.1:9".into()),
-                spotify_api_url: Some("http://127.0.0.1:9".into()),
+                spotify_accounts_url: at("/spotify-accounts"),
+                spotify_api_url: at("/spotify"),
                 lyrics_url: Some("http://127.0.0.1:9".into()),
+                soundcloud_url: at("/sc-web"),
+                soundcloud_api_url: at("/sc-api"),
             },
-            events.clone(),
+            events,
         )
-        .unwrap();
-        Device { core, events, _dir: dir }
+        .unwrap()
     }
 
     pub fn albums(&self) -> Vec<Item> {
