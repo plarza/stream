@@ -36,7 +36,8 @@ fn a_playlist_is_on_your_other_devices() {
     b.core.clone().add_to_playlist(list.id.clone(), vec![song(&b, "Kettle")]);
     b.core.clone().rename_playlist(list.id.clone(), "Later".into());
     b.sync_to(&a);
-    assert_eq!(titles(&a, &list.id), ["Sunrise", "Kettle"]);
+    // This Mac finds Kettle among its own files by its hash, which may still be under way.
+    until(10, "this Mac to find the song the other added", || titles(&a, &list.id) == ["Sunrise", "Kettle"]);
     assert_eq!(a.core.own_playlists()[0].title, "Later");
 
     // Deleted here, it goes there too.
