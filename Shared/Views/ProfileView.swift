@@ -112,7 +112,7 @@ struct ProfileView: View {
             }
         } footer: {
             if !a.spotifyWeb {
-                Text("Create an app at developer.spotify.com with redirect URI http://127.0.0.1:8989/login and the Web API enabled, then paste its Client ID. Signing in takes two approvals: your account, then playback. Playback needs Premium.")
+                Text("developer.spotify.com app · redirect http://127.0.0.1:8989/login · Web API on · Premium for playback")
             }
         }
     }
@@ -199,8 +199,6 @@ struct ProfileView: View {
                 }
                 .disabled(!model.core.hasLastfmApi() && (lastfmKey.isEmpty || lastfmSecret.isEmpty))
             }
-        } footer: {
-            Text("Spotify songs and your own files both scrobble from here. Spotify’s own Last.fm connection never sees what Stream plays.")
         }
     }
 
@@ -209,7 +207,7 @@ struct ProfileView: View {
     private var nodeSection: some View {
         SettingsCard("Stream node") {
             if aza.client == nil {
-                Text("Sign in with aza to keep your music on the Stream node and play it on all your devices.")
+                Text("Sign in with aza to use it")
                     .foregroundStyle(.secondary)
             } else if let n = node, n.connected || n.quota > 0 {
                 if n.quota > 0 {
@@ -242,12 +240,6 @@ struct ProfileView: View {
                     Text("Connecting").foregroundStyle(.secondary)
                 }
             }
-        } footer: {
-            #if os(macOS)
-            Text("Your music folders go up to the Stream node, so your iPhone can stream them or download albums and playlists to play offline.")
-            #else
-            Text("Songs from your Mac stream from the Stream node. Download an album or playlist to play it offline.")
-            #endif
         }
     }
 

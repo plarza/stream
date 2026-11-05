@@ -81,8 +81,6 @@ struct HomeView: View {
     private var empty: some View {
         ContentUnavailableView {
             Label("Nothing pinned yet", systemImage: "pin")
-        } description: {
-            Text("Long-press an album, song, artist or playlist and choose Pin.")
         } actions: {
             #if os(iOS)
             if !model.account.spotifyWeb {

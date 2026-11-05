@@ -30,8 +30,7 @@ struct HistoryView: View {
             .navigationTitle("History")
             .overlay {
                 if plays.isEmpty && exhausted {
-                    ContentUnavailableView("Nothing played yet", systemImage: "clock",
-                                           description: Text("Songs you play on any of your devices show up here."))
+                    ContentUnavailableView("Nothing played yet", systemImage: "clock")
                 }
             }
             .onAppear { if loadedVersion != model.historyVersion { reload() } }
