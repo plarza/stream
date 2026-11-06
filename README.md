@@ -62,7 +62,7 @@ scripts/build-core.sh
 xcodegen generate && open Stream.xcodeproj
 ```
 
-To install on this Mac and a connected iPhone, run `scripts/deploy.sh` (`DEVICE=<udid>` picks another iPhone). `scripts/testflight.sh` uploads a build to TestFlight.
+To install on this Mac and a connected iPhone, run `scripts/deploy.sh` (`DEVICE=<udid>` picks another iPhone). `scripts/testflight.sh` uploads a build to TestFlight, and `scripts/release-mac.sh` publishes a signed, notarized Mac build as a [GitHub release](https://github.com/plarza/stream/releases).
 
 To sign in to Spotify, make an app at [developer.spotify.com](https://developer.spotify.com/dashboard) with the redirect URI `http://127.0.0.1:8989/login` and paste its Client ID in Profile. You approve twice in the sign-in sheet: once for your account, through your app, and once for playback.
 
