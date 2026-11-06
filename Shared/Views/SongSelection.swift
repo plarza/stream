@@ -3,8 +3,8 @@ import AppKit
 import StreamBindings
 import SwiftUI
 
-/// The songs picked in a Mac list, as Finder and Music pick them: click picks one, ⇧-click a
-/// run from the last one picked, ⌘-click adds or takes one away. Rows are keyed by their place
+/// The songs picked in a Mac list: click picks one and plays it, ⇧-click picks a run from the
+/// last one picked without playing, ⌘-click adds or takes one away. Rows are keyed by their place
 /// in the page as the core gave it (a playlist can hold a song twice).
 @MainActor
 @Observable
@@ -12,16 +12,25 @@ final class SongSelection {
     var keys: Set<Int> = []
     private var anchor: Int?
 
-    func click(_ key: Int, in order: [Int]) {
+    /// Picks for a click on `key`; true when the click should play it (no ⇧ or ⌘ held).
+    func click(_ key: Int, in order: [Int]) -> Bool {
         let flags = NSEvent.modifierFlags
-        if flags.contains(.shift), let a = anchor, let from = order.firstIndex(of: a), let to = order.firstIndex(of: key) {
-            keys = Set(order[min(from, to)...max(from, to)])
+        if flags.contains(.shift) {
+            if let a = anchor, let from = order.firstIndex(of: a), let to = order.firstIndex(of: key) {
+                keys = Set(order[min(from, to)...max(from, to)])
+            } else {
+                keys = [key]
+                anchor = key
+            }
+            return false
         } else if flags.contains(.command) {
             if keys.contains(key) { keys.remove(key) } else { keys.insert(key) }
             anchor = key
+            return false
         } else {
             keys = [key]
             anchor = key
+            return true
         }
     }
 
@@ -106,7 +115,7 @@ struct SongClipboard: ViewModifier {
 }
 
 extension View {
-    /// One row: picked on click (with ⇧ and ⌘), played on double-click, tinted while picked.
+    /// One row: a click picks and plays it, ⇧- and ⌘-click only pick; tinted while picked.
     func pickable(_ key: Int, in selection: SongSelection, order: [Int], play: @escaping () -> Void) -> some View {
         self
             .background {
@@ -115,8 +124,7 @@ extension View {
                     .padding(.horizontal, 8)
             }
             .contentShape(Rectangle())
-            .onTapGesture { selection.click(key, in: order) }
-            .simultaneousGesture(TapGesture(count: 2).onEnded(play))
+            .onTapGesture { if selection.click(key, in: order) { play() } }
     }
 
     func songClipboard(_ selection: SongSelection, order: [Int], tracks: @escaping ([Int]) -> [Track],

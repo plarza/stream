@@ -126,8 +126,8 @@ entry, and written empty when deleted. Each one can also be kept on Spotify and 
   (`open.spotify.com/…`, `spotify:…`) or a SoundCloud set (`soundcloud.com/…/sets/…`, short
   `on.soundcloud.com` links too) and makes it one of your playlists, with its name and songs.
   `network-aza-stream://newplaylist?import=<link>` does the same.
-- **Mac:** song lists pick like Finder's: click, ⇧-click a run, ⌘-click one more, ⌘A all; double-click
-  plays. ⌘C copies the picked songs (as Spotify links or "title — artist" elsewhere), ⌘X cuts them out
+- **Mac:** a click on a song plays it (and picks it); ⇧-click picks a run without playing, ⌘-click
+  picks one more, ⌘A all. ⌘C copies the picked songs (as Spotify links or "title — artist" elsewhere), ⌘X cuts them out
   of your own playlist, ⌘V pastes copied songs into one, and Delete takes them out. A right-click
   on a picked song acts on all of them. Playlist sort choices show inline in the sort menu, as on iPhone.
 - Copies don't show again in Library. The playlist's page shows where it's kept (aza, Spotify
