@@ -61,6 +61,37 @@ pub trait CoreDelegate: Send + Sync {
     fn settings_changed(&self);
 }
 
+/// Where the core's warnings go: the system log, so they can be read off a device later.
+#[uniffi::export(with_foreign)]
+pub trait LogSink: Send + Sync {
+    fn log(&self, level: String, line: String);
+}
+
+struct Logger(Arc<dyn LogSink>);
+
+impl log::Log for Logger {
+    fn enabled(&self, m: &log::Metadata) -> bool {
+        // librespot's own warnings say why a session went; its info is chatter.
+        m.level() <= log::Level::Warn
+    }
+
+    fn log(&self, r: &log::Record) {
+        if self.enabled(r.metadata()) {
+            self.0.log(r.level().as_str().to_lowercase(), format!("{}: {}", r.target(), r.args()));
+        }
+    }
+
+    fn flush(&self) {}
+}
+
+/// Sends the core's warnings and errors (and librespot's) to `sink`. Once per process.
+#[uniffi::export]
+pub fn set_log_sink(sink: Arc<dyn LogSink>) {
+    if log::set_logger(Box::leak(Box::new(Logger(sink)))).is_ok() {
+        log::set_max_level(log::LevelFilter::Warn);
+    }
+}
+
 #[derive(uniffi::Record)]
 pub struct CoreConfig {
     /// Application Support: database, settings.
@@ -611,8 +642,8 @@ impl StreamCore {
             vec![]
         };
         let mut found: Vec<Item> = own.into_iter().chain(self.db.search(&query, filter, 40)).filter(|i| on.is_on(Service::of(i.source))).collect();
-        // In service order, keeping each service's own ranking.
-        let order = on.services_on();
+        // Your playlists, then your files, Spotify's and SoundCloud's, each in its own ranking.
+        let order = Service::all();
         found.sort_by_key(|i| if i.id.starts_with(playlists::PREFIX) { 0 } else { 1 + order.iter().position(|s| *s == Service::of(i.source)).unwrap_or(9) });
         found
     }
@@ -956,7 +987,7 @@ impl StreamCore {
         self.delegate.account_changed(self.account.lock().clone());
     }
 
-    fn on_engine(&self, ev: EngineEvent) {
+    fn on_engine(self: &Arc<Self>, ev: EngineEvent) {
         match ev {
             EngineEvent::Changed => {
                 self.engine.persist();
@@ -972,7 +1003,11 @@ impl StreamCore {
                 self.now_playing(t)
             }
             EngineEvent::Heard { track, started_at } => self.scrobble(track, started_at),
-            EngineEvent::Error(m) => self.delegate.message(m),
+            EngineEvent::SpotifyDropped => self.clone().reconnect_playback(),
+            EngineEvent::Error(m) => {
+                log::error!("{m}");
+                self.delegate.message(m)
+            }
         }
     }
 
@@ -1478,7 +1513,7 @@ impl StreamCore {
 
     async fn search_inner(&self, q: &str, filter: SearchFilter) -> SearchResults {
         let prefs = self.settings();
-        let order = prefs.services_on();
+        let order = Service::all();
         let library = self.search_library(q.to_string(), filter);
         let spotify_on = prefs.is_on(Service::Spotify);
         let soundcloud_on = prefs.is_on(Service::SoundCloud);
@@ -1508,7 +1543,39 @@ impl StreamCore {
                 }
             }
         }
-        SearchResults { items, problems }
+        SearchResults { items: self.best_copies(items), problems }
+    }
+
+    /// One song found on several services shows once, as its best copy (see
+    /// [`matching::rank`]), where the first of them was listed.
+    fn best_copies(&self, items: Vec<Item>) -> Vec<Item> {
+        let mut out: Vec<Item> = Vec::with_capacity(items.len());
+        // Songs listed so far: their tags, their copy and where they are in `out`.
+        let mut songs: Vec<(matching::Tags, Track, usize)> = Vec::new();
+        for item in items {
+            let track = (item.kind == ItemKind::Track).then(|| self.db.track(&item.id)).flatten();
+            let Some(track) = track else {
+                out.push(item);
+                continue;
+            };
+            let tags = matching::Tags { title: track.title.clone(), artist: track.artist.clone(), duration_ms: track.duration_ms, isrc: None };
+            let same = songs
+                .iter_mut()
+                .find(|(t, kept, _)| kept.source != track.source && matching::score(t, &tags) >= matching::SAME);
+            match same {
+                Some((_, kept, at)) => {
+                    if matching::rank(&track) < matching::rank(kept) {
+                        out[*at] = item;
+                        *kept = track;
+                    }
+                }
+                None => {
+                    songs.push((tags, track, out.len()));
+                    out.push(item);
+                }
+            }
+        }
+        out
     }
 
     /// A SoundCloud song's audio, or the same song elsewhere when SoundCloud only has it

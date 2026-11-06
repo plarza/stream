@@ -144,3 +144,35 @@ pub fn best<'a, T>(want: &Tags, candidates: &'a [(Tags, T)]) -> Option<&'a T> {
         .max_by(|a, b| a.0.total_cmp(&b.0))
         .map(|(_, v)| v)
 }
+
+/// How good a copy sounds, from its quality label ("FLAC 24/96", "OGG 320", "MP3 128"): any
+/// lossless copy beats every lossy one, more bits and a higher rate beating fewer; among lossy
+/// ones the bitrate, with Ogg, AAC and Opus worth a quarter more than MP3 at the same rate.
+pub fn quality(label: &str) -> u32 {
+    let mut parts = label.split_whitespace();
+    let codec = parts.next().unwrap_or("").to_ascii_uppercase();
+    let detail = parts.next().unwrap_or("");
+    match codec.as_str() {
+        "FLAC" | "ALAC" | "WAV" | "AIFF" => {
+            let (bits, khz) = detail.split_once('/').unwrap_or(("16", "44.1"));
+            let bits: u32 = bits.parse().unwrap_or(16);
+            let khz: f32 = khz.parse().unwrap_or(44.1);
+            10_000 + bits * 100 + khz as u32
+        }
+        _ => {
+            let kbps: u32 = detail.parse().unwrap_or(128);
+            match codec.as_str() {
+                "MP3" => kbps * 4,
+                _ => kbps * 5,
+            }
+        }
+    }
+}
+
+/// Which copy of the same song to play, best first. Your files (here or on the Stream node)
+/// and Spotify start about as fast, so the best sounding one wins; a SoundCloud song not yet
+/// on this device downloads whole before it plays, so it comes after them.
+pub fn rank(t: &crate::types::Track) -> (u8, std::cmp::Reverse<u32>) {
+    let slow = t.source == crate::types::Source::SoundCloud && !t.downloaded;
+    (slow as u8, std::cmp::Reverse(quality(&t.quality)))
+}

@@ -2,6 +2,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -30,7 +31,8 @@ const SPOTIFY_RATE: u32 = 44_100;
 
 type Tap = Arc<Mutex<Option<TrackWriter>>>;
 
-struct TapSink(Tap);
+/// Where the song in the tap has reached, in frames written since it was loaded.
+struct TapSink(Tap, Arc<AtomicU64>);
 
 impl Sink for TapSink {
     fn write(&mut self, packet: AudioPacket, _: &mut Converter) -> SinkResult<()> {
@@ -38,11 +40,27 @@ impl Sink for TapSink {
             let f: Vec<f32> = samples.iter().map(|s| *s as f32).collect();
             if let Some(w) = self.0.lock().as_mut() {
                 w.write(&f, 2);
+                self.1.fetch_add(f.len() as u64 / 2, Ordering::Relaxed);
             }
         }
         Ok(())
     }
 }
+
+/// The connection to Spotify's servers went (sleep, a network change, the phone in
+/// the background) while a song played: a new session picks it up from `at_ms`.
+#[derive(Debug)]
+pub struct Dropped {
+    pub at_ms: u32,
+}
+
+impl std::fmt::Display for Dropped {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("lost the connection to Spotify")
+    }
+}
+
+impl std::error::Error for Dropped {}
 
 pub struct Playback {
     pub session: Session,
@@ -50,6 +68,7 @@ pub struct Playback {
     http: reqwest::Client,
     player: Arc<Player>,
     tap: Tap,
+    written: Arc<AtomicU64>,
     events: std::sync::Mutex<mpsc::Receiver<PlayerEvent>>,
 }
 
@@ -97,6 +116,8 @@ impl Playback {
 
         let tap: Tap = Arc::new(Mutex::new(None));
         let sink_tap = tap.clone();
+        let written = Arc::new(AtomicU64::new(0));
+        let sink_written = written.clone();
         let player_config = PlayerConfig {
             bitrate: Bitrate::Bitrate320,
             gapless: true,
@@ -106,7 +127,7 @@ impl Playback {
             ..PlayerConfig::default()
         };
         let player = Player::new(player_config, session.clone(), Box::new(NoOpVolume), move || {
-            Box::new(TapSink(sink_tap)) as Box<dyn Sink>
+            Box::new(TapSink(sink_tap.clone(), sink_written.clone())) as Box<dyn Sink>
         });
 
         let (tx, rx) = mpsc::channel();
@@ -119,11 +140,17 @@ impl Playback {
             }
         });
 
-        Ok((Self { session, http: reqwest::Client::new(), player, tap, events: std::sync::Mutex::new(rx) }, reusable))
+        Ok((Self { session, http: reqwest::Client::new(), player, tap, written, events: std::sync::Mutex::new(rx) }, reusable))
+    }
+
+    /// Whether the connection to Spotify's servers is still up.
+    pub fn is_live(&self) -> bool {
+        !self.session.is_invalid()
     }
 
     /// Plays one song into the output, returning when it has been fully
     /// written or a jump cancelled it. `next` is preloaded for gapless play.
+    /// A connection lost partway is a [`Dropped`] error saying where it got to.
     pub fn play(
         &self,
         uri: &str,
@@ -136,6 +163,15 @@ impl Playback {
         let events = self.events.lock().unwrap_or_else(|p| p.into_inner());
         while events.try_recv().is_ok() {}
         *self.tap.lock() = Some(TrackWriter::new(out.clone(), generation, SPOTIFY_RATE, 1.0));
+        self.written.store(0, Ordering::Relaxed);
+        let dropped = || {
+            let ms = self.written.load(Ordering::Relaxed) * 1000 / SPOTIFY_RATE as u64;
+            anyhow::Error::new(Dropped { at_ms: start_ms + ms as u32 })
+        };
+        if self.session.is_invalid() {
+            self.tap.lock().take();
+            return Err(dropped());
+        }
         self.player.load(track.clone(), true, start_ms);
         let mut preloaded = false;
         let outcome = loop {
@@ -159,7 +195,8 @@ impl Playback {
                 Ok(_) => {}
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     if self.session.is_invalid() {
-                        anyhow::bail!("the Spotify session dropped");
+                        self.tap.lock().take();
+                        return Err(dropped());
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => anyhow::bail!("player stopped"),

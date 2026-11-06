@@ -2,17 +2,16 @@ import StreamBindings
 import AzaUI
 import SwiftUI
 
-/// Your account, Services (your music, Spotify, SoundCloud: their order and each one's own
-/// page, where it's switched off), Last.fm, playback, then Appearance.
+/// Your account, Services (your music, Spotify, SoundCloud and Last.fm, each with its own page,
+/// where it's switched off), playback, then Appearance.
 struct ProfileView: View {
     @Environment(AppModel.self) private var model
     @State private var clientId = ""
     @State private var lastfmKey = ""
     @State private var lastfmSecret = ""
-    @State private var settings = Preferences(normalization: true, autoplay: true, scrobbling: true,
-                                              services: [.files, .spotify, .soundCloud], servicesOff: [])
+    @State private var settings = Preferences(normalization: true, autoplay: true, scrobbling: true, servicesOff: [])
     @State private var soundCloudSignIn = false
-    @State private var path: [Service] = []
+    @State private var path: [SettingsPage] = []
     @State private var node: NodeStatus?
     @Environment(Account.self) private var aza
     @State private var refreshing = false
@@ -28,12 +27,10 @@ struct ProfileView: View {
                     AccountRow().padding(.top, 8)
                     heading("Services")
                     ServicesList(settings: $settings)
-                    lastfm
                     SettingsCard("Playback") {
                         Toggle("Normalize loudness", isOn: $settings.normalization)
                         Toggle("Autoplay similar songs", isOn: $settings.autoplay)
                             .accessibilityIdentifier("settings.autoplay")
-                        Toggle("Scrobble to Last.fm", isOn: $settings.scrobbling)
                     }
                     heading("Appearance")
                     AppearanceSection()
@@ -46,12 +43,13 @@ struct ProfileView: View {
                 if let page = model.settingsPage { path = [page]; model.settingsPage = nil }
             }
             .onChange(of: model.settingsVersion) { settings = model.core.settings() }
-            .navigationDestination(for: Service.self) { s in
-                ServicePage(service: s) {
-                    switch s {
-                    case .files: filesPage
-                    case .spotify: spotify
-                    case .soundCloud: soundCloud
+            .navigationDestination(for: SettingsPage.self) { page in
+                ServicePage(page: page) {
+                    switch page {
+                    case .service(.files): filesPage
+                    case .service(.spotify): spotify
+                    case .service(.soundCloud): soundCloud
+                    case .lastfm: lastfm
                     }
                 }
             }
@@ -66,6 +64,10 @@ struct ProfileView: View {
             }
             #endif
         }
+        #if os(macOS)
+        // Settings' own switches, not checkboxes, at the end of the row.
+        .toggleStyle(TrailingSwitch())
+        #endif
         .onAppear {
             if let page = model.settingsPage { path = [page]; model.settingsPage = nil }
             clientId = model.account.spotifyClientId ?? ""
@@ -237,9 +239,11 @@ struct ProfileView: View {
     }
 
     private var lastfm: some View {
-        SettingsCard("Last.fm") {
+        SettingsCard("Account") {
             if let user = model.account.lastfmUser {
-                LabeledContent("Scrobbling as", value: user)
+                Toggle("Scrobble to Last.fm", isOn: $settings.scrobbling)
+                    .accessibilityIdentifier("settings.lastfm.scrobble")
+                LabeledContent("Account", value: user)
                 Button("Sign out", role: .destructive) { model.core.lastfmSignOut() }
             } else {
                 if !model.core.hasLastfmApi() {
@@ -254,6 +258,10 @@ struct ProfileView: View {
                 }
                 .disabled(!model.core.hasLastfmApi() && (lastfmKey.isEmpty || lastfmSecret.isEmpty))
             }
+        } footer: {
+            Text(model.account.lastfmUser == nil
+                 ? "Sign in to scrobble what you play, from every service. An API key and secret come from last.fm/api."
+                 : "Songs count once you've heard half of them or four minutes, from every service.")
         }
     }
 
@@ -357,10 +365,24 @@ private struct SettingsCard<Content: View, Footer: View>: View {
                 .padding(.leading, 4)
                 .padding(.top, 20)
                 .accessibilityAddTraits(.isHeader)
-            VStack(alignment: .leading, spacing: 14) { content }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .glassEffect(.regular, in: .rect(cornerRadius: 24))
+            // A row each, divided as Settings' own groups are.
+            Group(subviews: content) { rows in
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows) { row in
+                        if row.id != rows.first?.id {
+                            Divider().padding(.leading, 16)
+                        }
+                        row
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    }
+                }
+            }
+            .buttonStyle(.borderless)
+            .padding(.vertical, 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular, in: .rect(cornerRadius: 24))
             footer
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -374,3 +396,19 @@ extension SettingsCard where Footer == EmptyView {
         self.init(title, content: content) { EmptyView() }
     }
 }
+
+#if os(macOS)
+/// A switch at the end of its row, as in System Settings.
+private struct TrailingSwitch: ToggleStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack {
+            configuration.label
+            Spacer(minLength: 12)
+            Toggle("", isOn: configuration.$isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+    }
+}
+#endif

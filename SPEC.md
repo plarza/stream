@@ -89,15 +89,24 @@ Through soundcloud.com's own web player API (api-v2), with no developer app (cor
   and playlists, and lets Stream keep playlists there.
 - Audio is HLS: AAC 160 in fragmented MP4 (or MP3), fetched whole into a 1 GB cache and played
   like a file. Songs SoundCloud only offers encrypted (most major-label releases) play from the
-  same song found elsewhere (your files, then Spotify, by ISRC or tags) instead.
+  same song found elsewhere (your files or Spotify, by ISRC or tags, the best sounding) instead.
 
 ## Services
 
-Settings → Services lists your music (files and Uploads), Spotify and SoundCloud. Drag to set the
-order: search shows what's in your library first, then each service's results in this order, and
-a song in one of your playlists that's on more than one plays from the first. A switch turns a
-service off without signing out: it leaves search, Library, Home and playback, and Spotify drops
-its playback connection. The order and switches are synced `settings` (`services`, `servicesOff`).
+Settings → Services lists your music (files and Uploads), Spotify, SoundCloud and Last.fm, each
+opening its own page. There's no order to set: when a song is on more than one service, it plays
+from its best copy. Your files (here or on the Stream node) and Spotify start about as fast, so the
+best sounding wins: any lossless file, then by bitrate, Ogg, AAC and Opus counting a quarter more
+than MP3 (Spotify is Ogg 320). A SoundCloud song not yet on the device downloads whole before it
+plays, so it comes after them. Search shows such a song once, as its best copy, where the first of
+them was listed: your library, then Spotify, then SoundCloud. A switch turns a service off without
+signing out: it leaves search, Library, Home and playback, and Spotify drops its playback
+connection. The switches are synced `settings` (`servicesOff`). Last.fm's page signs in and turns
+scrobbling on and off.
+
+If the connection to Spotify's servers drops (sleep, a network change, the phone in the
+background), the song playing picks up where it got to on a new session, and the next time the
+app comes back a dead session is replaced rather than kept.
 
 ## Your playlists
 
@@ -221,7 +230,7 @@ bottom accessory.
 | Lyrics | `04` **A**: left-aligned, word fill on the active line, distance blur on the others, tap a line to seek |
 | Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, like, pin). Playlists sort from the toolbar (playlist order, title, artist, album, length, reversed), the same for every playlist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |
 | Queue | `06` **A** without the toggle row: "Playing Next" + "Continue from …" |
-| Settings → Services | `09` **A** One Services list: a reorderable row per service with its status and switch, each opening its own page |
+| Settings → Services | `09` **A** One Services list: a row per service and Last.fm with its status, each opening its own page |
 | Search | `07` **C**: one relevance-ranked list across library + Spotify, type chips (All, Songs, Albums, Artists, Playlists); the empty state shows recent searches |
 
 **Mac**

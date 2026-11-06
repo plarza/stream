@@ -1,6 +1,7 @@
 import StreamBindings
 import Foundation
 import Observation
+import os
 import SwiftUI
 
 /// The app's single source of truth on the Swift side. Everything durable
@@ -31,7 +32,7 @@ final class AppModel {
     /// "New Playlist" was asked for, with the songs to start it with.
     var newPlaylist: NewPlaylistRequest?
     /// A service's own page to open in Settings (a deep link).
-    var settingsPage: Service?
+    var settingsPage: SettingsPage?
     var nowPlayingMode: NowPlayingMode = .artwork
     /// Colors derived from the current artwork (backgrounds, Now Playing).
     var accent: Palette = .fallback
@@ -91,6 +92,7 @@ final class AppModel {
                                 // Tests never reach SoundCloud: nothing listens here.
                                 soundcloudUrl: Self.isTesting ? "http://127.0.0.1:9" : nil,
                                 soundcloudApiUrl: Self.isTesting ? "http://127.0.0.1:9" : nil)
+        setLogSink(sink: SystemLog())
         // A failure here means the disk is unusable; nothing sensible to show.
         core = try! StreamCore(config: config, delegate: bridge)
         player = core.playerState()
@@ -379,7 +381,7 @@ final class AppModel {
             showNowPlaying = false
         case "settings":
             // `page=Spotify` opens that service's own page.
-            settingsPage = [Service.files, .spotify, .soundCloud].first { $0.title == value("page") }
+            settingsPage = SettingsPage.all.first { $0.title == value("page") }
             showNowPlaying = false
             showSettings = true
         case "newplaylist" where value("import") != nil:
@@ -493,6 +495,20 @@ final class AppModel {
         let position = (activity.userInfo?["position"] as? NSNumber)?.uint32Value ?? 0
         Task {
             do { try await core.resumeHandoff(trackId: track, positionMs: position, contextId: nil) } catch { show(error.localizedDescription) }
+        }
+    }
+}
+
+/// The core's warnings and errors in the system log, readable later with
+/// `log show --predicate 'subsystem == "network.aza.stream"'` (or `log collect` off the iPhone).
+final class SystemLog: LogSink, @unchecked Sendable {
+    private let logger = Logger(subsystem: "network.aza.stream", category: "core")
+
+    func log(level: String, line: String) {
+        if level == "error" {
+            logger.error("\(line, privacy: .public)")
+        } else {
+            logger.warning("\(line, privacy: .public)")
         }
     }
 }

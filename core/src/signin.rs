@@ -176,6 +176,14 @@ impl StreamCore {
         if !self.settings().is_on(Service::Spotify) {
             return;
         }
+        // A session whose connection dropped is no session: it fails everything sent over it.
+        {
+            let mut pb = self.playback.write();
+            if pb.as_ref().is_some_and(|p| !p.is_live()) {
+                log::warn!("Spotify session dropped; reconnecting");
+                *pb = None;
+            }
+        }
         let busy = self.sign_in_task.lock().as_ref().is_some_and(|h| !h.is_finished());
         if busy || self.playback.read().is_some() || RECONNECTING.swap(true, Ordering::SeqCst) {
             return;

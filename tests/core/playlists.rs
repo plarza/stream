@@ -110,8 +110,10 @@ fn a_playlist_is_kept_on_spotify_and_soundcloud() {
     fake.world.lock().spotify_playlists.values_mut().next().unwrap().1.push("spotify:track:dew".into());
     tokio_block(mac.core.clone().sync_playlists());
     assert_eq!(titles(&mac, &list.id), ["Tunnel", "Sunrise", "Dew"]);
-    // Dew is one of your files: it plays from there, your music being first.
-    assert_eq!(mac.core.cached_collection(list.id.clone()).unwrap().tracks[2].source, Source::Local);
+    // Each song plays from its best copy: your FLAC of Tunnel, but Spotify's Ogg 320 of Dew
+    // over your MP3.
+    let tracks = mac.core.cached_collection(list.id.clone()).unwrap().tracks;
+    assert_eq!((tracks[0].source, tracks[2].source), (Source::Local, Source::Spotify));
 
     // Taken out here: gone from both.
     mac.core.clone().remove_from_playlist(list.id.clone(), vec![0]);
@@ -148,8 +150,9 @@ fn a_playlist_comes_in_from_its_link() {
     assert_eq!(list.title, "Their Mix");
     assert!(list.id.starts_with("stream:playlist:"));
     assert_eq!(titles(&mac, &list.id), ["Tunnel", "Dew"]);
-    // Dew is one of your files too: it plays from there.
-    assert_eq!(mac.core.cached_collection(list.id.clone()).unwrap().tracks[1].source, Source::Local);
+    // Tunnel is one of your files, in FLAC: it plays from there. Dew sounds better on Spotify than your MP3.
+    let tracks = mac.core.cached_collection(list.id.clone()).unwrap().tracks;
+    assert_eq!((tracks[0].source, tracks[1].source), (Source::Local, Source::Spotify));
 
     let sc = tokio_block(mac.core.clone().import_playlist("https://soundcloud.com/someone/sets/77".into(), vec![])).unwrap();
     assert_eq!((sc.title.as_str(), titles(&mac, &sc.id)), ("Uploads I like", vec!["Neon Coast - Tunnel".to_string()]));

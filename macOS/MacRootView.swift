@@ -42,6 +42,7 @@ struct MacRootView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
+            SettingsOpener()
             if appearance == .oledDark {
                 Color.black.ignoresSafeArea()
             }
@@ -693,5 +694,21 @@ struct CommandPalette: View {
         guard results.indices.contains(selected) else { return }
         model.core.addRecentSearch(query: search.query)
         open(results[selected])
+    }
+}
+
+/// On the Mac, Settings is its own window: what asks for it (Connect Spotify, a `settings` link)
+/// opens that.
+private struct SettingsOpener: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Color.clear.frame(width: 0, height: 0)
+            .onChange(of: model.showSettings, initial: true) {
+                guard model.showSettings else { return }
+                model.showSettings = false
+                openSettings()
+            }
     }
 }

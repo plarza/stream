@@ -375,19 +375,16 @@ impl StreamCore {
     }
 
     /// The song to play: from the first service in `order` that has it, else from anywhere.
-    fn song_track(&self, s: &Song, order: &[Service]) -> Option<Track> {
-        let fallback = [Service::Files, Service::Spotify, Service::SoundCloud];
-        for service in order.iter().chain(fallback.iter()) {
-            let t = match service {
-                Service::Files => s.hash.as_deref().and_then(|h| self.db.track_for_hash(h)),
-                Service::Spotify => s.spotify.as_ref().map(|id| self.db.track(id).unwrap_or_else(|| self.song_as(s, id, Source::Spotify))),
-                Service::SoundCloud => s.soundcloud.as_ref().map(|id| self.db.track(id).unwrap_or_else(|| self.song_as(s, id, Source::SoundCloud))),
-            };
-            if t.is_some() {
-                return t;
-            }
-        }
-        None
+    /// The copy of a playlist song that plays: the best sounding of those on services that
+    /// are on (see [`matching::rank`]), or any copy at all when none of those has it.
+    fn song_track(&self, s: &Song, on: &[Service]) -> Option<Track> {
+        let copy = |service: Service| match service {
+            Service::Files => s.hash.as_deref().and_then(|h| self.db.track_for_hash(h)),
+            Service::Spotify => s.spotify.as_ref().map(|id| self.db.track(id).unwrap_or_else(|| self.song_as(s, id, Source::Spotify))),
+            Service::SoundCloud => s.soundcloud.as_ref().map(|id| self.db.track(id).unwrap_or_else(|| self.song_as(s, id, Source::SoundCloud))),
+        };
+        let best = |services: &[Service]| services.iter().filter_map(|x| copy(*x)).min_by_key(matching::rank);
+        best(on).or_else(|| best(&Service::all()))
     }
 
     fn song_as(&self, s: &Song, id: &str, source: Source) -> Track {
@@ -438,20 +435,23 @@ impl StreamCore {
             };
             let want = Tags { isrc, ..want };
             let song = Song { title: want.title.clone(), artist: want.artist.clone(), duration_ms: want.duration_ms, isrc: want.isrc.clone(), ..Default::default() };
-            for s in me.settings().services_on() {
-                match s {
-                    Service::Files => {
-                        if let Some(h) = me.find_file(&song) {
-                            return me.db.track_for_hash(&h);
-                        }
-                    }
-                    Service::Spotify if me.web.read().is_some() => {
-                        if let Ok(Some(id)) = me.find_on_spotify(&song).await {
-                            return me.db.track(&id);
-                        }
-                    }
-                    _ => {}
-                }
+            // Every copy that's here or quickly found, and the best sounding of them.
+            let on = me.settings();
+            let mut copies: Vec<Track> = Vec::new();
+            if on.is_on(Service::Files)
+                && let Some(t) = me.find_file(&song).and_then(|h| me.db.track_for_hash(&h))
+            {
+                copies.push(t);
+            }
+            if on.is_on(Service::Spotify)
+                && me.web.read().is_some()
+                && let Ok(Some(id)) = me.find_on_spotify(&song).await
+                && let Some(t) = me.db.track(&id)
+            {
+                copies.push(t);
+            }
+            if let Some(best) = copies.into_iter().min_by_key(matching::rank) {
+                return Some(best);
             }
             None
         })

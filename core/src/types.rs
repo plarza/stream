@@ -40,7 +40,7 @@ pub enum Source {
     SoundCloud,
 }
 
-/// Where music comes from, in the order search and playback try them (Settings → Services).
+/// Where music comes from (Settings → Services).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, uniffi::Enum, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Service {
@@ -356,8 +356,6 @@ pub struct Preferences {
     #[serde(rename = "autoplay_similar")]
     pub autoplay: bool,
     pub scrobbling: bool,
-    /// Every service, in the order search and playback try them.
-    pub services: Vec<Service>,
     /// Services turned off: still signed in, but out of search, Library and playback.
     #[serde(rename = "servicesOff")]
     pub services_off: Vec<Service>,
@@ -365,22 +363,15 @@ pub struct Preferences {
 
 impl Default for Preferences {
     fn default() -> Self {
-        Self { normalization: true, autoplay: true, scrobbling: true, services: Service::all().to_vec(), services_off: vec![] }
+        Self { normalization: true, autoplay: true, scrobbling: true, services_off: vec![] }
     }
 }
 
 impl Preferences {
-    /// The services that are on, in order. One missing from the list (from an older version)
-    /// goes last.
+    /// The services that are on. There's no order to set: each song plays from its best copy
+    /// (see `matching::rank`).
     pub fn services_on(&self) -> Vec<Service> {
-        let mut order: Vec<Service> = self.services.iter().copied().filter(|s| !self.services_off.contains(s)).collect();
-        order.dedup();
-        for s in Service::all() {
-            if !self.services.contains(&s) && !self.services_off.contains(&s) {
-                order.push(s);
-            }
-        }
-        order
+        Service::all().into_iter().filter(|s| !self.services_off.contains(s)).collect()
     }
 
     pub fn is_on(&self, service: Service) -> bool {
@@ -388,7 +379,7 @@ impl Preferences {
     }
 }
 
-/// Search across every service that's on, in their order.
+/// Search across every service that's on.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct SearchResults {
     pub items: Vec<Item>,

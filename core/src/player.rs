@@ -16,7 +16,7 @@ use crate::audio::Output;
 use crate::db::{Db, LocalSource};
 use crate::local::{self, Outcome};
 use crate::queue::{Queue, SavedQueue};
-use crate::spotify::session::Playback;
+use crate::spotify::session::{Dropped, Playback};
 use crate::types::*;
 
 #[derive(Clone, Copy)]
@@ -35,6 +35,8 @@ pub enum EngineEvent {
     Played { track: Track, started_at: i64 },
     /// A song was listened to long enough to scrobble.
     Heard { track: Track, started_at: i64 },
+    /// The Spotify session lost its connection and was let go: connect a new one.
+    SpotifyDropped,
     Error(String),
 }
 
@@ -384,7 +386,6 @@ impl Engine {
                 }
                 Err(_) if self.out.generation() != generation => return,
                 Err(e) => {
-                    log::warn!("{e:#}");
                     (self.notify)(EngineEvent::Error(format!("{e:#}")));
                     failures += 1;
                     if failures >= 5 {
@@ -427,10 +428,41 @@ impl Engine {
                 }
                 None => Err(anyhow::anyhow!("the file for “{}” is missing", track.title)),
             },
-            Source::Spotify => match self.spotify_soon(generation) {
-                Some(sp) => sp.play(&track.id, ms, self.out.clone(), generation, next_uri),
-                None => Err(anyhow::anyhow!("sign in to Spotify to play “{}”", track.title)),
-            },
+            Source::Spotify => {
+                // A lost connection (sleep, a network change, the phone in the background)
+                // lets the dead session go, waits for a new one and carries on where the
+                // song got to, rather than failing it and every Spotify song after it.
+                let mut ms = ms;
+                let mut drops = 0;
+                loop {
+                    let Some(sp) = self.spotify_soon(generation) else {
+                        if self.out.generation() != generation {
+                            return Ok(Outcome::Cancelled);
+                        }
+                        return Err(if drops > 0 {
+                            anyhow::anyhow!("couldn't reconnect to Spotify to play “{}”", track.title)
+                        } else {
+                            anyhow::anyhow!("sign in to Spotify to play “{}”", track.title)
+                        });
+                    };
+                    match sp.play(&track.id, ms, self.out.clone(), generation, next_uri) {
+                        Err(e) if drops < 3 && e.downcast_ref::<Dropped>().is_some() => {
+                            let at = e.downcast_ref::<Dropped>().map_or(ms, |d| d.at_ms);
+                            log::warn!("Spotify connection lost at {at} ms into {}; reconnecting", track.id);
+                            {
+                                let mut slot = self.spotify.write();
+                                if slot.as_ref().is_some_and(|p| Arc::ptr_eq(p, &sp)) {
+                                    *slot = None;
+                                }
+                            }
+                            (self.notify)(EngineEvent::SpotifyDropped);
+                            drops += 1;
+                            ms = at;
+                        }
+                        other => return other,
+                    }
+                }
+            }
             Source::SoundCloud => match (self.soundcloud)(track)? {
                 SoundCloudAudio::File(path, ext) => {
                     let f = std::fs::File::open(&path)?;
