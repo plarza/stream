@@ -1334,10 +1334,6 @@ impl Db {
         let _ = tx.commit();
     }
 
-    pub fn recents(&self, limit: u32) -> Vec<Item> {
-        self.recents_at(limit).into_iter().map(|(_, i)| i).collect()
-    }
-
     /// Recents with when each was last played (Unix seconds), newest first.
     pub fn recents_at(&self, limit: u32) -> Vec<(i64, Item)> {
         let conn = self.conn.lock();

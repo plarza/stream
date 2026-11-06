@@ -23,4 +23,5 @@ cat > build/export.plist <<PLIST
 PLIST
 xcodebuild -exportArchive -archivePath build/Stream.xcarchive -exportOptionsPlist build/export.plist \
   -exportPath build/export $AUTH 2>&1 | grep -E 'error:|EXPORT|Upload' | tee build/export.log
-! grep -q 'EXPORT FAILED' build/export.log
+# `! grep` would slip past set -e, so a failed export has to exit by hand.
+if grep -q 'EXPORT FAILED' build/export.log; then exit 1; fi

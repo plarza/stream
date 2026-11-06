@@ -31,12 +31,13 @@ cat > "$OUT/export.plist" <<PLIST
 PLIST
 xcodebuild -exportArchive -archivePath "$OUT/Stream.xcarchive" -exportOptionsPlist "$OUT/export.plist" \
   -exportPath "$OUT" $AUTH 2>&1 | grep -E 'error:|EXPORT' | tee "$OUT/export.log"
-! grep -q 'EXPORT FAILED' "$OUT/export.log"
+# `! grep` would slip past set -e, so a failed export has to exit by hand.
+if grep -q 'EXPORT FAILED' "$OUT/export.log"; then exit 1; fi
 
 # Apple checks it, then the ticket is stapled on so it opens offline too.
 ditto -c -k --keepParent "$OUT/Stream.app" "$OUT/notarize.zip"
 xcrun notarytool submit "$OUT/notarize.zip" --key "$KEY" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait | tee "$OUT/notary.log"
-grep -q 'status: Accepted' "$OUT/notary.log"
+if ! grep -q 'status: Accepted' "$OUT/notary.log"; then exit 1; fi
 xcrun stapler staple "$OUT/Stream.app"
 ZIP="$OUT/Stream-$VERSION-$BUILD-mac.zip"
 ditto -c -k --keepParent "$OUT/Stream.app" "$ZIP"
