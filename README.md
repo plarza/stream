@@ -25,10 +25,10 @@ Because it uses librespot, Stream isn't for the App Store. Install it with `scri
 - **Your own playlists**, kept with aza on every device, and if you like on Spotify and SoundCloud too: the same songs on each, found by ISRC or by title, artist and length. Changes made there come back.
 - **Import a playlist from a link**: paste a Spotify or SoundCloud playlist or album link and it becomes one of your playlists.
 - **Services** in Settings: your music, Spotify, SoundCloud and Last.fm, each with its own page; switch any off without signing out. A song on several plays from its best copy.
-- **Now Playing** is tinted from the album art and shows the format and quality, like FLAC 24/96 or OGG 320. Behind it, Aurora melts the cover's colours into a mesh that moves with the music; the waveform button beside AirPlay turns it off.
+- **Now Playing** is tinted from the album art and shows the format and quality, like FLAC 24/96 or OGG 320. Behind it, Aurora animates the cover's colours as a mesh that moves with the music; the waveform button beside AirPlay turns it off.
 - **Synced lyrics**, word by word where the source has it. Tap a line to seek.
 - **A queue** of Play Next and Play Later above the rest of the album or playlist.
-- **Artist pages** like Spotify's: header photo, top songs, every release with filter pills, bio, listeners and top cities.
+- **Artist pages**: header photo, top songs, every release with filter pills, bio, listeners and top cities.
 - **Offline.** Download a song, album or playlist from its page or long-press menu. One ⬇ badge marks anything that plays offline.
 - **Podcasts** you follow on Spotify, in Library and in search. An episode picks up where you left off and is marked played when you finish it.
 - **History** of every song you played, on any device, by day.
@@ -107,4 +107,4 @@ scripts/       Build, deploy, test and screenshots
 
 Every source decodes in Rust into a ring buffer that an `AVAudioSourceNode` pulls from. The core's UniFFI bindings compile as their own module, `StreamBindings`, without main-actor isolation, so calls into the core stay off the main thread. Sign-in, the profile button and Appearance come from [AzaUI](https://github.com/plarza/ui).
 
-The decisions behind all of this, and what Stream deliberately leaves out, are in [SPEC.md](SPEC.md).
+Design decisions, and what Stream leaves out, are in [SPEC.md](SPEC.md).
