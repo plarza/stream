@@ -203,7 +203,13 @@ pub struct ArtistInfo {
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct Home {
     pub pins: Vec<Item>,
+    /// What you opened or played from, newest first: albums, artists, playlists, shows.
     pub recents: Vec<Item>,
+    /// Artists, albums and songs you played lately, newest first: the ones you opened and
+    /// the ones of each song in History.
+    pub artists: Vec<Item>,
+    pub albums: Vec<Item>,
+    pub songs: Vec<Item>,
 }
 
 /// A song in History: when it was played, and on which device ("iPhone", "Mac").

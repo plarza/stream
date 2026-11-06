@@ -84,4 +84,24 @@ fn a_song_played_past_halfway_is_in_history_on_every_device() {
     mac.sync_to(&other);
     let theirs = other.core.history(0, 10);
     assert!(theirs.iter().any(|p| p.track.title == "Tunnel" && p.playable), "{:?}", theirs.iter().map(|p| &p.track.title).collect::<Vec<_>>());
+
+    // Home's recent songs, albums and artists come from History, so the other Mac has them too.
+    for home in [mac.core.home(), other.core.home()] {
+        let titles = |items: &[Item]| items.iter().map(|i| i.title.clone()).collect::<Vec<_>>();
+        assert_eq!(titles(&home.songs).first().map(String::as_str), Some("Tunnel"), "{:?}", titles(&home.songs));
+        assert!(titles(&home.albums).contains(&"Night Drive".into()), "{:?}", titles(&home.albums));
+        assert!(titles(&home.artists).contains(&"Neon Coast".into()), "{:?}", titles(&home.artists));
+    }
+}
+
+#[test]
+fn an_album_you_play_puts_it_and_its_artist_on_home() {
+    let _out = OUTPUT.lock();
+    let mac = Device::mac();
+    let night = mac.item(LibrarySection::Albums, "Night Drive");
+    mac.core.play(mac.album("Night Drive"), 0, Some(night), false);
+    mac.core.pause();
+    let home = mac.core.home();
+    assert_eq!(home.albums.first().map(|i| i.title.as_str()), Some("Night Drive"));
+    assert_eq!(home.artists.first().map(|i| i.title.as_str()), Some("Neon Coast"));
 }

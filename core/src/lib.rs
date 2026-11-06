@@ -553,9 +553,38 @@ impl StreamCore {
     pub fn home(&self) -> Home {
         let on = self.settings();
         let shown = |i: &Item| on.is_on(Service::of(i.source));
+        let recents: Vec<(i64, Item)> = self.db.recents_at(60).into_iter().filter(|(_, i)| shown(i)).collect();
+        // Each song in History brings its album and artist along, at the time it was played.
+        let mut played: Vec<(i64, Item)> = vec![];
+        for play in self.history(0, 200).into_iter().filter(|p| shown(&p.track.as_item())) {
+            let t = &play.track;
+            played.push((play.played_at, t.as_item()));
+            if let Some((album, _, _)) = t.album_id.as_deref().and_then(|id| self.db.album_item(id)) {
+                played.push((play.played_at, album));
+            }
+            for id in t.artists.iter().map(|a| a.id.as_str()).chain(t.artist_id.as_deref()) {
+                if let Some(artist) = self.db.artist_item(id) {
+                    played.push((play.played_at, artist));
+                }
+            }
+        }
+        // An album you played brings its artist along too.
+        let by: Vec<(i64, Item)> = recents
+            .iter()
+            .filter(|(_, i)| i.kind == ItemKind::Album)
+            .filter_map(|(at, i)| Some((*at, self.db.artist_item(&self.db.album_artist_id(&i.id)?)?)))
+            .collect();
+        let mut all: Vec<(i64, Item)> = recents.iter().cloned().chain(played).chain(by).collect();
+        all.sort_by_key(|(at, _)| std::cmp::Reverse(*at));
+        let mut seen = std::collections::HashSet::new();
+        let all: Vec<Item> = all.into_iter().map(|(_, i)| i).filter(|i| seen.insert(i.id.clone())).collect();
+        let of = |kind: ItemKind, n: usize| all.iter().filter(|i| i.kind == kind).take(n).cloned().collect::<Vec<_>>();
         Home {
             pins: self.db.pins().into_iter().map(|p| self.pin_here(p)).filter(shown).collect(),
-            recents: self.db.recents(24).into_iter().filter(shown).collect(),
+            artists: of(ItemKind::Artist, 12),
+            albums: of(ItemKind::Album, 12),
+            songs: of(ItemKind::Track, 12),
+            recents: recents.into_iter().take(24).map(|(_, i)| i).collect(),
         }
     }
 

@@ -157,9 +157,8 @@ struct Toast: View {
 extension View {
     func scrollPolish() -> some View {
         scrollTransition(.interactive, axis: .vertical) { content, phase in
-            content
-                .opacity(phase.isIdentity ? 1 : 0.6)
-                .scaleEffect(phase.isIdentity ? 1 : 0.96)
+            // Only a fade: scaling a full-width row pulls its leading edge in, out of line.
+            content.opacity(phase.isIdentity ? 1 : 0.6)
         }
     }
 }

@@ -569,7 +569,7 @@ enum TrackSort: String, CaseIterable {
 }
 
 /// One release in an artist's discography grid: its cover filling the column.
-private struct ReleaseTile: View {
+struct ReleaseTile: View {
     let item: Item
 
     var body: some View {

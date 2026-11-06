@@ -18,7 +18,7 @@ final class AppModel {
 
     var player: PlayerState
     var account: AccountState
-    var home: Home = Home(pins: [], recents: [])
+    var home: Home = Home(pins: [], recents: [], artists: [], albums: [], songs: [])
     /// Bumped whenever the library changes; views that page the library observe it.
     var libraryVersion = 0
     /// Bumped whenever History gains a play, here or from another device.
@@ -555,7 +555,12 @@ final class CoreBridge: CoreDelegate, @unchecked Sendable {
     }
 
     func historyChanged() {
-        Task { @MainActor in self.model?.historyVersion &+= 1 }
+        Task { @MainActor in
+            guard let model = self.model else { return }
+            model.historyVersion &+= 1
+            // Home's recent songs, albums and artists come from History.
+            model.home = model.core.home()
+        }
     }
 
     func syncNeeded() {

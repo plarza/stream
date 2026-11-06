@@ -1123,6 +1123,11 @@ impl Db {
         .flatten()
     }
 
+    /// The artist an album is by, when it has a page.
+    pub fn album_artist_id(&self, id: &str) -> Option<String> {
+        self.conn.lock().query_row("SELECT artist_id FROM albums WHERE id = ?1", [id], |r| r.get(0)).optional().ok().flatten().flatten()
+    }
+
     pub fn artist_item(&self, id: &str) -> Option<Item> {
         let conn = self.conn.lock();
         conn.query_row("SELECT id, source, name, art FROM artists WHERE id = ?1", [id], |r| {
@@ -1330,7 +1335,18 @@ impl Db {
     }
 
     pub fn recents(&self, limit: u32) -> Vec<Item> {
-        self.json_items(&format!("SELECT item FROM recents ORDER BY played_at DESC LIMIT {limit}"))
+        self.recents_at(limit).into_iter().map(|(_, i)| i).collect()
+    }
+
+    /// Recents with when each was last played (Unix seconds), newest first.
+    pub fn recents_at(&self, limit: u32) -> Vec<(i64, Item)> {
+        let conn = self.conn.lock();
+        let Ok(mut stmt) = conn.prepare_cached("SELECT played_at, item FROM recents ORDER BY played_at DESC LIMIT ?1") else {
+            return vec![];
+        };
+        stmt.query_map([limit], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))
+            .map(|rows| rows.filter_map(Result::ok).filter_map(|(at, j)| Some((at, serde_json::from_str(&j).ok()?))).collect())
+            .unwrap_or_default()
     }
 
     pub fn add_recent(&self, item: &Item) {
