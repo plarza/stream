@@ -1,7 +1,7 @@
 #!/bin/sh
 # Archive the Mac app (Release), sign it with Developer ID, notarize and staple it, and
 # publish it as a GitHub release of plarza/stream. Pass a build number, or it uses a
-# timestamp. Signs through the App Store Connect key, so it needs no certificate here.
+# timestamp. Needs the Account Holder's Apple ID in Xcode → Settings → Accounts.
 set -eu
 set -o pipefail
 cd "$(dirname "$0")/.."
@@ -29,8 +29,10 @@ cat > "$OUT/export.plist" <<PLIST
   <key>teamID</key><string>H5A6B4L9W8</string>
 </dict></plist>
 PLIST
+# Signed through the Apple ID in Xcode → Settings → Accounts: only the Account Holder may
+# make the Developer ID certificate, which the API key can't, so Xcode makes it the first time.
 xcodebuild -exportArchive -archivePath "$OUT/Stream.xcarchive" -exportOptionsPlist "$OUT/export.plist" \
-  -exportPath "$OUT" $AUTH 2>&1 | grep -E 'error:|EXPORT' | tee "$OUT/export.log"
+  -exportPath "$OUT" -allowProvisioningUpdates 2>&1 | grep -E 'error:|EXPORT' | tee "$OUT/export.log"
 # `! grep` would slip past set -e, so a failed export has to exit by hand.
 if grep -q 'EXPORT FAILED' "$OUT/export.log"; then exit 1; fi
 

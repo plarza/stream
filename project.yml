@@ -130,7 +130,7 @@ targets:
         PRODUCT_NAME: Stream
         INFOPLIST_FILE: macOS/Info.plist
         CODE_SIGN_ENTITLEMENTS: macOS/Stream.entitlements
-        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
     info:
