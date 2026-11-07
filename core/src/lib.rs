@@ -456,7 +456,6 @@ impl StreamCore {
         self.soundcloud.set_token(None);
         self.delegate.secret_set(SECRET_SOUNDCLOUD.into(), None);
         self.account.lock().soundcloud_user = None;
-        let _ = self.db.set_saved_from(Source::SoundCloud, &[]);
         self.db.replace_playlists_from("soundcloud:", &[]);
         self.emit_account();
         self.delegate.library_changed();
@@ -637,20 +636,20 @@ impl StreamCore {
             let tracks = self.db.album_tracks(&id);
             let description = label.filter(|l| !l.is_empty()).map(|l| format!("℗ {l}"));
             return (!tracks.is_empty())
-                .then(|| CollectionPage { detail: detail(year, &tracks), item, description, tracks, releases: vec![], artist: None, liked: saved && id.starts_with("spotify:"), pinned, episodes: vec![] });
+                .then(|| CollectionPage { detail: detail(year, &tracks), item, description, tracks, releases: vec![], artist: None, saved: saved && id.starts_with("spotify:"), pinned, episodes: vec![] });
         }
         if id.starts_with("spotify:playlist:") {
             let (item, description) = self.db.playlist_item(&id)?;
             let tracks = self.db.playlist_track_list(&id);
             return (!tracks.is_empty())
-                .then(|| CollectionPage { detail: list_detail(&tracks), item, description, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
+                .then(|| CollectionPage { detail: list_detail(&tracks), item, description, tracks, releases: vec![], artist: None, saved: false, pinned, episodes: vec![] });
         }
         if id.starts_with("local:artist:") {
             let item = self.db.artist_item(&id)?;
             let releases = local_releases(self.db.artist_albums(&id));
             let tracks = self.db.artist_tracks(&id, 500);
             let n = releases.len();
-            return Some(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, releases, artist: None, liked: false, pinned, episodes: vec![] });
+            return Some(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, releases, artist: None, saved: false, pinned, episodes: vec![] });
         }
         None
     }
@@ -721,39 +720,26 @@ impl StreamCore {
         self.db.pins().into_iter().any(|p| p.id == id || self.pin_here(p).id == id)
     }
 
-    /// Heart: Spotify Like (any Spotify song/album/playlist), a local flag for local songs.
-    pub async fn set_liked(self: Arc<Self>, track_id: String, liked: bool) -> Result<(), CoreError> {
-        if track_id.starts_with("local:") {
-            self.db.set_local_liked(&track_id, liked);
-        } else if let Some(n) = track_id.strip_prefix("soundcloud:track:").and_then(|n| n.parse::<u64>().ok()) {
-            let sc = self.soundcloud.clone();
-            self.rt.spawn(async move { sc.set_liked(n, liked).await }).await.map_err(err)?.map_err(err)?;
-            self.db.set_spotify_saved(&track_id, liked);
-            self.delegate.library_changed();
-        } else {
-            let web = self.web.read().clone().ok_or(CoreError::NotSignedIn)?;
-            let id = track_id.clone();
-            self.rt
-                .spawn(async move {
-                    let method = if liked { reqwest::Method::PUT } else { reqwest::Method::DELETE };
-                    web.request(method, "/me/library", &[("uris", id)], None).await
-                })
-                .await
-                .map_err(err)?
-                .map_err(err)?;
-            if track_id.starts_with("spotify:track:") {
-                self.db.set_spotify_saved(&track_id, liked);
-            } else if track_id.starts_with("spotify:album:") {
-                self.db.set_album_saved(&track_id, liked);
-                self.delegate.library_changed();
-            } else if track_id.starts_with("spotify:show:") {
-                self.db.set_show_saved(&track_id, liked);
-                let _ = self.db.rebuild_search();
-                self.delegate.library_changed();
-            }
+    /// Saves a Spotify album, playlist or podcast to your library, or follows an artist, or
+    /// takes it out again.
+    pub async fn set_saved(self: Arc<Self>, id: String, saved: bool) -> Result<(), CoreError> {
+        let web = self.web.read().clone().ok_or(CoreError::NotSignedIn)?;
+        let uri = id.clone();
+        self.rt
+            .spawn(async move {
+                let method = if saved { reqwest::Method::PUT } else { reqwest::Method::DELETE };
+                web.request(method, "/me/library", &[("uris", uri)], None).await
+            })
+            .await
+            .map_err(err)?
+            .map_err(err)?;
+        if id.starts_with("spotify:album:") {
+            self.db.set_album_saved(&id, saved);
+        } else if id.starts_with("spotify:show:") {
+            self.db.set_show_saved(&id, saved);
+            let _ = self.db.rebuild_search();
         }
-        self.engine.queue.lock().entries.iter_mut().filter(|e| e.track.id == track_id).for_each(|e| e.track.liked = liked);
-        self.delegate.player_changed(self.engine.state());
+        self.delegate.library_changed();
         Ok(())
     }
 
@@ -878,7 +864,7 @@ impl StreamCore {
                 let id = api::bare_id(&track_id).to_string();
                 let v = self.rt.spawn(async move { web.get(&format!("/tracks/{id}"), &[]).await }).await.map_err(err)?.map_err(err)?;
                 let row = api::track_row(&v, None).ok_or(CoreError::NotFound)?;
-                let _ = self.db.upsert_spotify_tracks(std::slice::from_ref(&row), None);
+                let _ = self.db.upsert_spotify_tracks(std::slice::from_ref(&row));
                 api::row_to_track(&row)
             }
         };
@@ -1111,8 +1097,7 @@ impl StreamCore {
 
         let page: [(&str, String); 1] = [("limit", "50".into())];
         let follow: [(&str, String); 2] = [("type", "artist".into()), ("limit", "50".into())];
-        let (saved, albums, artists, playlists, shows) = tokio::join!(
-            web.all_pages("/me/tracks", &page, 20_000),
+        let (albums, artists, playlists, shows) = tokio::join!(
             web.all_pages("/me/albums", &page, 5_000),
             web.all_pages("/me/following", &follow, 5_000),
             web.all_pages("/me/playlists", &page, 2_000),
@@ -1130,12 +1115,6 @@ impl StreamCore {
             self.db.set_saved_shows(&ids);
         }
 
-        if let Ok(saved) = saved {
-            let rows: Vec<_> = saved.iter().filter_map(|i| api::track_row(&i["track"], None)).collect();
-            let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
-            self.db.upsert_spotify_tracks(&rows, Some(true)).map_err(err)?;
-            self.db.set_saved_tracks(&ids).map_err(err)?;
-        }
         if let Ok(albums) = albums {
             let mut ids = Vec::new();
             for a in albums {
@@ -1207,14 +1186,14 @@ impl StreamCore {
         if id.starts_with("local:album:") {
             let (item, year, _) = self.db.album_item(id).ok_or(CoreError::NotFound)?;
             let tracks = self.db.album_tracks(id);
-            return Ok(CollectionPage { detail: detail(year, &tracks), item, description: None, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
+            return Ok(CollectionPage { detail: detail(year, &tracks), item, description: None, tracks, releases: vec![], artist: None, saved: false, pinned, episodes: vec![] });
         }
         if id.starts_with("local:artist:") {
             let item = self.db.artist_item(id).ok_or(CoreError::NotFound)?;
             let releases = local_releases(self.db.artist_albums(id));
             let tracks = self.db.artist_tracks(id, 500);
             let n = releases.len();
-            return Ok(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, releases, artist: None, liked: false, pinned, episodes: vec![] });
+            return Ok(CollectionPage { detail: format!("{n} album{}", if n == 1 { "" } else { "s" }), item, description: None, tracks, releases, artist: None, saved: false, pinned, episodes: vec![] });
         }
         if id.starts_with("spotify:album:") {
             // An album fetched in full once doesn't change: serve it from disk.
@@ -1227,7 +1206,7 @@ impl StreamCore {
                 && !cached.is_empty()
                 && self.web.read().is_none()
             {
-                return Ok(CollectionPage { detail: detail(year, &cached), item, description: None, tracks: cached, releases: vec![], artist: None, liked: saved, pinned, episodes: vec![] });
+                return Ok(CollectionPage { detail: detail(year, &cached), item, description: None, tracks: cached, releases: vec![], artist: None, saved: saved, pinned, episodes: vec![] });
             }
             let web = self.web.read().clone().ok_or(CoreError::NotSignedIn)?;
             let v = match web.get(&format!("/albums/{}", api::bare_id(id)), &[]).await {
@@ -1236,7 +1215,7 @@ impl StreamCore {
                     if let Some((item, year, saved)) = header
                         && !cached.is_empty()
                     {
-                        return Ok(CollectionPage { detail: detail(year, &cached), item, description: None, tracks: cached, releases: vec![], artist: None, liked: saved, pinned, episodes: vec![] });
+                        return Ok(CollectionPage { detail: detail(year, &cached), item, description: None, tracks: cached, releases: vec![], artist: None, saved: saved, pinned, episodes: vec![] });
                     }
                     return Err(err(e));
                 }
@@ -1249,7 +1228,7 @@ impl StreamCore {
                 raw.extend(more);
             }
             let rows: Vec<_> = raw.iter().filter_map(|t| api::track_row(t, Some(&v))).collect();
-            self.db.upsert_spotify_tracks(&rows, None).map_err(err)?;
+            self.db.upsert_spotify_tracks(&rows).map_err(err)?;
             let saved = header.map(|h| h.2);
             self.db.upsert_album(&item, v["artists"][0]["uri"].as_str(), api::year_of(&v), saved);
             self.db.set_kv(&album_key(id), v["label"].as_str().unwrap_or(""));
@@ -1260,7 +1239,7 @@ impl StreamCore {
                 description: v["label"].as_str().map(|l| format!("℗ {l}")),
                 tracks,
                 releases: vec![], artist: None,
-                liked: saved.unwrap_or(false),
+                saved: saved.unwrap_or(false),
                 pinned, episodes: vec![],
             });
         }
@@ -1278,18 +1257,18 @@ impl StreamCore {
                     (item, description, self.db.playlist_track_list(id))
                 }
             };
-            return Ok(CollectionPage { detail: list_detail(&tracks), item, description, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
+            return Ok(CollectionPage { detail: list_detail(&tracks), item, description, tracks, releases: vec![], artist: None, saved: false, pinned, episodes: vec![] });
         }
         if let Some(n) = id.strip_prefix("soundcloud:artist:").and_then(|n| n.parse::<u64>().ok()) {
             let user = self.soundcloud.get(&format!("/users/{n}"), &[]).await.map_err(err)?;
             let item = soundcloud::user_item(&user).ok_or(CoreError::NotFound)?;
             let songs = self.soundcloud.all_pages(&format!("/users/{n}/tracks"), &[("limit", "50".into())], 200).await.map_err(err)?;
             let rows: Vec<_> = songs.iter().filter_map(soundcloud::track_row).collect();
-            self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows, None).map_err(err)?;
+            self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows).map_err(err)?;
             let tracks: Vec<Track> = rows.iter().filter_map(|r| self.db.track(&r.id)).collect();
             let description = user["description"].as_str().filter(|d| !d.is_empty()).map(str::to_string);
             let followers = user["followers_count"].as_u64().unwrap_or(0);
-            return Ok(CollectionPage { detail: format!("{} followers on SoundCloud", group_thousands(followers)), item, description, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
+            return Ok(CollectionPage { detail: format!("{} followers on SoundCloud", group_thousands(followers)), item, description, tracks, releases: vec![], artist: None, saved: false, pinned, episodes: vec![] });
         }
         if id.starts_with("spotify:artist:") {
             return self.artist(id, pinned).await;
@@ -1343,7 +1322,7 @@ impl StreamCore {
         }
         let item = item.ok_or(if web.is_none() { CoreError::NotSignedIn } else { CoreError::NotFound })?;
         let rows: Vec<_> = found.iter().map(|e| e.0.clone()).collect();
-        self.db.upsert_spotify_tracks(&rows, None).map_err(err)?;
+        self.db.upsert_spotify_tracks(&rows).map_err(err)?;
         let episodes: Vec<Episode> = found
             .into_iter()
             .filter_map(|(row, released, description, theirs)| {
@@ -1367,7 +1346,7 @@ impl StreamCore {
             tracks: episodes.iter().map(|e| e.track.clone()).collect(),
             releases: vec![],
             artist: None,
-            liked: followed,
+            saved: followed,
             pinned,
             episodes,
         })
@@ -1405,7 +1384,7 @@ impl StreamCore {
             let mut a = api::artist_overview(&v.map_err(err)?).ok_or(CoreError::NotFound)?;
             a.info.biography = a.info.biography.map(|b| strip_html(&b).trim().to_string());
             self.db.upsert_artist(&a.item, None);
-            let _ = self.db.upsert_spotify_tracks(&a.top, None);
+            let _ = self.db.upsert_spotify_tracks(&a.top);
             let tracks: Vec<Track> = a.top.iter().filter_map(|r| self.db.track(&r.id)).collect();
             let releases = merge_releases(a.releases, all);
             return Ok(CollectionPage {
@@ -1415,7 +1394,7 @@ impl StreamCore {
                 tracks,
                 releases,
                 artist: Some(a.info),
-                liked: false,
+                saved: false,
                 pinned, episodes: vec![],
             });
         }
@@ -1425,7 +1404,7 @@ impl StreamCore {
         let item = api::artist_item(&artist.map_err(err)?).ok_or(CoreError::NotFound)?;
         self.db.upsert_artist(&item, None);
         let releases = merge_releases(vec![], releases);
-        Ok(CollectionPage { detail: String::new(), description: None, item, tracks: vec![], releases, artist: None, liked: false, pinned, episodes: vec![] })
+        Ok(CollectionPage { detail: String::new(), description: None, item, tracks: vec![], releases, artist: None, saved: false, pinned, episodes: vec![] })
     }
 
     async fn playlist(&self, id: &str, pinned: bool) -> Result<CollectionPage, CoreError> {
@@ -1434,12 +1413,12 @@ impl StreamCore {
             && let Some((item, desc)) = header.clone()
         {
             let tracks = self.db.playlist_track_list(id);
-            return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
+            return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, saved: false, pinned, episodes: vec![] });
         }
         let Some(web) = self.web.read().clone() else {
             if let Some((item, desc)) = header {
                 let tracks = self.db.playlist_track_list(id);
-                return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
+                return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, saved: false, pinned, episodes: vec![] });
             }
             return Err(CoreError::NotSignedIn);
         };
@@ -1459,7 +1438,7 @@ impl StreamCore {
                 if let Some((item, desc)) = header {
                     let tracks = self.db.playlist_track_list(id);
                     if !tracks.is_empty() {
-                        return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] });
+                        return Ok(CollectionPage { detail: list_detail(&tracks), item, description: desc, tracks, releases: vec![], artist: None, saved: false, pinned, episodes: vec![] });
                     }
                 }
                 return Err(err(m.err().or(i.err()).map(|e| format!("{e:#}")).unwrap_or_default()));
@@ -1489,7 +1468,7 @@ impl StreamCore {
                 rows.push(r);
             }
         }
-        self.db.upsert_spotify_tracks(&rows, None).map_err(err)?;
+        self.db.upsert_spotify_tracks(&rows).map_err(err)?;
         let item = api::playlist_item(&meta).ok_or(CoreError::NotFound)?;
         let snapshot = meta["snapshot_id"].as_str();
         self.db.set_playlist_tracks(id, &ids, snapshot);
@@ -1504,7 +1483,7 @@ impl StreamCore {
             description: meta["description"].as_str().filter(|d| !d.is_empty()).map(strip_html),
             tracks,
             releases: vec![], artist: None,
-            liked: false,
+            saved: false,
             pinned, episodes: vec![],
         })
     }
@@ -1600,7 +1579,7 @@ impl StreamCore {
         };
         let v = web.get("/search", &[("q", q.to_string()), ("type", types.into()), ("limit", "10".into())]).await.map_err(err)?;
         let rows: Vec<_> = v["tracks"]["items"].as_array().map(|a| a.iter().filter_map(|t| api::track_row(t, None)).collect()).unwrap_or_default();
-        let _ = self.db.upsert_spotify_tracks(&rows, None);
+        let _ = self.db.upsert_spotify_tracks(&rows);
         let mut tracks: Vec<Item> = rows
             .iter()
             .map(|r| {

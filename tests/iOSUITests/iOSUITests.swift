@@ -11,7 +11,7 @@ final class iOSUITests: StreamUITestCase {
 
     func testTabsAndLibrarySections() {
         app.tabBars.buttons["Library"].tap()
-        for s in ["Playlists", "Artists", "Albums", "Liked Songs", "Uploads", "Downloaded", "History"] {
+        for s in ["Playlists", "Artists", "Albums", "Uploads", "Downloaded", "History"] {
             wait(el("library.\(s)"))
         }
         XCTAssertFalse(el("library.Songs").exists)

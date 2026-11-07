@@ -21,7 +21,7 @@ Because it uses librespot, Stream isn't for the App Store. Install it with `scri
 - **One library.** Spotify and your own files side by side in Playlists, Artists, Albums, Songs, Uploads and Downloaded, with Made For You, Discover Weekly and the Daily Mixes in Playlists.
 - **Home** is a grid of pins above your recents. Long-press any album, song, artist or playlist to pin it.
 - **One search** across your library, Spotify and SoundCloud, each song once as its best sounding copy, with type chips and recent searches.
-- **SoundCloud** with no developer account: search and play straight away; sign in for your likes and playlists. Songs a label only offers encrypted play from Spotify or your files instead.
+- **SoundCloud** with no developer account: search and play straight away; sign in for your playlists. Songs a label only offers encrypted play from Spotify or your files instead.
 - **Your own playlists**, kept with aza on every device, and if you like on Spotify and SoundCloud too: the same songs on each, found by ISRC or by title, artist and length. Changes made there come back.
 - **Import a playlist from a link**: paste a Spotify or SoundCloud playlist or album link and it becomes one of your playlists.
 - **Services** in Settings: your music, Spotify, SoundCloud and Last.fm, each with its own page; switch any off without signing out. A song on several plays from its best copy.

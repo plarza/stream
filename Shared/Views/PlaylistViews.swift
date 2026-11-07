@@ -146,10 +146,17 @@ struct NewPlaylistSheet: View {
     }
 }
 
-/// "Add to Playlist": your playlists, newest first, and a new one.
-struct AddToPlaylistMenu: View {
+/// "Add to Playlist": your playlists, newest first, and a new one. Drawn as a menu item
+/// unless it's given its own label (the add button beside what's playing).
+struct AddToPlaylistMenu<Content: View>: View {
     let tracks: () async -> [Track]
+    let label: Content
     @Environment(AppModel.self) private var model
+
+    init(tracks: @escaping () async -> [Track], @ViewBuilder label: () -> Content) {
+        self.tracks = tracks
+        self.label = label()
+    }
 
     var body: some View {
         Menu {
@@ -172,9 +179,14 @@ struct AddToPlaylistMenu: View {
                 }
             }
         } label: {
-            Label("Add to Playlist", systemImage: "text.badge.plus")
+            label
         }
-        .accessibilityIdentifier("menu.addToPlaylist")
+    }
+}
+
+extension AddToPlaylistMenu where Content == Label<Text, Image> {
+    init(tracks: @escaping () async -> [Track]) {
+        self.init(tracks: tracks) { Label("Add to Playlist", systemImage: "text.badge.plus") }
     }
 }
 

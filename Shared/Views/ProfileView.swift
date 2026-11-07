@@ -118,7 +118,7 @@ struct ProfileView: View {
             }
         } footer: {
             Text(model.account.soundcloudUser == nil
-                 ? "Search and play work without an account. Sign in for your likes and playlists, and to keep playlists there."
+                 ? "Search and play work without an account. Sign in for your playlists, and to keep playlists there."
                  : "Songs a label has only made available encrypted play from Spotify or your files instead.")
         }
     }

@@ -2,7 +2,7 @@
 //!
 //! No developer app: the web player's public client ID is read out of soundcloud.com's
 //! scripts, and found again when SoundCloud turns it over (401/403). That's enough to search
-//! and to play. Your likes and playlists need you signed in: the web player's `oauth_token`
+//! and to play. Your playlists need you signed in: the web player's `oauth_token`
 //! from a sign-in sheet on soundcloud.com, sent as `Authorization: OAuth …`.
 //!
 //! Audio is HLS: AAC in fragmented MP4 (or MP3) segments, joined into one file that plays
@@ -202,7 +202,7 @@ impl SoundCloud {
             async { match users { Some(n) => self.get("/search/users", &query(n)).await.map(Some), None => Ok(None) } },
         );
         let rows: Vec<SpotifyTrackRow> = t?.map(|v| collection(&v).iter().filter_map(track_row).collect()).unwrap_or_default();
-        let _ = self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows, None);
+        let _ = self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows);
         let mut tracks: Vec<Item> = rows.iter().map(|r| {
             let mut i = row_track(r).as_item();
             i.subtitle = format!("Song · {}", r.artist);
@@ -247,19 +247,12 @@ impl SoundCloud {
 
     // ---- your library ---------------------------------------------------------------
 
-    /// Your likes and playlists, into the library.
+    /// Your playlists, into the library.
     pub async fn refresh_library(&self) -> Result<()> {
         let me = self.me().await?;
         let uid = me["id"].as_u64().ok_or_else(|| anyhow!("SoundCloud didn't say who you are"))?;
         let page = [("limit", "200".to_string())];
-        let (likes_path, lists_path) = (format!("/users/{uid}/track_likes"), format!("/users/{uid}/playlists_without_albums"));
-        let (likes, lists) = tokio::join!(self.all_pages(&likes_path, &page, 10_000), self.all_pages(&lists_path, &page, 1_000));
-        if let Ok(likes) = likes {
-            let rows: Vec<SpotifyTrackRow> = likes.iter().filter_map(|l| track_row(&l["track"])).collect();
-            let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
-            self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows, Some(true))?;
-            self.db.set_saved_from(Source::SoundCloud, &ids)?;
-        }
+        let lists = self.all_pages(&format!("/users/{uid}/playlists_without_albums"), &page, 1_000).await;
         if let Ok(lists) = lists {
             let rows: Vec<_> = lists
                 .iter()
@@ -290,7 +283,7 @@ impl SoundCloud {
             fetched.iter().find(|f| f["id"] == t["id"]).cloned()
         };
         let rows: Vec<SpotifyTrackRow> = listed.iter().filter_map(|t| full(t)).filter_map(|t| track_row(&t)).collect();
-        self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows, None)?;
+        self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows)?;
         let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
         self.db.set_playlist_tracks(&item.id, &ids, None);
         let tracks = ids.iter().filter_map(|id| self.db.track(id)).collect();
@@ -314,13 +307,6 @@ impl SoundCloud {
     pub async fn set_playlist(&self, n: u64, title: &str, tracks: &[u64]) -> Result<()> {
         let body = json!({ "playlist": { "title": title, "tracks": tracks } });
         self.request(Method::PUT, &format!("/playlists/{n}"), &[], Some(body)).await.map(|_| ())
-    }
-
-    pub async fn set_liked(&self, n: u64, liked: bool) -> Result<()> {
-        let me = self.me().await?;
-        let uid = me["id"].as_u64().ok_or_else(|| anyhow!("SoundCloud didn't say who you are"))?;
-        let method = if liked { Method::PUT } else { Method::DELETE };
-        self.request(method, &format!("/users/{uid}/track_likes/{n}"), &[], None).await.map(|_| ())
     }
 
     // ---- audio ----------------------------------------------------------------------
@@ -482,7 +468,6 @@ pub fn row_track(r: &SpotifyTrackRow) -> Track {
         track_number: 0,
         disc_number: 0,
         downloaded: false,
-        liked: false,
         quality: "AAC 160".into(),
         remote: false,
     }

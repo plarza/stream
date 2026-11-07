@@ -442,16 +442,20 @@ struct PlayerBar: View {
             .id(t?.id)
             .transition(.blurReplace)
             if let t {
-                Button { model.setLiked(t, !t.liked) } label: {
-                    Image(systemName: t.liked ? "heart.fill" : "heart")
-                        .foregroundStyle(t.liked ? accent : .secondary)
-                        .contentTransition(.symbolEffect(.replace))
+                AddToPlaylistMenu(tracks: { [t] }) {
+                    Image(systemName: "plus")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
                         .frame(width: target, height: target)
                         .contentShape(Rectangle())
                 }
+                .menuStyle(.button)
+                .menuIndicator(.hidden)
                 .buttonStyle(.pressable)
-                .accessibilityLabel(t.liked ? "Unlike" : "Like")
-                .accessibilityIdentifier("player.like")
+                .fixedSize()
+                .help("Add to Playlist")
+                .accessibilityLabel("Add to Playlist")
+                .accessibilityIdentifier("player.addToPlaylist")
             }
         }
     }

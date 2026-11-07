@@ -27,18 +27,6 @@ struct PreviousTrackIntent: AppIntent {
     }
 }
 
-struct PlayLikedSongsIntent: AppIntent {
-    static let title: LocalizedStringResource = "Play Liked Songs"
-    @Parameter(title: "Shuffle", default: true) var shuffle: Bool
-
-    @MainActor func perform() async throws -> some IntentResult {
-        let model = AppModel.shared
-        let tracks = model.core.sectionTracks(section: .likedSongs)
-        model.core.play(tracks: tracks, start: 0, context: nil, shuffle: shuffle)
-        return .result()
-    }
-}
-
 /// Pinned albums, artists, playlists and songs, for "Play <pin>".
 struct PinEntity: AppEntity {
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Pinned Item"
@@ -79,7 +67,6 @@ struct PlayPinIntent: AppIntent {
 
 struct StreamShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: PlayLikedSongsIntent(), phrases: ["Play my liked songs in \(.applicationName)"], shortTitle: "Liked Songs", systemImageName: "heart.fill")
         AppShortcut(intent: PlayPinIntent(), phrases: ["Play \(\.$pin) in \(.applicationName)"], shortTitle: "Play Pinned", systemImageName: "pin.fill")
         AppShortcut(intent: PlayPauseIntent(), phrases: ["Pause \(.applicationName)", "Resume \(.applicationName)"], shortTitle: "Play/Pause", systemImageName: "playpause.fill")
         AppShortcut(intent: NextTrackIntent(), phrases: ["Skip song in \(.applicationName)"], shortTitle: "Next Song", systemImageName: "forward.fill")

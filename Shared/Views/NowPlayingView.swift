@@ -124,7 +124,7 @@ struct NowPlayingView: View {
             .id(track?.id)
             .transition(.blurReplace)
             Spacer()
-            likeButton
+            addButton
         }
         .padding(.bottom, 8)
         .animation(.smooth, value: track?.id)
@@ -142,7 +142,7 @@ struct NowPlayingView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .id(track?.id)
             .transition(.blurReplace)
-            likeButton
+            addButton
         }
         .animation(.smooth, value: track?.id)
     }
@@ -166,14 +166,12 @@ struct NowPlayingView: View {
         }
     }
 
-    private var likeButton: some View {
-        Button {
-            if let t = track { model.setLiked(t, !t.liked) }
-        } label: {
-            Image(systemName: track?.liked == true ? "heart.fill" : "heart")
-                .font(.title3)
-                .foregroundStyle(track?.liked == true ? accent : .white)
-                .contentTransition(.symbolEffect(.replace))
+    /// Adds what's playing to one of your playlists, or a new one.
+    private var addButton: some View {
+        AddToPlaylistMenu(tracks: { track.map { [$0] } ?? [] }) {
+            Image(systemName: "plus")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
                 .frame(width: 38, height: 38)
                 .glassEffect(.regular.interactive(), in: .circle)
                 .padding(3)
@@ -181,8 +179,8 @@ struct NowPlayingView: View {
         }
         .buttonStyle(.pressable)
         .disabled(track == nil)
-        .accessibilityLabel(track?.liked == true ? "Unlike" : "Like")
-        .accessibilityIdentifier("nowPlaying.like")
+        .accessibilityLabel("Add to Playlist")
+        .accessibilityIdentifier("nowPlaying.addToPlaylist")
     }
 
     private var bottomBar: some View {

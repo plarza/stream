@@ -22,7 +22,6 @@ pub struct World {
     pub spotify_saved_albums: Vec<Value>,
     pub spotify_followed: Vec<Value>,
     pub soundcloud_playlists: HashMap<u64, (String, Vec<u64>)>,
-    pub soundcloud_likes: Vec<u64>,
     /// The Stream node's files by SHA-256.
     pub node_files: HashMap<String, Vec<u8>>,
     /// While set, the node holds every file download until it's cleared.
@@ -255,10 +254,6 @@ fn route(method: &str, path: &str, q: &HashMap<String, String>, auth: &str, body
             None => status(404),
         },
         ("GET", ["sc-api", "media", n, "hls"]) => ok(json!({ "url": format!("{base}/cdn/{n}/playlist.m3u8?expires=1") })),
-        ("GET", ["sc-api", "users", "7", "track_likes"]) => {
-            let likes: Vec<Value> = w.soundcloud_likes.iter().filter_map(|n| w.soundcloud.iter().find(|t| t["id"] == *n)).map(|t| json!({ "track": t })).collect();
-            ok(json!({ "collection": likes, "next_href": null }))
-        }
         ("GET", ["sc-api", "users", "7", "playlists_without_albums"]) => {
             let lists: Vec<Value> = w.soundcloud_playlists.iter().map(|(n, p)| json!({ "id": n, "title": p.0, "track_count": p.1.len(), "user": { "username": "aiden-sc" } })).collect();
             ok(json!({ "collection": lists, "next_href": null }))

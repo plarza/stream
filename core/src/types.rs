@@ -111,7 +111,6 @@ pub struct Track {
     pub track_number: u32,
     pub disc_number: u32,
     pub downloaded: bool,
-    pub liked: bool,
     /// "FLAC 24/96", "OGG 320", "AAC 256".
     pub quality: String,
     /// A song from the Stream node rather than a file on this device.
@@ -145,7 +144,8 @@ pub struct CollectionPage {
     pub releases: Vec<Release>,
     /// Artist pages from Spotify: bio, photos and stats.
     pub artist: Option<ArtistInfo>,
-    pub liked: bool,
+    /// In your library: an album or podcast saved, an artist followed.
+    pub saved: bool,
     pub pinned: bool,
     /// Show pages: the episodes, newest first (`tracks` has them too, to play).
     pub episodes: Vec<Episode>,
@@ -238,7 +238,6 @@ pub enum LibrarySection {
     UploadedArtists,
     /// On this device to play offline: downloaded Spotify songs and Uploads.
     Downloaded,
-    LikedSongs,
     /// The podcasts you follow on Spotify.
     Podcasts,
 }
@@ -345,7 +344,7 @@ pub struct AccountState {
 }
 
 /// One Spotify sign-in, step by step. It takes two approvals in the browser sheet: the
-/// account (library, likes, search, through your own Spotify app) and playback (through
+/// account (library, search, through your own Spotify app) and playback (through
 /// Spotify's desktop client, the only kind its streaming servers let in).
 #[derive(Debug, Clone, PartialEq, uniffi::Enum)]
 pub enum SignInStep {

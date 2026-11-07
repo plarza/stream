@@ -71,12 +71,9 @@ final class SignInTests: StreamUITestCase {
         el("sort").tap()
         wait(app.buttons["Playlist Order"]).tap()
         order(["Zebra", "Apple", "Mango"])
-        app.navigationBars.buttons.firstMatch.tap()
-        app.navigationBars.buttons.firstMatch.tap()
 
         // A song by two artists offers both; the second opens their page.
-        wait(el("library.Liked Songs")).tap()
-        wait(el("row.Duet"), 15).press(forDuration: 1)
+        el("track.Mango").press(forDuration: 1)
         wait(app.buttons["Go to Artist"]).tap()
         wait(app.buttons["Mira Vale"])
         app.buttons["Otto Rhee"].tap()

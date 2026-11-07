@@ -32,9 +32,6 @@ struct TrackRow: View {
             }
             Spacer(minLength: 8)
             if !showArtist && track.downloadable { DownloadMark(id: track.id, downloaded: track.downloaded) }
-            if track.liked {
-                Image(systemName: "heart.fill").font(.caption).foregroundStyle(accent.opacity(0.9))
-            }
             Text(Format.time(Double(track.durationMs) / 1000))
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(.tertiary)
@@ -225,7 +222,7 @@ struct ItemMenu: ViewModifier {
             Button { Task { model.playLater(await resolve()) } } label: { Label("Play Later", systemImage: "text.line.last.and.arrowtriangle.forward") }
                 .accessibilityIdentifier("menu.playLater")
             if item.kind != .artist, item.kind != .show {
-                AddToPlaylistMenu(tracks: resolve)
+                AddToPlaylistMenu(tracks: resolve).accessibilityIdentifier("menu.addToPlaylist")
             }
             if let remove {
                 Button(role: .destructive, action: remove) { Label("Remove from Playlist", systemImage: "minus.circle") }

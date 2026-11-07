@@ -13,7 +13,6 @@ extension LibrarySection: Identifiable {
         case .uploadedAlbums: "Uploaded Albums"
         case .uploadedArtists: "Uploaded Artists"
         case .downloaded: "Downloaded"
-        case .likedSongs: "Liked Songs"
         case .podcasts: "Podcasts"
         }
     }
@@ -27,12 +26,11 @@ extension LibrarySection: Identifiable {
         case .uploadedAlbums: "square.stack"
         case .uploadedArtists: "music.mic"
         case .downloaded: "arrow.down.circle"
-        case .likedSongs: "heart"
         case .podcasts: Item.showSymbol
         }
     }
 
-    var isSongs: Bool { self == .uploads || self == .downloaded || self == .likedSongs }
+    var isSongs: Bool { self == .uploads || self == .downloaded }
 
     /// Shown as a grid of covers rather than a list.
     var isGrid: Bool { !isSongs }
@@ -42,7 +40,7 @@ extension LibrarySection: Identifiable {
         self == .uploads ? [("Songs", .uploads), ("Albums", .uploadedAlbums), ("Artists", .uploadedArtists)] : []
     }
 
-    static let ordered: [LibrarySection] = [.playlists, .podcasts, .artists, .albums, .likedSongs, .uploads, .downloaded]
+    static let ordered: [LibrarySection] = [.playlists, .podcasts, .artists, .albums, .uploads, .downloaded]
 }
 
 /// A Library page that isn't one of the core's sections.
@@ -301,7 +299,6 @@ struct SectionView: View {
     private var emptyText: String {
         switch section {
         case .downloaded: "Nothing downloaded"
-        case .likedSongs: "No liked songs"
         case .uploads: "No uploads yet"
         case .albums: "No saved albums"
         case .artists: "No followed artists"

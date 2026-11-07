@@ -23,7 +23,7 @@ Rust core  (static lib, packed as StreamCore.xcframework)
   ├─ engine    decoding (symphonia / librespot), queue, gapless, normalization
   ├─ lyrics    Spotify synced lyrics + embedded lyrics + LRCLIB, "best sync wins"
   ├─ scrobble  Last.fm (Spotify and local files), offline queue
-  ├─ soundcloud  search, HLS playback, likes and playlists through api-v2
+  ├─ soundcloud  search, HLS playback and playlists through api-v2
   ├─ playlists your own playlists, kept with aza and copied to Spotify and SoundCloud
   ├─ node      your own files on the Stream node, streamed or downloaded
   └─ sync      aza sync items: settings, pins, what's playing, History
@@ -48,7 +48,7 @@ AVAudioEngine (AVAudioSourceNode) → system output, Now Playing, AirPlay
 Works the way spotifast does:
 
 1. **Web API grant**: OAuth PKCE using your own Spotify developer app's Client ID (you
-   register it once). Used for library, playlists, search, likes, playback control, and
+   register it once). Used for library, playlists, search, playback control, and
    artist info.
 2. **Playback grant**: OAuth PKCE with Spotify's desktop client identity, only the
    `streaming` scope, exchanged for librespot's reusable credentials. These are stored in the
@@ -74,8 +74,9 @@ Rules:
 - **Offline:** manual "Download" on a song, album or playlist (its page, or a long-press). Uses
   librespot's encrypted audio cache for Spotify songs; Uploads are downloaded as their files.
   Both land in Library → **Downloaded**.
-- Heart = Spotify Like (Liked Songs). Hearting a local track sets a local "liked" flag so it
-  shows up in Liked Songs.
+- There are no liked songs: the songs you keep go in your playlists. The **+** beside the song
+  playing (Now Playing, and the Mac's player bar) adds it to one of them or a new one. An
+  album's + saves it to your Spotify library (Library → Albums).
 
 ## SoundCloud
 
@@ -85,8 +86,7 @@ Through soundcloud.com's own web player API (api-v2), with no developer app (cor
   SoundCloud turns it over (a 401/403). Search and playback need nothing else.
 - Signing in (Settings → Services → SoundCloud) opens soundcloud.com in a private web sheet and
   takes the web player's `oauth_token` cookie. It's checked against `/me`, kept in the Keychain and
-  synced in `settings`, so other devices are signed in too. It brings your likes (Liked Songs)
-  and playlists, and lets Stream keep playlists there.
+  synced in `settings`, so other devices are signed in too. It brings your playlists, and lets Stream keep playlists there.
 - Audio is HLS: AAC 160 in fragmented MP4 (or MP3), fetched whole into a 1 GB cache and played
   like a file. Songs SoundCloud only offers encrypted (most major-label releases) play from the
   same song found elsewhere (your files or Spotify, by ISRC or tags, the best sounding) instead.
@@ -126,8 +126,9 @@ entry, and written empty when deleted. Each one can also be kept on Spotify and 
   (`open.spotify.com/…`, `spotify:…`) or a SoundCloud set (`soundcloud.com/…/sets/…`, short
   `on.soundcloud.com` links too) and makes it one of your playlists, with its name and songs.
   `network-aza-stream://newplaylist?import=<link>` does the same.
-- **Mac:** a click on a song plays it (and picks it); ⇧-click picks a run without playing, ⌘-click
-  picks one more, ⌘A all. ⌘C copies the picked songs (as Spotify links or "title — artist" elsewhere), ⌘X cuts them out
+- **Mac:** a click on a song plays it without picking it; ⇧-click picks a run from it without
+  playing, ⌘-click picks one more, ⌘A all. Only picked songs are tinted. Your own playlist takes
+  ⌘V as soon as its page is open, even empty. ⌘C copies the picked songs (as Spotify links or "title — artist" elsewhere), ⌘X cuts them out
   of your own playlist, ⌘V pastes copied songs into one, and Delete takes them out. A right-click
   on a picked song acts on all of them. Playlist sort choices show inline in the sort menu, as on iPhone.
 - Copies don't show again in Library. The playlist's page shows where it's kept (aza, Spotify
@@ -153,7 +154,7 @@ entry, and written empty when deleted. Each one can also be kept on Spotify and 
   filled arrow once it's here, a filling ring while it downloads and a dotted arrow while it
   waits. Library → Downloaded (with a ring beside it while downloading) lists the song
   downloading now and the ones waiting above what's downloaded, and can cancel them.
-- Every list of songs (albums, playlists, an artist's popular songs, Uploads, Liked Songs,
+- Every list of songs (albums, playlists, an artist's popular songs, Uploads,
   Downloaded) sorts from the same ⇅ menu: the list's own order, title, artist, album or length,
   and reversed. The choice is kept per kind of list.
 - Artist info comes from Spotify only. An artist that exists only locally gets a plain page.
@@ -203,7 +204,7 @@ iPhone approves in the aza app on the same phone; the Mac shows a QR code that t
 - No EQ.
 - **Queue:** Play Next / Play Later above the remaining context (album or playlist).
   Shuffle sits left of the transport and repeat right of it; repeat only loops the current
-  song forever. Toggles, likes and saves change on screen at once and roll back if the
+  song forever. Toggles and saves change on screen at once and roll back if the
   core or Spotify refuses. Autoplay is a setting, off by default.
 - **Handoff:** Spotify tracks only (track, position, context URI).
 
@@ -232,11 +233,11 @@ bottom accessory.
 |---|---|
 | Now Playing | `01` **A Immersive**: blurred full-bleed art, big art, format/quality chip (e.g. FLAC 24/96, OGG 320). Behind it, Aurora: a 4×4 mesh of the cover's colours, each row lit by its part of the spectrum (bass at the bottom) and pushed outward on beats. The bottom row is Lyrics, AirPlay, Visualizer (waveform, accent when on, slashed when off; saved per device) and Queue |
 | Home | `02` **D Pinned grid + recents**, without the floating search pill. You can pin albums, songs, artists and playlists |
-| Library | Category list: Playlists, Podcasts, Artists, Albums, Liked Songs, Uploads, Downloaded, History |
+| Library | Category list: Playlists, Podcasts, Artists, Albums, Uploads, Downloaded, History |
 | Podcasts | Library → Podcasts: the shows you follow on Spotify as a grid. A show's page lists its episodes newest first with the date, description, length or time left, and Played. Play starts the newest episode you haven't finished; an episode resumes where you left it, and counts as played within 15 seconds of the end |
 | History | Library → History (not a tab): every song played on any of your devices, newest first, by day, with the time and device |
 | Lyrics | `04` **A**: left-aligned, word fill on the active line, distance blur on the others, tap a line to seek |
-| Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, like, pin). Their songs sort from the ⇅ menu in the actions row (the list's own order, title, artist, album, length, reversed), the same for every playlist, every album and every artist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |
+| Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, save, pin). Their songs sort from the ⇅ menu in the actions row (the list's own order, title, artist, album, length, reversed), the same for every playlist, every album and every artist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |
 | Queue | `06` **A** without the toggle row: "Playing Next" + "Continue from …" |
 | Settings → Services | `09` **A** One Services list: a row per service and Last.fm with its status, each opening its own page |
 | Search | `07` **C**: one relevance-ranked list across library + Spotify, type chips (All, Songs, Albums, Artists, Playlists); the empty state shows recent searches |
@@ -270,14 +271,14 @@ Everything should feel like Apple's own apps:
   frame with `TimelineView`.
 - Scroll transitions on grids and lists (subtle scale/opacity). Album art crossfades between
   tracks, and the background tint animates its color change.
-- Haptics on play/pause, skip, pin, like and queue reorder (iPhone).
+- Haptics on play/pause, skip, pin, save and queue reorder (iPhone).
 - Respects Reduce Motion (transitions become crossfades).
 
 ## System integration
 
 - iOS: lock screen and Control Center through the system Now Playing card (no Live Activity,
   no widgets), AirPlay, Siri + Shortcuts via App Intents (play / pause / skip, "play album X",
-  "play my liked songs", "play pinned X").
+  "play pinned X").
 - macOS: media keys, Now Playing, menu bar mini player, and a keep-running-when-closed
   lifecycle.
 

@@ -13,7 +13,7 @@ struct CollectionView: View {
     @State private var palette: Palette = .fallback
     @State private var error: String?
     @State private var pinned = false
-    @State private var liked = false
+    @State private var saved = false
     @State private var showCover = false
     /// Artist pages: the release kind picked, or nil for all of them.
     @State private var releaseFilter: ReleaseKind?
@@ -39,7 +39,7 @@ struct CollectionView: View {
         // Open with what we had last time or what's on disk (page and colors), then refresh.
         let cached = AppModel.shared.cachedPage(item.id)
         _page = State(initialValue: cached)
-        _liked = State(initialValue: cached?.liked ?? false)
+        _saved = State(initialValue: cached?.saved ?? false)
         _pinned = State(initialValue: cached?.pinned ?? false)
         _palette = State(initialValue: Palette.cached(cached?.item.art ?? item.art) ?? .fallback)
     }
@@ -213,12 +213,12 @@ struct CollectionView: View {
             }
             if item.kind == .album, item.source == .spotify {
                 Button { toggleSaved() } label: {
-                    Image(systemName: liked ? "heart.fill" : "heart").font(.title3)
+                    Image(systemName: saved ? "checkmark.circle.fill" : "plus.circle").font(.title3)
                         .contentTransition(.symbolEffect(.replace))
                 }
                 .buttonStyle(.pressable)
-                .accessibilityLabel(liked ? "Remove from Library" : "Add to Library")
-                .accessibilityIdentifier("collection.like")
+                .accessibilityLabel(saved ? "Remove from Library" : "Add to Library")
+                .accessibilityIdentifier("collection.save")
             }
             Button {
                 model.togglePin(shown)
@@ -477,7 +477,7 @@ struct CollectionView: View {
             model.pages[item.id] = p
             withAnimation(.smooth) {
                 page = p
-                liked = p.liked
+                saved = p.saved
                 pinned = p.pinned
             }
         } catch {
@@ -486,12 +486,12 @@ struct CollectionView: View {
     }
 
     private func toggleSaved() {
-        liked.toggle()
+        saved.toggle()
         Haptics.success()
-        let id = item.id, on = liked
+        let id = item.id, on = saved
         Task {
-            do { try await model.core.setLiked(trackId: id, liked: on) } catch {
-                withAnimation(.snappy) { liked = !on }
+            do { try await model.core.setSaved(id: id, saved: on) } catch {
+                withAnimation(.snappy) { saved = !on }
                 model.show(AppModel.message(error))
             }
         }

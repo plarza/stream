@@ -402,7 +402,6 @@ impl StreamCore {
             track_number: 0,
             disc_number: 0,
             downloaded: false,
-            liked: false,
             quality: if source == Source::Spotify { "OGG 320".into() } else { "AAC 160".into() },
             remote: false,
         }
@@ -419,7 +418,7 @@ impl StreamCore {
         if !on.is_empty() {
             detail = format!("{detail} · also on {}", on.join(" and "));
         }
-        Some(CollectionPage { detail, item: self.own_item(bare, &p), description: None, tracks, releases: vec![], artist: None, liked: false, pinned, episodes: vec![] })
+        Some(CollectionPage { detail, item: self.own_item(bare, &p), description: None, tracks, releases: vec![], artist: None, saved: false, pinned, episodes: vec![] })
     }
 
     /// The same song somewhere it plays: for a SoundCloud song only offered encrypted.
@@ -614,7 +613,7 @@ impl StreamCore {
                 let web = self.web.read().clone().ok_or_else(|| anyhow::anyhow!("Connect Spotify in Settings"))?;
                 let items = web.all_pages(&format!("/playlists/{}/items", api::bare_id(id)), &[("limit", "100".into())], 10_000).await?;
                 let rows: Vec<_> = items.iter().filter_map(|it| api::track_row(if it["item"].is_object() { &it["item"] } else { &it["track"] }, None)).collect();
-                self.db.upsert_spotify_tracks(&rows, None)?;
+                self.db.upsert_spotify_tracks(&rows)?;
                 Ok(rows.into_iter().map(|r| r.id).collect())
             }
             Service::SoundCloud => {
@@ -623,7 +622,7 @@ impl StreamCore {
                 let unknown: Vec<u64> = nums.iter().copied().filter(|n| self.db.track(&crate::soundcloud::track_id(*n)).is_none()).collect();
                 if !unknown.is_empty() {
                     let rows: Vec<_> = self.soundcloud.tracks(&unknown).await?.iter().filter_map(crate::soundcloud::track_row).collect();
-                    self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows, None)?;
+                    self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows)?;
                 }
                 Ok(nums.into_iter().map(crate::soundcloud::track_id).collect())
             }
@@ -718,7 +717,7 @@ impl StreamCore {
             if let Some(t) = matching::best(&want, &candidates)
                 && let Some(row) = api::track_row(t, None)
             {
-                self.db.upsert_spotify_tracks(std::slice::from_ref(&row), None)?;
+                self.db.upsert_spotify_tracks(std::slice::from_ref(&row))?;
                 return Ok(Some(row.id));
             }
         }
@@ -739,7 +738,7 @@ impl StreamCore {
             .collect();
         let Some(t) = matching::best(&want, &candidates) else { return Ok(None) };
         let Some(row) = crate::soundcloud::track_row(t) else { return Ok(None) };
-        self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", std::slice::from_ref(&row), None)?;
+        self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", std::slice::from_ref(&row))?;
         Ok(Some(row.id))
     }
 

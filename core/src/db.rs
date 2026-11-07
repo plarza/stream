@@ -41,8 +41,6 @@ CREATE TABLE IF NOT EXISTS tracks (
     mtime         INTEGER,
     size          INTEGER,
     added_at      INTEGER NOT NULL,
-    liked         INTEGER NOT NULL DEFAULT 0,
-    saved         INTEGER NOT NULL DEFAULT 0, -- spotify: in Liked Songs
     downloaded    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS tracks_album ON tracks(album_id, disc_no, track_no);
@@ -260,6 +258,9 @@ impl Db {
         let _ = conn.execute("ALTER TABLE tracks ADD COLUMN hash TEXT", []);
         let _ = conn.execute("ALTER TABLE tracks ADD COLUMN remote INTEGER NOT NULL DEFAULT 0", []);
         let _ = conn.execute("ALTER TABLE tracks ADD COLUMN uploaded INTEGER NOT NULL DEFAULT 0", []);
+        // Songs aren't liked any more: playlists hold the ones you keep.
+        let _ = conn.execute("ALTER TABLE tracks DROP COLUMN liked", []);
+        let _ = conn.execute("ALTER TABLE tracks DROP COLUMN saved", []);
         conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS tracks_hash ON tracks(hash);
              -- aza sync items as last read or written: the version, and for songs whether this
@@ -768,49 +769,32 @@ impl Db {
 
     // ---- spotify cache -----------------------------------------------------
 
-    pub fn upsert_spotify_tracks(&self, tracks: &[SpotifyTrackRow], saved: Option<bool>) -> anyhow::Result<()> {
-        self.upsert_streamed_tracks(Source::Spotify, "OGG 320", tracks, saved)
+    pub fn upsert_spotify_tracks(&self, tracks: &[SpotifyTrackRow]) -> anyhow::Result<()> {
+        self.upsert_streamed_tracks(Source::Spotify, "OGG 320", tracks)
     }
 
-    /// Songs from a streaming service, keeping whether they're liked unless `saved` says.
-    pub fn upsert_streamed_tracks(&self, source: Source, quality: &str, tracks: &[SpotifyTrackRow], saved: Option<bool>) -> anyhow::Result<()> {
+    /// Songs from a streaming service.
+    pub fn upsert_streamed_tracks(&self, source: Source, quality: &str, tracks: &[SpotifyTrackRow]) -> anyhow::Result<()> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         let now = now();
         for t in tracks {
             tx.execute(
                 "INSERT INTO tracks(id, source, title, artist, artist_id, album, album_id, track_no, disc_no,
-                    duration_ms, quality, art, added_at, saved, artists)
-                 VALUES(?1, ?14, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?15, ?10, ?11, COALESCE(?12, 0), ?13)
+                    duration_ms, quality, art, added_at, artists)
+                 VALUES(?1, ?13, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?14, ?10, ?11, ?12)
                  ON CONFLICT(id) DO UPDATE SET title=excluded.title, artist=excluded.artist, artist_id=excluded.artist_id,
                     artists=COALESCE(excluded.artists, tracks.artists),
                     album=COALESCE(NULLIF(excluded.album, ''), tracks.album), album_id=COALESCE(excluded.album_id, tracks.album_id),
                     track_no=CASE excluded.track_no WHEN 0 THEN tracks.track_no ELSE excluded.track_no END,
-                    disc_no=excluded.disc_no, duration_ms=excluded.duration_ms, art=COALESCE(excluded.art, tracks.art),
-                    saved = COALESCE(?12, tracks.saved)",
+                    disc_no=excluded.disc_no, duration_ms=excluded.duration_ms, art=COALESCE(excluded.art, tracks.art)",
                 params![
                     t.id, t.title, t.artist, t.artist_id, t.album, t.album_id, t.track_no, t.disc_no,
-                    t.duration_ms, t.art, now, saved.map(|s| s as i64),
+                    t.duration_ms, t.art, now,
                     (t.artists.len() > 1).then(|| serde_json::to_string(&t.artists).ok()).flatten(),
                     source_num(source), quality
                 ],
             )?;
-        }
-        tx.commit()?;
-        Ok(())
-    }
-
-    pub fn set_saved_tracks(&self, ids: &[String]) -> anyhow::Result<()> {
-        self.set_saved_from(Source::Spotify, ids)
-    }
-
-    /// The songs liked on one service: exactly these.
-    pub fn set_saved_from(&self, source: Source, ids: &[String]) -> anyhow::Result<()> {
-        let mut conn = self.conn.lock();
-        let tx = conn.transaction()?;
-        tx.execute("UPDATE tracks SET saved = 0 WHERE source = ?1", [source_num(source)])?;
-        for id in ids {
-            tx.execute("UPDATE tracks SET saved = 1 WHERE id = ?1", [id])?;
         }
         tx.commit()?;
         Ok(())
@@ -1023,13 +1007,11 @@ impl Db {
 
     fn track_from_row(&self, r: &Row) -> rusqlite::Result<Track> {
         let source = source_of(r.get(1)?);
-        let saved: i64 = r.get(13)?;
-        let liked: i64 = r.get(12)?;
         let artist: String = r.get(3)?;
         let artist_id: Option<String> = r.get(4)?;
         // Only songs with several artists store the list; one artist is just artist and artist_id.
         let artists = r
-            .get::<_, Option<String>>(15)?
+            .get::<_, Option<String>>(13)?
             .and_then(|s| serde_json::from_str::<Vec<ArtistCredit>>(&s).ok())
             .unwrap_or_else(|| artist_id.clone().map(|id| vec![ArtistCredit { id, name: artist.clone() }]).unwrap_or_default());
         Ok(Track {
@@ -1046,14 +1028,13 @@ impl Db {
             track_number: r.get::<_, i64>(9)? as u32,
             disc_number: r.get::<_, i64>(10)? as u32,
             quality: r.get(11)?,
-            liked: liked != 0 || saved != 0,
-            downloaded: r.get::<_, i64>(14)? != 0,
-            remote: r.get::<_, i64>(16)? != 0,
+            downloaded: r.get::<_, i64>(12)? != 0,
+            remote: r.get::<_, i64>(14)? != 0,
         })
     }
 
     const TRACK_COLS: &'static str =
-        "t.id, t.source, t.title, t.artist, t.artist_id, t.album, t.album_id, t.art, t.duration_ms, t.track_no, t.disc_no, t.quality, t.liked, t.saved, t.downloaded, t.artists, t.remote";
+        "t.id, t.source, t.title, t.artist, t.artist_id, t.album, t.album_id, t.art, t.duration_ms, t.track_no, t.disc_no, t.quality, t.downloaded, t.artists, t.remote";
 
     pub fn track(&self, id: &str) -> Option<Track> {
         let conn = self.conn.lock();
@@ -1251,11 +1232,6 @@ impl Db {
                  ORDER BY position LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
-            LibrarySection::LikedSongs => self.items(
-                "SELECT id, 'track', source, title, artist, art, (downloaded = 1 AND (source = 1 OR remote = 1)) FROM tracks
-                 WHERE saved = 1 OR liked = 1 ORDER BY added_at DESC LIMIT ?1 OFFSET ?2",
-                &[&limit, &offset],
-            ),
         }
     }
 
@@ -1263,7 +1239,6 @@ impl Db {
         match section {
             LibrarySection::Uploads => self.tracks_where("WHERE t.source = 0 ORDER BY t.title COLLATE NOCASE", &[]),
             LibrarySection::Downloaded => self.tracks_where("WHERE t.downloaded = 1 AND (t.source = 1 OR t.remote = 1) ORDER BY t.added_at DESC", &[]),
-            LibrarySection::LikedSongs => self.tracks_where("WHERE t.saved = 1 OR t.liked = 1 ORDER BY t.added_at DESC", &[]),
             _ => vec![],
         }
     }
@@ -1295,14 +1270,6 @@ impl Db {
 
     pub fn set_album_saved(&self, id: &str, saved: bool) {
         let _ = self.conn.lock().execute("UPDATE albums SET saved = ?2 WHERE id = ?1", params![id, saved as i64]);
-    }
-
-    pub fn set_local_liked(&self, id: &str, liked: bool) {
-        let _ = self.conn.lock().execute("UPDATE tracks SET liked = ?2 WHERE id = ?1", params![id, liked as i64]);
-    }
-
-    pub fn set_spotify_saved(&self, id: &str, saved: bool) {
-        let _ = self.conn.lock().execute("UPDATE tracks SET saved = ?2 WHERE id = ?1", params![id, saved as i64]);
     }
 
     // ---- pins & recents ----------------------------------------------------
@@ -1373,7 +1340,7 @@ impl Db {
         tx.execute("DELETE FROM search", [])?;
         tx.execute(
             "INSERT INTO search(id, kind, title, subtitle)
-               SELECT id, 'track', title, artist || ' ' || album FROM tracks WHERE source = 0 OR saved = 1
+               SELECT id, 'track', title, artist || ' ' || album FROM tracks WHERE source = 0
                UNION ALL SELECT id, 'album', title, artist FROM albums WHERE saved = 1
                UNION ALL SELECT id, 'artist', name, '' FROM artists WHERE saved = 1
                UNION ALL SELECT id, 'playlist', name, owner FROM playlists

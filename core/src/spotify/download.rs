@@ -83,7 +83,7 @@ pub async fn autoplay(session: &Session, context_uri: &str, recent: &[String], d
         .collect()
         .await;
     let rows: Vec<SpotifyTrackRow> = tracks.iter().map(row).collect();
-    db.upsert_spotify_tracks(&rows, None)?;
+    db.upsert_spotify_tracks(&rows)?;
     Ok(rows.iter().filter_map(|r| db.track(&r.id)).collect())
 }
 
@@ -175,7 +175,7 @@ pub async fn session_playlist(session: &Session, id: &str, db: &Db) -> Result<Co
         .collect()
         .await;
     let rows: Vec<SpotifyTrackRow> = tracks.iter().map(row).collect();
-    db.upsert_spotify_tracks(&rows, None)?;
+    db.upsert_spotify_tracks(&rows)?;
     let ids: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
     db.set_playlist_tracks(id, &ids, None);
     let header = db.playlist_item(id);
@@ -195,7 +195,7 @@ pub async fn session_playlist(session: &Session, id: &str, db: &Db) -> Result<Co
         item,
         tracks,
         releases: vec![], artist: None,
-        liked: false,
+        saved: false,
         pinned: false, episodes: vec![],
     })
 }

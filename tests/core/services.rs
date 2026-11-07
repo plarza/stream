@@ -143,18 +143,19 @@ fn an_encrypted_soundcloud_song_plays_from_your_files() {
 #[test]
 fn signed_in_to_soundcloud_once_is_signed_in_everywhere() {
     let fake = world();
-    fake.world.lock().soundcloud_likes = vec![12];
+    fake.world.lock().soundcloud_playlists.insert(31, ("Night Drives".into(), vec![12]));
     let a = Device::online(&fake);
     let b = Device::online(&fake);
     assert!(tokio_block(a.core.clone().soundcloud_sign_in("wrong".into())).is_err());
     assert_eq!(a.core.account().soundcloud_user, None);
     tokio_block(a.core.clone().soundcloud_sign_in(SOUNDCLOUD_TOKEN.into())).unwrap();
-    until(5, "SoundCloud likes", || a.core.section_tracks(LibrarySection::LikedSongs).iter().any(|t| t.id == "soundcloud:track:12"));
+    let playlists = |d: &Device| d.core.section(LibrarySection::Playlists, 0, 100).into_iter().filter(|i| i.source == Source::SoundCloud).count();
+    until(5, "SoundCloud playlists", || playlists(&a) == 1);
     a.sync_to(&b);
     assert_eq!(b.core.account().soundcloud_user.as_deref(), Some("aiden-sc"));
 
     a.core.soundcloud_sign_out();
-    assert!(a.core.section_tracks(LibrarySection::LikedSongs).is_empty());
+    assert_eq!(playlists(&a), 0);
     a.sync_to(&b);
     assert_eq!(b.core.account().soundcloud_user, None);
 }
