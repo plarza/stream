@@ -3007,6 +3007,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "strsim",
  "symphonia 0.6.1",
  "symphonia-adapter-libopus",
  "tempfile",

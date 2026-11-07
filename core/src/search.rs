@@ -1,8 +1,18 @@
 //! One ranked list from every service. Each service ranks its own results its own way (and
 //! Spotify's Web API matches loosely, so it fills ten rows even when nothing it has is what
-//! you typed), so search ranks every result the same way: by how much of what you typed
-//! it matches. A service's own order and your library only break ties.
+//! you typed), so search ranks every result the same way.
+//!
+//! The ranking is Meilisearch's: rules applied one after another, each only ordering what the
+//! one before it left tied. Then reciprocal rank fusion (Cormack, Clarke and Büttcher, 2009)
+//! of the services' own orders, your library first, settles the rest.
+//!
+//! 1. **Words**: how many of the words you typed it has (the last one may be unfinished).
+//! 2. **Typo**: fewer typos. One is allowed in a word of 5 letters, two from 9.
+//! 3. **Proximity**: your words next to each other and in order, as you typed them.
+//! 4. **Attribute**: more of them in its name than in who it's by.
+//! 5. **Exactness**: words typed in full, then a name that's nothing but what you typed.
 
+use std::cmp::Reverse;
 use std::collections::HashSet;
 
 use crate::types::Item;
@@ -10,54 +20,99 @@ use crate::types::Item;
 /// The labels in front of a result's subtitle ("Song · …"), which aren't part of its name.
 const LABELS: &[&str] = &["Song", "Album", "Single", "EP", "Playlist", "Podcast", "Artist", "Compilation"];
 
-/// Words that don't make a title longer than what you asked for.
+/// Words a name can have beyond what you typed and still be only what you typed.
 const NOISE: &[&str] = &["the", "a", "an", "and", "original", "mix", "version", "radio", "edit", "remastered", "remaster", "feat", "ft", "official", "audio", "video"];
+
+/// Reciprocal rank fusion's constant, from the paper.
+const RRF_K: f32 = 60.0;
 
 /// `lists` in order of trust (your library first, then the services): every item once,
 /// best match first.
 pub fn rank(query: &str, lists: Vec<Vec<Item>>) -> Vec<Item> {
     let asked = query_words(query);
     let mut seen = HashSet::new();
-    let mut scored: Vec<(f32, usize, Item)> = Vec::new();
+    let mut ranked: Vec<(Rules, Reverse<u8>, f32, usize, Item)> = Vec::new();
     for (trust, list) in lists.into_iter().enumerate() {
         for (at, item) in list.into_iter().enumerate() {
-            if !seen.insert(item.id.clone()) {
-                continue;
+            if seen.insert(item.id.clone()) {
+                let fused = 1.0 / (RRF_K + at as f32 + 1.0);
+                ranked.push((rules(&asked, &item), Reverse(u8::from(trust == 0)), fused, ranked.len(), item));
             }
-            // Only breaks ties between results that match about as well.
-            let order = 0.08 / (1.0 + at as f32 / 3.0) + if trust == 0 { 0.05 } else { 0.0 };
-            let score = if asked.is_empty() { 0.0 } else { relevance(&asked, &item) };
-            scored.push((score + order, scored.len(), item));
         }
     }
-    scored.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
-    scored.into_iter().map(|(_, _, i)| i).collect()
+    ranked.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(b.2.total_cmp(&a.2)).then(a.3.cmp(&b.3)));
+    ranked.into_iter().map(|r| r.4).collect()
 }
 
-/// How well `item` answers the query, 0 to 1: mostly how much of what you typed is in its
-/// name and who it's by, and a little how little else its name has.
-fn relevance(asked: &[String], item: &Item) -> f32 {
-    let title = words(&item.title);
+/// Meilisearch's rules, as one key: greater is better.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Default)]
+struct Rules {
+    words: usize,
+    typos: Reverse<usize>,
+    proximity: usize,
+    in_name: usize,
+    exact: usize,
+    only_this: bool,
+}
+
+/// How one word you typed was found.
+#[derive(Clone, Copy)]
+struct Hit {
+    typos: usize,
+    exact: bool,
+    in_name: bool,
+    /// Where, among the name's words and then who it's by.
+    at: usize,
+}
+
+fn rules(asked: &[String], item: &Item) -> Rules {
+    if asked.is_empty() {
+        return Rules::default();
+    }
+    let name = words(&item.title);
     let by = words(subtitle_name(&item.subtitle));
     let last = asked.len() - 1;
-    let mut found = 0.0;
-    let mut title_hits: HashSet<usize> = HashSet::new();
-    for (n, q) in asked.iter().enumerate() {
-        let typing = n == last;
-        let in_title = title.iter().enumerate().map(|(i, w)| (likeness(q, w, typing), i)).max_by(|a, b| a.0.total_cmp(&b.0));
-        let in_by = by.iter().map(|w| likeness(q, w, typing)).fold(0.0, f32::max);
-        if let Some((s, i)) = in_title
-            && s > 0.0
-            && s >= in_by
-        {
-            title_hits.insert(i);
-        }
-        found += in_title.map_or(0.0, |t| t.0).max(in_by);
+    let hits: Vec<Option<Hit>> = asked
+        .iter()
+        .enumerate()
+        .map(|(n, q)| {
+            let in_name = name.iter().enumerate().filter_map(|(i, w)| found(q, w, n == last).map(|(t, e)| Hit { typos: t, exact: e, in_name: true, at: i }));
+            let in_by = by.iter().enumerate().filter_map(|(i, w)| found(q, w, n == last).map(|(t, e)| Hit { typos: t, exact: e, in_name: false, at: name.len() + 1 + i }));
+            in_name.chain(in_by).min_by_key(|h| (h.typos, !h.exact, !h.in_name))
+        })
+        .collect();
+    let matched: Vec<Hit> = hits.iter().flatten().copied().collect();
+    let named: HashSet<usize> = matched.iter().filter(|h| h.in_name).map(|h| h.at).collect();
+    Rules {
+        words: matched.len(),
+        typos: Reverse(matched.iter().map(|h| h.typos).sum()),
+        proximity: hits.windows(2).filter(|p| matches!(p, [Some(a), Some(b)] if b.at == a.at + 1)).count(),
+        in_name: named.len(),
+        exact: matched.iter().filter(|h| h.exact).count(),
+        only_this: (0..name.len()).all(|i| named.contains(&i) || name[i].iter().all(|f| NOISE.contains(&f.as_str()))),
     }
-    let coverage = found / asked.len() as f32;
-    let named: Vec<usize> = (0..title.len()).filter(|i| !title[*i].iter().all(|f| NOISE.contains(&f.as_str()))).collect();
-    let precision = if named.is_empty() { 0.0 } else { named.iter().filter(|i| title_hits.contains(i)).count() as f32 / named.len() as f32 };
-    0.85 * coverage + 0.15 * precision
+}
+
+/// Whether a word you typed is this word of a result: its typos and whether it's typed in
+/// full. The word still being typed counts from its start.
+fn found(q: &str, word: &[String], typing: bool) -> Option<(usize, bool)> {
+    let allowed = match q.chars().count() {
+        0..5 => 0,
+        5..9 => 1,
+        _ => 2,
+    };
+    word.iter()
+        .filter_map(|f| {
+            if f == q {
+                Some((0, true))
+            } else if typing && f.starts_with(q) {
+                Some((0, false))
+            } else {
+                let typos = strsim::osa_distance(q, f);
+                (typos <= allowed).then_some((typos, false))
+            }
+        })
+        .min()
 }
 
 /// "Song · K.ONE, GROOVEBABY" is by "K.ONE, GROOVEBABY".
@@ -67,51 +122,6 @@ fn subtitle_name(s: &str) -> &str {
         _ if LABELS.contains(&s) => "",
         _ => s,
     }
-}
-
-/// How alike a word you typed and a word of a result are, 0 to 1. The word still being
-/// typed counts from its start.
-fn likeness(q: &str, w: &[String], typing: bool) -> f32 {
-    w.iter()
-        .map(|f| {
-            if f == q {
-                1.0
-            } else if f.starts_with(q) {
-                if typing { 0.95 } else { 0.7 }
-            } else if q.chars().count() >= 4 && typo(q, f) {
-                0.7
-            } else {
-                0.0
-            }
-        })
-        .fold(0.0, f32::max)
-}
-
-/// One slip of the finger (two in a long word): a letter wrong, missing, extra or swapped.
-fn typo(a: &str, b: &str) -> bool {
-    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
-    let allowed = if a.len() >= 8 { 2 } else { 1 };
-    if a.len().abs_diff(b.len()) > allowed {
-        return false;
-    }
-    // Optimal string alignment distance.
-    let mut d = vec![vec![0usize; b.len() + 1]; a.len() + 1];
-    for (i, row) in d.iter_mut().enumerate() {
-        row[0] = i;
-    }
-    for j in 0..=b.len() {
-        d[0][j] = j;
-    }
-    for i in 1..=a.len() {
-        for j in 1..=b.len() {
-            let cost = usize::from(a[i - 1] != b[j - 1]);
-            d[i][j] = (d[i - 1][j] + 1).min(d[i][j - 1] + 1).min(d[i - 1][j - 1] + cost);
-            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
-                d[i][j] = d[i][j].min(d[i - 2][j - 2] + 1);
-            }
-        }
-    }
-    d[a.len()][b.len()] <= allowed
 }
 
 fn query_words(q: &str) -> Vec<String> {
