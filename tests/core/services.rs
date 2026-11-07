@@ -57,6 +57,34 @@ fn search_shows_each_song_once_as_its_best_copy() {
 }
 
 #[test]
+fn search_puts_what_you_typed_first_whichever_service_has_it() {
+    let fake = Fake::start();
+    {
+        let mut w = fake.world.lock();
+        // Spotify matches loosely: songs that share a word or two come back first there.
+        w.spotify.push(spotify_track("fall", "When Will You Fall For Me", "Vika & Linda", 6000, "AU0000000001"));
+        w.spotify.push(spotify_track("found", "You Will Be Found", "Ben Platt", 6000, "US0000000002"));
+        w.spotify.push(spotify_track("shah", "Who Will Find Me - Original Summer Sunrise Mix", "DJ Shah", 6000, "DE0000000003"));
+        w.soundcloud.push(soundcloud_track(21, "Who Will Find Me", "K.ONE", 6000, None, false));
+        w.soundcloud.push(soundcloud_track(22, "Etenee x Who Will Find Me", "Real José", 6000, None, false));
+    }
+    let mac = Device::online(&fake);
+    let r = search(&mac, "who will find me kone");
+    let songs: Vec<&str> = r.items.iter().filter(|i| i.kind == ItemKind::Track).map(|i| i.id.as_str()).collect();
+    assert_eq!(songs.first(), Some(&"soundcloud:track:21"), "{songs:?}");
+    // The rest by how much of it they match, nothing dropped.
+    let at = |id: &str| songs.iter().position(|s| *s == id).unwrap_or_else(|| panic!("{id} missing from {songs:?}"));
+    assert!(at("soundcloud:track:22") < at("spotify:track:fall"), "{songs:?}");
+    assert!(at("spotify:track:shah") < at("spotify:track:found"), "{songs:?}");
+
+    // Typed the way it's written, or with a slip, it's the same song.
+    for q in ["who will find me k.one", "who will find me k one", "who wil find me kone"] {
+        let first = search(&mac, q).items.into_iter().find(|i| i.kind == ItemKind::Track).map(|i| i.id);
+        assert_eq!(first.as_deref(), Some("soundcloud:track:21"), "{q}");
+    }
+}
+
+#[test]
 fn services_turned_off_follow_you_to_your_other_devices() {
     let a = Device::mac();
     let b = Device::mac();

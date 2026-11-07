@@ -15,6 +15,7 @@ mod player;
 mod playlists;
 mod queue;
 mod scan;
+mod search;
 mod signin;
 mod soundcloud;
 mod spotify;
@@ -676,11 +677,8 @@ impl StreamCore {
         } else {
             vec![]
         };
-        let mut found: Vec<Item> = own.into_iter().chain(self.db.search(&query, filter, 40)).filter(|i| on.is_on(Service::of(i.source))).collect();
-        // Your playlists, then your files, Spotify's and SoundCloud's, each in its own ranking.
-        let order = Service::all();
-        found.sort_by_key(|i| if i.id.starts_with(playlists::PREFIX) { 0 } else { 1 + order.iter().position(|s| *s == Service::of(i.source)).unwrap_or(9) });
-        found
+        let found = own.into_iter().chain(self.db.search(&query, filter, 40)).filter(|i| on.is_on(Service::of(i.source))).collect();
+        search::rank(&query, vec![found])
     }
 
     pub async fn search_spotify(self: Arc<Self>, query: String, filter: SearchFilter) -> Result<Vec<Item>, CoreError> {
@@ -1534,16 +1532,8 @@ impl StreamCore {
             Some(Err(e)) => problems.push(ServiceProblem { service: Service::SoundCloud, message: format!("{e:#}") }),
             None => {}
         }
-        let mut seen: std::collections::HashSet<String> = library.iter().map(|i| i.id.clone()).collect();
-        let mut items = library;
-        for s in order {
-            for i in found.remove(&s).unwrap_or_default() {
-                if seen.insert(i.id.clone()) {
-                    items.push(i);
-                }
-            }
-        }
-        SearchResults { items: self.best_copies(items), problems }
+        let lists = std::iter::once(library).chain(order.into_iter().map(|s| found.remove(&s).unwrap_or_default())).collect();
+        SearchResults { items: self.best_copies(search::rank(q, lists)), problems }
     }
 
     /// One song found on several services shows once, as its best copy (see

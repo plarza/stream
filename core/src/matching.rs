@@ -119,7 +119,7 @@ fn words_of(s: &str) -> (HashSet<String>, Vec<&'static str>) {
 }
 
 /// Without accents: "beyoncé" is "beyonce".
-fn fold(w: &str) -> String {
+pub(crate) fn fold(w: &str) -> String {
     w.chars()
         .map(|c| match c {
             'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => 'a',
