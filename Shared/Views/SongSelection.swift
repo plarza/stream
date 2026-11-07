@@ -3,8 +3,8 @@ import AppKit
 import StreamBindings
 import SwiftUI
 
-/// The songs picked in a Mac list: click picks one and plays it, ⇧-click picks a run from the
-/// last one picked without playing, ⌘-click adds or takes one away. Rows are keyed by their place
+/// The songs picked in a Mac list: click plays one without picking it, ⇧-click picks a run from
+/// the song last clicked, ⌘-click adds or takes one away, ⌘A picks them all. Rows are keyed by their place
 /// in the page as the core gave it (a playlist can hold a song twice).
 @MainActor
 @Observable
@@ -28,7 +28,7 @@ final class SongSelection {
             anchor = key
             return false
         } else {
-            keys = [key]
+            keys = []
             anchor = key
             return true
         }
@@ -101,6 +101,9 @@ struct SongClipboard: ViewModifier {
             }
             .onExitCommand { selection.clear() }
             .onChange(of: selection.keys) { if !selection.keys.isEmpty { focused = true } }
+            // Your own playlist takes ⌘V as soon as it's open, even before it has a song to click.
+            .frame(minHeight: paste != nil && order.isEmpty ? 120 : nil, alignment: .top)
+            .onAppear { if paste != nil { focused = true } }
     }
 
     /// The picked rows in the order shown.
@@ -115,7 +118,7 @@ struct SongClipboard: ViewModifier {
 }
 
 extension View {
-    /// One row: a click picks and plays it, ⇧- and ⌘-click only pick; tinted while picked.
+    /// One row: a click plays it, ⇧- and ⌘-click only pick; tinted while picked.
     func pickable(_ key: Int, in selection: SongSelection, order: [Int], play: @escaping () -> Void) -> some View {
         self
             .background {
