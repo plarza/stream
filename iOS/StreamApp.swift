@@ -98,6 +98,12 @@ struct RootView: View {
             openPending()
             model.showNowPlaying = false
         }
+        .onChange(of: model.libraryRequest) {
+            guard let s = model.libraryRequest else { return }
+            model.libraryRequest = nil
+            tab = .library
+            libraryPath = NavigationPath([s])
+        }
         .onChange(of: model.searchRequest) {
             guard let q = model.searchRequest else { return }
             model.searchRequest = nil

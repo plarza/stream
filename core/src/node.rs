@@ -526,21 +526,19 @@ impl Node {
         self.stream_dir.join(format!("{hash}.{}", ext_of(rel)))
     }
 
-    /// Keeps songs from the node on this device. Returns the IDs now downloaded.
-    pub async fn download(&self, songs: Vec<(String, String, String)>, done: &(dyn Fn(&str) + Send + Sync)) -> Result<()> {
+    /// Keeps a song from the node on this device, telling `progress` how much has arrived.
+    pub async fn download_one(&self, hash: &str, rel: &str, progress: Arc<dyn Fn(f32) + Send + Sync>) -> Result<()> {
         let (base, token) = self.conn()?;
-        for (id, hash, rel) in songs {
-            let dest = self.download_path(&hash, &rel);
-            let cached = self.cached_path(&hash, &rel);
-            if !dest.exists() {
-                if cached.exists() {
-                    tokio::fs::rename(&cached, &dest).await?;
-                } else {
-                    self.fetch(&base, &token, &hash, &dest).await?;
-                }
+        let dest = self.download_path(hash, rel);
+        let cached = self.cached_path(hash, rel);
+        if !dest.exists() {
+            if cached.exists() {
+                tokio::fs::rename(&cached, &dest).await?;
+            } else {
+                self.fetch(&base, &token, hash, &dest, &*progress).await?;
             }
-            done(&id);
         }
+        progress(1.0);
         Ok(())
     }
 
@@ -548,9 +546,11 @@ impl Node {
         let _ = std::fs::remove_file(self.download_path(hash, rel));
     }
 
-    async fn fetch(&self, base: &str, token: &str, hash: &str, dest: &Path) -> Result<()> {
+    async fn fetch(&self, base: &str, token: &str, hash: &str, dest: &Path, progress: &(dyn Fn(f32) + Send + Sync)) -> Result<()> {
         let part = dest.with_extension("part");
         let res = check(self.http.get(format!("{base}/v1/files/{hash}")).bearer_auth(token).send().await?).await?;
+        let size = res.content_length().unwrap_or(0);
+        let mut got = 0u64;
         let mut file = tokio::fs::File::create(&part).await?;
         let mut hasher = Sha256::new();
         let mut body = res.bytes_stream();
@@ -558,6 +558,10 @@ impl Node {
             let chunk = chunk?;
             hasher.update(&chunk);
             file.write_all(&chunk).await?;
+            got += chunk.len() as u64;
+            if size > 0 {
+                progress(got as f32 / size as f32);
+            }
         }
         file.flush().await?;
         drop(file);

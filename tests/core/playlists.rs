@@ -7,7 +7,7 @@ use crate::device::{Device, until};
 use crate::fake::{Fake, SOUNDCLOUD_TOKEN, soundcloud_track, spotify_track};
 
 fn song(d: &Device, title: &str) -> Track {
-    d.core.section_tracks(LibrarySection::Songs).into_iter().find(|t| t.title == title).unwrap_or_else(|| panic!("no {title:?}"))
+    d.core.section_tracks(LibrarySection::Uploads).into_iter().find(|t| t.title == title).unwrap_or_else(|| panic!("no {title:?}"))
 }
 
 fn titles(d: &Device, id: &str) -> Vec<String> {

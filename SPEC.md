@@ -142,12 +142,20 @@ entry, and written empty when deleted. Each one can also be kept on Spotify and 
   streamed while they play, or downloaded from an album or playlist to play offline.
 - The library is **merged but not deduplicated**: Spotify and local versions show as separate
   items.
-- **Uploads** (Library → Uploads) are your own music files, on the Stream node. They behave like
-  Spotify songs: they're in Songs, Albums, Artists and search, stream when played, and can be
-  downloaded. **Downloaded** is only what's on this device to play offline; the Mac's own
-  folders are Uploads, not downloads.
-- One **downloaded** badge (⬇) marks a song from the Stream node or Spotify that's downloaded
-  to this device.
+- **Uploads** (Library → Uploads) are your own music files, on the Stream node, and the one
+  place to find them: its Songs / Albums / Artists pills list them by song, album and artist.
+  They're in search, stream when played, and can be downloaded. **Albums** and **Artists** are
+  only what you saved and follow on Spotify. **Downloaded** is only what's on this device to
+  play offline; the Mac's own folders are Uploads, not downloads.
+- Downloads work as Spotify's do. Songs download one at a time from a queue. An album's or
+  playlist's download button turns into a ring that fills as its songs arrive (tap to stop),
+  with "Downloading 3 of 12 · About 2 min left" under the actions row. Each song row shows a
+  filled arrow once it's here, a filling ring while it downloads and a dotted arrow while it
+  waits. Library → Downloaded (with a ring beside it while downloading) lists the song
+  downloading now and the ones waiting above what's downloaded, and can cancel them.
+- Every list of songs (albums, playlists, an artist's popular songs, Uploads, Liked Songs,
+  Downloaded) sorts from the same ⇅ menu: the list's own order, title, artist, album or length,
+  and reversed. The choice is kept per kind of list.
 - Artist info comes from Spotify only. An artist that exists only locally gets a plain page.
 
 ## aza sync and the Stream node
@@ -224,11 +232,11 @@ bottom accessory.
 |---|---|
 | Now Playing | `01` **A Immersive**: blurred full-bleed art, big art, format/quality chip (e.g. FLAC 24/96, OGG 320). Behind it, Aurora: a 4×4 mesh of the cover's colours, each row lit by its part of the spectrum (bass at the bottom) and pushed outward on beats. The bottom row is Lyrics, AirPlay, Visualizer (waveform, accent when on, slashed when off; saved per device) and Queue |
 | Home | `02` **D Pinned grid + recents**, without the floating search pill. You can pin albums, songs, artists and playlists |
-| Library | Category list: Playlists, Podcasts, Artists, Albums, Songs, Liked Songs, Uploads, Downloaded, History |
+| Library | Category list: Playlists, Podcasts, Artists, Albums, Liked Songs, Uploads, Downloaded, History |
 | Podcasts | Library → Podcasts: the shows you follow on Spotify as a grid. A show's page lists its episodes newest first with the date, description, length or time left, and Played. Play starts the newest episode you haven't finished; an episode resumes where you left it, and counts as played within 15 seconds of the end |
 | History | Library → History (not a tab): every song played on any of your devices, newest first, by day, with the time and device |
 | Lyrics | `04` **A**: left-aligned, word fill on the active line, distance blur on the others, tap a line to seek |
-| Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, like, pin). Playlists sort from the toolbar (playlist order, title, artist, album, length, reversed), the same for every playlist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |
+| Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, like, pin). Their songs sort from the ⇅ menu in the actions row (the list's own order, title, artist, album, length, reversed), the same for every playlist, every album and every artist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |
 | Queue | `06` **A** without the toggle row: "Playing Next" + "Continue from …" |
 | Settings → Services | `09` **A** One Services list: a row per service and Last.fm with its status, each opening its own page |
 | Search | `07` **C**: one relevance-ranked list across library + Spotify, type chips (All, Songs, Albums, Artists, Playlists); the empty state shows recent searches |

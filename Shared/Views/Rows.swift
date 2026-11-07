@@ -23,7 +23,7 @@ struct TrackRow: View {
                 SongTitle(id: track.id, title: track.title)
                 if showArtist {
                     HStack(spacing: 4) {
-                        if track.downloaded && track.downloadable { DownloadedBadge() }
+                        if track.downloadable { DownloadMark(id: track.id, downloaded: track.downloaded) }
                         Text(track.artist).lineLimit(1)
                     }
                     .font(.subheadline)
@@ -31,7 +31,7 @@ struct TrackRow: View {
                 }
             }
             Spacer(minLength: 8)
-            if !showArtist && track.downloaded && track.downloadable { DownloadedBadge() }
+            if !showArtist && track.downloadable { DownloadMark(id: track.id, downloaded: track.downloaded) }
             if track.liked {
                 Image(systemName: "heart.fill").font(.caption).foregroundStyle(accent.opacity(0.9))
             }
@@ -88,7 +88,11 @@ struct ItemRow: View {
                 if showSubtitle && !item.subtitle.isEmpty {
                     HStack(spacing: 4) {
                         // A device's own file is "downloaded" in the core, but it's no download.
-                        if item.downloaded && song?.downloadable != false { DownloadedBadge() }
+                        if let song {
+                            if song.downloadable { DownloadMark(id: song.id, downloaded: song.downloaded) }
+                        } else if item.downloaded {
+                            DownloadedBadge()
+                        }
                         Text(item.subtitle).lineLimit(1)
                     }
                     .font(.subheadline)

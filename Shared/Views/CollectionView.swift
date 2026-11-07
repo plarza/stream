@@ -18,9 +18,9 @@ struct CollectionView: View {
     /// Artist pages: the release kind picked, or nil for all of them.
     @State private var releaseFilter: ReleaseKind?
     @State private var bioExpanded = false
-    /// Playlist pages: how the songs are sorted, the same for every playlist.
-    @AppStorage("playlistSort") private var sort: TrackSort = .playlist
-    @AppStorage("playlistSortReversed") private var reversed = false
+    /// How the songs are sorted: the same for every playlist, every album and every artist.
+    @AppStorage private var sort: TrackSort
+    @AppStorage private var reversed: Bool
     @Namespace private var coverZoom
     @Environment(\.dismiss) private var dismiss
     #if os(macOS)
@@ -29,6 +29,13 @@ struct CollectionView: View {
 
     init(item: Item) {
         self.item = item
+        let kind = switch item.kind {
+        case .album: "album"
+        case .artist: "artist"
+        default: "playlist"
+        }
+        _sort = AppStorage(wrappedValue: .playlist, "\(kind)Sort")
+        _reversed = AppStorage(wrappedValue: false, "\(kind)SortReversed")
         // Open with what we had last time or what's on disk (page and colors), then refresh.
         let cached = AppModel.shared.cachedPage(item.id)
         _page = State(initialValue: cached)
@@ -46,6 +53,19 @@ struct CollectionView: View {
                 actions
                     .padding(.horizontal, Metrics.page)
                     .padding(.vertical, 16)
+                if let page, item.kind != .artist, item.kind != .show {
+                    let dl = DownloadProgress(page.tracks, model: model)
+                    if dl.active {
+                        Text(dl.text)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .contentTransition(.numericText())
+                            .padding(.horizontal, Metrics.page)
+                            .padding(.top, -6)
+                            .padding(.bottom, 10)
+                            .accessibilityIdentifier("collection.downloading")
+                    }
+                }
                 if let page {
                     tracks(page)
                     if !page.releases.isEmpty { releases(page) }
@@ -211,36 +231,55 @@ struct CollectionView: View {
             .accessibilityLabel(pinned ? "Unpin" : "Pin")
             .accessibilityIdentifier("collection.pin")
             if item.kind != .artist, item.kind != .show, let page, page.tracks.contains(where: \.downloadable) {
-                // Spotify songs and Uploads: download to play offline, or remove the download.
-                let all = page.tracks.filter(\.downloadable).allSatisfy(\.downloaded)
-                Button {
-                    Task {
-                        do {
-                            if all {
-                                try await model.core.removeDownload(collectionId: item.id)
-                                model.show("Removed download")
-                            } else {
-                                model.show("Downloading…")
-                                try await model.core.download(collectionId: item.id)
-                                model.show("Downloaded")
-                            }
-                            await load()
-                        } catch { model.show(AppModel.message(error)) }
-                    }
-                } label: {
-                    Image(systemName: all ? "arrow.down.circle.fill" : "arrow.down.circle").font(.title3)
-                        .contentTransition(.symbolEffect(.replace))
-                }
-                .buttonStyle(.pressable)
-                .accessibilityLabel(all ? "Remove download" : "Download")
-                .accessibilityIdentifier("collection.download")
+                downloadButton(page)
             }
             Spacer()
             // In the page, not the toolbar: the Mac window has none to show it in.
-            if item.kind == .playlist { sortMenu }
+            if item.kind != .show { sortMenu }
             if item.isOwnPlaylist { OwnPlaylistMenu(item: shown) { dismiss() } }
         }
         .foregroundStyle(.primary)
+    }
+
+    /// Spotify's download button: an arrow to download, a ring filling while the songs come
+    /// down (tap it to stop), a filled arrow once they're all here (tap to remove them).
+    private func downloadButton(_ page: CollectionPage) -> some View {
+        let dl = DownloadProgress(page.tracks, model: model)
+        let all = dl.done == dl.total
+        return Button {
+            if dl.active || all {
+                Task {
+                    do {
+                        try await model.core.removeDownload(collectionId: item.id)
+                        if all { model.show("Removed download") }
+                    } catch { model.show(AppModel.message(error)) }
+                }
+            } else {
+                Haptics.tap()
+                Task {
+                    do { try await model.core.download(collectionId: item.id) } catch { model.show(AppModel.message(error)) }
+                }
+            }
+        } label: {
+            Group {
+                if dl.active {
+                    ZStack {
+                        ProgressRing(value: dl.fraction, lineWidth: 2.2)
+                        Image(systemName: "stop.fill").font(.system(size: 7))
+                    }
+                    .frame(width: 21, height: 21)
+                } else {
+                    Image(systemName: all ? "arrow.down.circle.fill" : "arrow.down.circle")
+                        .font(.title3)
+                        .foregroundStyle(all ? AnyShapeStyle(accent) : AnyShapeStyle(.primary))
+                        .contentTransition(.symbolEffect(.replace))
+                }
+            }
+            .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(dl.active ? "Stop downloading" : all ? "Remove download" : "Download")
+        .accessibilityIdentifier("collection.download")
     }
 
     /// What Play plays: a show's newest episode you haven't finished, everything else in order.
@@ -327,41 +366,17 @@ struct CollectionView: View {
     }
 
     private var sortMenu: some View {
-        Menu {
-            // Inline, as on iPhone: the Mac would otherwise tuck the choices into a submenu.
-            Picker("Sort By", selection: $sort.animation(.smooth)) {
-                ForEach(TrackSort.allCases, id: \.self) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.inline)
-            Divider()
-            Toggle("Reverse", isOn: $reversed.animation(.smooth))
-        } label: {
-            Image(systemName: "arrow.up.arrow.down").font(.title3)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(.plain)
-        .accessibilityLabel("Sort")
-        .accessibilityIdentifier("playlist.sort")
+        SortMenu(sort: $sort, reversed: $reversed, kind: item.kind)
     }
 
-    /// The page's songs, sorted as picked when it's a playlist.
+    /// The page's songs, sorted as picked.
     private func ordered(_ page: CollectionPage) -> [Track] { orderedRows(page).map(\.1) }
 
     /// The songs as shown, each with its place in the page as the core gave it.
     private func orderedRows(_ page: CollectionPage) -> [(Int, Track)] {
         let rows = Array(page.tracks.enumerated()).map { ($0.offset, $0.element) }
-        guard item.kind == .playlist else { return rows }
-        let less: (Track, Track) -> Bool = switch sort {
-        case .playlist: { _, _ in false }
-        case .title: { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-        case .artist: { ($0.artist, $0.album, $0.discNumber, $0.trackNumber) < ($1.artist, $1.album, $1.discNumber, $1.trackNumber) }
-        case .album: { ($0.album, $0.discNumber, $0.trackNumber) < ($1.album, $1.discNumber, $1.trackNumber) }
-        case .length: { $0.durationMs < $1.durationMs }
-        }
-        let sorted = sort == .playlist ? rows : rows.sorted { less($0.1, $1.1) }
-        return reversed ? sorted.reversed() : sorted
+        guard item.kind != .show else { return rows }
+        return sort.apply(rows, reversed: reversed, track: \.1)
     }
 
     /// Every release, newest first, with pills for each kind there is. No pill picked shows them all.
@@ -553,18 +568,77 @@ struct EpisodeRow: View {
     }
 }
 
-/// How a playlist's songs are sorted.
+/// How a list of songs is sorted. The first is the list's own order (`playlist` stays its
+/// name so the playlists' saved choice carries over).
 enum TrackSort: String, CaseIterable {
     case playlist, title, artist, album, length
 
-    var title: String {
+    /// The list's own order is the playlist's, the album's, the artist's popular songs', or
+    /// when a song was added for the library's lists.
+    func title(_ kind: ItemKind?) -> String {
         switch self {
-        case .playlist: "Playlist Order"
+        case .playlist:
+            switch kind {
+            case .album: "Album Order"
+            case .artist: "Popularity"
+            case .playlist: "Playlist Order"
+            default: "Default"
+            }
         case .title: "Title"
         case .artist: "Artist"
         case .album: "Album"
         case .length: "Length"
         }
+    }
+
+    /// `rows` in this order (the list's own when it's `playlist`), reversed if asked.
+    func apply<Row>(_ rows: [Row], reversed: Bool, track: (Row) -> Track) -> [Row] {
+        func text(_ a: String, _ b: String) -> ComparisonResult { a.localizedStandardCompare(b) }
+        let less: ((Track, Track) -> Bool)? = switch self {
+        case .playlist: nil
+        case .title: { text($0.title, $1.title) == .orderedAscending }
+        case .artist: {
+            let a = text($0.artist, $1.artist), b = text($0.album, $1.album)
+            return a != .orderedSame ? a == .orderedAscending
+                : b != .orderedSame ? b == .orderedAscending
+                : ($0.discNumber, $0.trackNumber) < ($1.discNumber, $1.trackNumber)
+        }
+        case .album: {
+            let a = text($0.album, $1.album)
+            return a != .orderedSame ? a == .orderedAscending : ($0.discNumber, $0.trackNumber) < ($1.discNumber, $1.trackNumber)
+        }
+        case .length: { $0.durationMs < $1.durationMs }
+        }
+        let sorted = less.map { less in rows.sorted { less(track($0), track($1)) } } ?? rows
+        return reversed ? sorted.reversed() : sorted
+    }
+}
+
+/// The ⇅ menu every song list has: the list's own order, title, artist, album or length,
+/// and Reverse.
+struct SortMenu: View {
+    @Binding var sort: TrackSort
+    @Binding var reversed: Bool
+    var kind: ItemKind?
+
+    var body: some View {
+        Menu {
+            // Inline, as on iPhone: the Mac would otherwise tuck the choices into a submenu.
+            Picker("Sort By", selection: $sort.animation(.smooth)) {
+                ForEach(TrackSort.allCases, id: \.self) { Text($0.title(kind)).tag($0) }
+            }
+            .pickerStyle(.inline)
+            Divider()
+            Toggle("Reverse", isOn: $reversed.animation(.smooth))
+        } label: {
+            Image(systemName: "arrow.up.arrow.down").font(.title3)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Sort")
+        .accessibilityIdentifier("sort")
     }
 }
 

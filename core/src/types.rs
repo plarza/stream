@@ -226,11 +226,16 @@ pub struct Play {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum LibrarySection {
     Playlists,
+    /// The artists you follow on a service.
     Artists,
+    /// The albums you saved on a service.
     Albums,
-    Songs,
     /// Your own music files, on the Stream node (and the Mac's folders).
     Uploads,
+    /// The albums your Uploads make up.
+    UploadedAlbums,
+    /// The artists of your Uploads.
+    UploadedArtists,
     /// On this device to play offline: downloaded Spotify songs and Uploads.
     Downloaded,
     LikedSongs,

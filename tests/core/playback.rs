@@ -38,7 +38,7 @@ fn an_album_plays_in_order_and_the_queue_works() {
     let _out = OUTPUT.lock();
     let mac = Device::mac();
     mac.core.set_output_rate(44_100);
-    let album = mac.item(LibrarySection::Albums, "Night Drive");
+    let album = mac.item(LibrarySection::UploadedAlbums, "Night Drive");
     mac.core.play(mac.album("Night Drive"), 0, Some(album.clone()), false);
     until(5, "Neon Lights to play", || playing(&mac) == "Neon Lights" && mac.core.player_state().status == PlaybackStatus::Playing);
     assert_eq!(mac.core.player_state().context_id.as_deref(), Some(album.id.as_str()));
@@ -98,7 +98,7 @@ fn a_song_played_past_halfway_is_in_history_on_every_device() {
 fn an_album_you_play_puts_it_and_its_artist_on_home() {
     let _out = OUTPUT.lock();
     let mac = Device::mac();
-    let night = mac.item(LibrarySection::Albums, "Night Drive");
+    let night = mac.item(LibrarySection::UploadedAlbums, "Night Drive");
     mac.core.play(mac.album("Night Drive"), 0, Some(night), false);
     mac.core.pause();
     let home = mac.core.home();

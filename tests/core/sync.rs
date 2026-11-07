@@ -8,8 +8,8 @@ use crate::device::Device;
 fn pins_follow_you_to_your_other_devices() {
     let mac = Device::mac();
     let other_mac = Device::mac();
-    mac.core.pin(mac.item(LibrarySection::Albums, "Night Drive"));
-    let song = mac.core.section_tracks(LibrarySection::Songs).into_iter().find(|t| t.title == "Tunnel").unwrap();
+    mac.core.pin(mac.item(LibrarySection::UploadedAlbums, "Night Drive"));
+    let song = mac.core.section_tracks(LibrarySection::Uploads).into_iter().find(|t| t.title == "Tunnel").unwrap();
     mac.core.pin(Item {
         id: song.id.clone(),
         kind: ItemKind::Track,
@@ -35,8 +35,8 @@ fn pins_follow_you_to_your_other_devices() {
 fn first_sync_keeps_both_devices_pins() {
     let a = Device::mac();
     let b = Device::mac();
-    a.core.pin(a.item(LibrarySection::Albums, "Night Drive"));
-    b.core.pin(b.item(LibrarySection::Albums, "Singles"));
+    a.core.pin(a.item(LibrarySection::UploadedAlbums, "Night Drive"));
+    b.core.pin(b.item(LibrarySection::UploadedAlbums, "Singles"));
     a.sync_to(&b);
     b.sync_to(&a);
     for d in [&a, &b] {
@@ -69,11 +69,11 @@ fn nothing_to_sync_writes_nothing() {
 fn pins_made_on_both_devices_between_syncs_are_all_kept() {
     let a = Device::mac();
     let b = Device::mac();
-    a.core.pin(a.item(LibrarySection::Albums, "Night Drive"));
+    a.core.pin(a.item(LibrarySection::UploadedAlbums, "Night Drive"));
     a.sync_to(&b);
     // Both pin something before hearing from the other.
-    a.core.pin(a.item(LibrarySection::Albums, "Morning Light"));
-    b.core.pin(b.item(LibrarySection::Albums, "Singles"));
+    a.core.pin(a.item(LibrarySection::UploadedAlbums, "Morning Light"));
+    b.core.pin(b.item(LibrarySection::UploadedAlbums, "Singles"));
     a.sync_to(&b);
     b.sync_to(&a);
     assert_eq!(a.pins(), b.pins());
@@ -86,7 +86,7 @@ fn pins_made_on_both_devices_between_syncs_are_all_kept() {
 fn a_song_pinned_elsewhere_unpins_here() {
     let a = Device::mac();
     let b = Device::mac();
-    let song = a.core.section_tracks(LibrarySection::Songs).into_iter().find(|t| t.title == "Dew").unwrap();
+    let song = a.core.section_tracks(LibrarySection::Uploads).into_iter().find(|t| t.title == "Dew").unwrap();
     a.core.pin(song.as_item());
     a.sync_to(&b);
     let shown = b.core.home().pins.into_iter().find(|p| p.title == "Dew").unwrap();

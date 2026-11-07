@@ -14,7 +14,7 @@ use crate::types::{CollectionPage, Item, ItemKind, Source};
 const IMAGE_HOST: &str = "https://i.scdn.co/image/";
 
 /// Fetches a song's audio completely so librespot keeps it in its cache.
-pub async fn fetch(session: &Session, uri: &str) -> Result<()> {
+pub async fn fetch(session: &Session, uri: &str, progress: std::sync::Arc<dyn Fn(f32) + Send + Sync>) -> Result<()> {
     let id = SpotifyUri::from_uri(uri).map_err(|e| anyhow::anyhow!("{e}"))?;
     let track = SessionTrack::get(session, &id).await.map_err(|e| anyhow::anyhow!("{e}"))?;
     let file_id = [AudioFileFormat::OGG_VORBIS_320, AudioFileFormat::OGG_VORBIS_160]
@@ -25,10 +25,22 @@ pub async fn fetch(session: &Session, uri: &str) -> Result<()> {
     if file.is_cached() {
         return Ok(());
     }
+    let size = file.get_stream_loader_controller().map(|c| c.len()).unwrap_or(0);
     let mut file = file;
     tokio::task::spawn_blocking(move || {
         // Reading to the end completes the download, which librespot then caches.
-        let _ = std::io::copy(&mut file, &mut std::io::sink());
+        use std::io::Read;
+        let mut buf = vec![0u8; 64 * 1024];
+        let mut got = 0usize;
+        while let Ok(n) = file.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            got += n;
+            if size > 0 {
+                progress(got as f32 / size as f32);
+            }
+        }
         std::thread::sleep(std::time::Duration::from_secs(1));
         drop(file);
     })

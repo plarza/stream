@@ -3,23 +3,28 @@ import XCTest
 final class iOSUITests: StreamUITestCase {
     private func openAlbum(_ title: String) {
         app.tabBars.buttons["Library"].tap()
-        wait(el("library.Albums")).tap()
+        wait(el("library.Uploads")).tap()
+        wait(el("pill.Albums")).tap()
         wait(el("row.\(title)")).tap()
         wait(el("collection.play"))
     }
 
     func testTabsAndLibrarySections() {
         app.tabBars.buttons["Library"].tap()
-        for s in ["Playlists", "Artists", "Albums", "Songs", "Liked Songs", "Uploads", "Downloaded", "History"] {
+        for s in ["Playlists", "Artists", "Albums", "Liked Songs", "Uploads", "Downloaded", "History"] {
             wait(el("library.\(s)"))
         }
-        el("library.Artists").tap()
-        wait(el("row.Ada Field"))
-        XCTAssertFalse(el("row.Ada Field feat. Juno").exists)
-        // Your own files are Uploads; they're already on this device, so not Downloaded.
+        XCTAssertFalse(el("library.Songs").exists)
+        // Albums and Artists are what you saved on Spotify; your own files' are in Uploads.
+        el("library.Albums").tap()
+        wait(text("No saved albums"))
         app.navigationBars.buttons.firstMatch.tap()
         wait(el("library.Uploads")).tap()
         wait(el("row.Tunnel"))
+        el("pill.Artists").tap()
+        wait(el("row.Ada Field"))
+        XCTAssertFalse(el("row.Ada Field feat. Juno").exists)
+        // They're already on this device, so not Downloaded.
         app.navigationBars.buttons.firstMatch.tap()
         wait(el("library.Downloaded")).tap()
         wait(text("Nothing downloaded"))

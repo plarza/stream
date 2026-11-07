@@ -128,6 +128,11 @@ struct MacRootView: View {
         // On appear too: a launch link can ask before this window exists.
         .onAppear(perform: openPending)
         .onChange(of: model.openRequested, openPending)
+        .onChange(of: model.libraryRequest) {
+            guard let s = model.libraryRequest else { return }
+            model.libraryRequest = nil
+            pick(.section(s))
+        }
         .onChange(of: model.showNowPlaying) { _, shown in
             if !shown, let item = model.pendingNavigation {
                 model.pendingNavigation = nil
@@ -248,7 +253,8 @@ struct MacRootView: View {
                 row(.search, "Search", "magnifyingglass").accessibilityIdentifier("sidebar.search")
                 header("Library")
                 ForEach(LibrarySection.ordered) { s in
-                    row(.section(s), s.title, s.symbol).accessibilityIdentifier("sidebar.\(s.title)")
+                    row(.section(s), s.title, s.symbol, progress: s == .downloaded ? downloading : nil)
+                        .accessibilityIdentifier("sidebar.\(s.title)")
                 }
                 row(.history, "History", "clock").accessibilityIdentifier("sidebar.History")
                 if !model.home.pins.isEmpty {
@@ -286,13 +292,26 @@ struct MacRootView: View {
             .padding(.bottom, 4)
     }
 
-    private func row(_ item: SidebarItem, _ title: String, _ symbol: String) -> some View {
+    private func row(_ item: SidebarItem, _ title: String, _ symbol: String, progress: Double? = nil) -> some View {
         SidebarRow(selected: selection == item) { pick(item) } label: {
             Image(systemName: symbol)
                 .foregroundStyle(selection == item ? accent : .secondary)
                 .frame(width: 20)
             Text(title)
+            if let progress {
+                Spacer(minLength: 4)
+                ProgressRing(value: progress, lineWidth: 2)
+                    .frame(width: 13, height: 13)
+                    .help("Downloading \(model.downloads.done + 1) of \(model.downloads.total)")
+                    .accessibilityLabel("Downloading")
+            }
         }
+    }
+
+    /// How far the download queue is, while there is one.
+    private var downloading: Double? {
+        let d = model.downloads
+        return d.total > 0 ? (Double(d.done) + Double(d.progress)) / Double(d.total) : nil
     }
 
     /// Clicking the page you're on goes back to its top level; a pinned song plays.

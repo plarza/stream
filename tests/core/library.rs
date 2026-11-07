@@ -1,6 +1,10 @@
 use stream_core::*;
 
+use serde_json::json;
+
 use crate::device::Device;
+use crate::fake::Fake;
+use crate::playlists::tokio_block;
 
 fn titles(items: &[Item]) -> Vec<&str> {
     items.iter().map(|i| i.title.as_str()).collect()
@@ -14,18 +18,38 @@ fn scanning_fills_every_section() {
     assert_eq!(albums, ["Morning Light", "Night Drive", "Singles"]);
 
     // A featured artist isn't an artist of their own.
-    let artists = mac.core.section(LibrarySection::Artists, 0, 100);
+    let artists = mac.core.section(LibrarySection::UploadedArtists, 0, 100);
     assert!(titles(&artists).contains(&"Ada Field"));
     assert!(!titles(&artists).contains(&"Ada Field feat. Juno"), "{:?}", titles(&artists));
 
     // Every format in the fixtures: FLAC, MP3, Opus.
-    assert_eq!(mac.core.section_tracks(LibrarySection::Songs).len(), 8);
+    assert_eq!(mac.core.section_tracks(LibrarySection::Uploads).len(), 8);
     let songs = mac.album("Night Drive");
     assert_eq!(songs.iter().map(|t| t.title.as_str()).collect::<Vec<_>>(), ["Neon Lights", "Tunnel", "Overpass", "Last Exit"]);
     assert!(songs[0].quality.starts_with("FLAC"), "{}", songs[0].quality);
 
     // Your own files are Uploads; on the Mac that has them they're not "Downloaded".
     assert!(!mac.core.section(LibrarySection::Uploads, 0, 100).is_empty());
+}
+
+#[test]
+fn albums_and_artists_are_what_you_saved_on_spotify_and_uploads_keep_your_own() {
+    let fake = Fake::start();
+    {
+        let mut w = fake.world.lock();
+        w.spotify_saved_albums.push(json!({ "uri": "spotify:album:dusk", "name": "Dusk", "artists": [{ "name": "Lumen", "uri": "spotify:artist:lumen" }], "images": [] }));
+        w.spotify_followed.push(json!({ "uri": "spotify:artist:lumen", "name": "Lumen", "images": [] }));
+    }
+    let mac = Device::online(&fake);
+    tokio_block(mac.core.clone().refresh_spotify(true)).unwrap();
+
+    assert_eq!(titles(&mac.core.section(LibrarySection::Albums, 0, 100)), ["Dusk"]);
+    assert_eq!(titles(&mac.core.section(LibrarySection::Artists, 0, 100)), ["Lumen"]);
+    let mut own = titles(&mac.core.section(LibrarySection::UploadedAlbums, 0, 100)).into_iter().map(String::from).collect::<Vec<_>>();
+    own.sort();
+    assert_eq!(own, ["Morning Light", "Night Drive", "Singles"]);
+    assert!(titles(&mac.core.section(LibrarySection::UploadedArtists, 0, 100)).contains(&"Ada Field"));
+    assert!(!titles(&mac.core.section(LibrarySection::UploadedArtists, 0, 100)).contains(&"Lumen"));
 }
 
 #[test]
@@ -40,8 +64,8 @@ fn search_finds_your_own_songs() {
 #[test]
 fn pins_show_on_home_in_order() {
     let mac = Device::mac();
-    let morning = mac.item(LibrarySection::Albums, "Morning Light");
-    let night = mac.item(LibrarySection::Albums, "Night Drive");
+    let morning = mac.item(LibrarySection::UploadedAlbums, "Morning Light");
+    let night = mac.item(LibrarySection::UploadedAlbums, "Night Drive");
     mac.core.pin(morning.clone());
     mac.core.pin(night.clone());
     assert!(mac.core.is_pinned(morning.id.clone()));
@@ -55,7 +79,7 @@ fn pins_show_on_home_in_order() {
 #[test]
 fn a_songs_own_lrc_file_gives_its_synced_lyrics() {
     let mac = Device::mac();
-    let song = mac.core.section_tracks(LibrarySection::Songs).into_iter().find(|t| t.title == "Loose Song").unwrap();
+    let song = mac.core.section_tracks(LibrarySection::Uploads).into_iter().find(|t| t.title == "Loose Song").unwrap();
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
     let start = std::time::Instant::now();
     let lyrics = rt.block_on(mac.core.clone().lyrics(song)).expect("the .lrc next to the song");

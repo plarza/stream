@@ -1213,7 +1213,7 @@ impl Db {
                 &[&limit, &offset],
             ),
             LibrarySection::Artists => self.items(
-                "SELECT id, 'artist', source, name, 'Artist', art, 0 FROM artists WHERE saved = 1
+                "SELECT id, 'artist', source, name, 'Artist', art, 0 FROM artists WHERE saved = 1 AND source != 0
                  GROUP BY lower(name) ORDER BY name COLLATE NOCASE LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
@@ -1221,12 +1221,19 @@ impl Db {
                 "SELECT a.id, 'album', a.source, a.title, a.artist, a.art,
                     (EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND (t.source = 1 OR t.remote = 1))
                       AND NOT EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND (t.source = 1 OR t.remote = 1) AND t.downloaded = 0))
-                 FROM albums a WHERE a.saved = 1 ORDER BY a.added_at DESC, a.title COLLATE NOCASE LIMIT ?1 OFFSET ?2",
+                 FROM albums a WHERE a.saved = 1 AND a.source != 0 ORDER BY a.added_at DESC, a.title COLLATE NOCASE LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
-            LibrarySection::Songs => self.items(
-                "SELECT id, 'track', source, title, artist, art, (downloaded = 1 AND (source = 1 OR remote = 1)) FROM tracks
-                 WHERE source = 0 OR saved = 1 ORDER BY title COLLATE NOCASE LIMIT ?1 OFFSET ?2",
+            LibrarySection::UploadedAlbums => self.items(
+                "SELECT a.id, 'album', a.source, a.title, a.artist, a.art,
+                    (EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.remote = 1)
+                      AND NOT EXISTS(SELECT 1 FROM tracks t WHERE t.album_id = a.id AND t.remote = 1 AND t.downloaded = 0))
+                 FROM albums a WHERE a.source = 0 ORDER BY a.title COLLATE NOCASE LIMIT ?1 OFFSET ?2",
+                &[&limit, &offset],
+            ),
+            LibrarySection::UploadedArtists => self.items(
+                "SELECT id, 'artist', source, name, 'Artist', art, 0 FROM artists WHERE source = 0
+                 GROUP BY lower(name) ORDER BY name COLLATE NOCASE LIMIT ?1 OFFSET ?2",
                 &[&limit, &offset],
             ),
             LibrarySection::Uploads => self.items(
@@ -1254,7 +1261,6 @@ impl Db {
 
     pub fn section_tracks(&self, section: LibrarySection) -> Vec<Track> {
         match section {
-            LibrarySection::Songs => self.tracks_where("WHERE t.source = 0 OR t.saved = 1 ORDER BY t.title COLLATE NOCASE", &[]),
             LibrarySection::Uploads => self.tracks_where("WHERE t.source = 0 ORDER BY t.title COLLATE NOCASE", &[]),
             LibrarySection::Downloaded => self.tracks_where("WHERE t.downloaded = 1 AND (t.source = 1 OR t.remote = 1) ORDER BY t.added_at DESC", &[]),
             LibrarySection::LikedSongs => self.tracks_where("WHERE t.saved = 1 OR t.liked = 1 ORDER BY t.added_at DESC", &[]),

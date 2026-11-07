@@ -6,6 +6,7 @@
 //! No Simulator, no network, no audio hardware: `cargo test` runs these in seconds.
 
 mod device;
+mod downloads;
 mod fake;
 mod library;
 mod playback;

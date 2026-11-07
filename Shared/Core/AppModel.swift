@@ -26,6 +26,10 @@ final class AppModel {
     /// Bumped whenever the playback settings change, here or from another device.
     var settingsVersion = 0
     var toast: String?
+    /// The download queue, as the core last told it.
+    private(set) var downloads = DownloadStatus(current: nil, progress: 0, queued: [], done: 0, total: 0, secondsLeft: nil)
+    /// `downloads.queued` as a set, for rows to look themselves up in.
+    @ObservationIgnored private(set) var queuedDownloads: Set<String> = []
     var showNowPlaying = false
     /// iPhone's Settings sheet (the account button, and prompts to connect Spotify).
     var showSettings = false
@@ -129,6 +133,19 @@ final class AppModel {
             h.userInfo = handoffInfo()
             h.needsSave = true
         }
+    }
+
+    func downloadsChanged() {
+        let status = core.downloadStatus()
+        queuedDownloads = Set(status.queued)
+        downloads = status
+    }
+
+    /// Where a song's download is: here, on its way now, waiting its turn, or none.
+    func downloadState(_ id: String, downloaded: Bool) -> DownloadState {
+        if downloads.current == id { return .downloading(Double(downloads.progress)) }
+        if queuedDownloads.contains(id) { return .waiting }
+        return downloaded ? .downloaded : .none
     }
 
     func settingsChanged() {
@@ -284,17 +301,14 @@ final class AppModel {
         Haptics.tap()
         Task {
             do {
+                // Downloading shows on the songs themselves, and on Library → Downloaded.
                 switch (item.kind, on) {
-                case (.track, true):
-                    show("Downloading…")
-                    try await core.downloadSongs(trackIds: [item.id])
+                case (.track, true): try await core.downloadSongs(trackIds: [item.id])
                 case (.track, false): core.removeDownloads(trackIds: [item.id])
-                case (_, true):
-                    show("Downloading…")
-                    try await core.download(collectionId: item.id)
+                case (_, true): try await core.download(collectionId: item.id)
                 case (_, false): try await core.removeDownload(collectionId: item.id)
                 }
-                show(on ? "Downloaded" : "Removed download")
+                if !on { show("Removed download") }
             } catch { show(Self.message(error)) }
         }
     }
@@ -332,7 +346,7 @@ final class AppModel {
         return error.localizedDescription
     }
 
-    /// network-aza-stream://play?id=…[&shuffle=1|&track=<title>] · open?id=… · seek?ms=… · nowplaying?mode=lyrics|queue · search?q=…
+    /// network-aza-stream://play?id=…[&shuffle=1|&track=<title>] · open?id=… · seek?ms=… · nowplaying?mode=lyrics|queue · search?q=… · library?section=Uploads
     func handle(url: URL) {
         Task { await perform(url) }
     }
@@ -378,6 +392,9 @@ final class AppModel {
             await until { self.core.positionMs() >= ms }
         case "search":
             searchRequest = value("q") ?? ""
+            showNowPlaying = false
+        case "library":
+            libraryRequest = LibrarySection.ordered.first { $0.title == value("section") }
             showNowPlaying = false
         case "settings":
             // `page=Spotify` opens that service's own page.
@@ -446,6 +463,9 @@ final class AppModel {
 
     /// Bumped when a deep link asks to open a page.
     var openRequested = 0
+
+    /// A deep link's Library page (`library?section=Uploads`): shown, then cleared.
+    var libraryRequest: LibrarySection?
 
     /// A deep link's search: the Search tab shows it, then clears this.
     var searchRequest: String?
@@ -569,5 +589,9 @@ final class CoreBridge: CoreDelegate, @unchecked Sendable {
 
     func settingsChanged() {
         Task { @MainActor in self.model?.settingsChanged() }
+    }
+
+    func downloadsChanged() {
+        Task { @MainActor in self.model?.downloadsChanged() }
     }
 }

@@ -5,6 +5,7 @@ uniffi::setup_scaffolding!();
 
 mod audio;
 mod db;
+mod downloads;
 mod lastfm;
 mod local;
 mod lyrics;
@@ -33,6 +34,7 @@ use player::{Engine, EngineEvent};
 use spotify::api::{self, WebApi};
 use spotify::auth::{self, Tokens};
 use spotify::session::{self as sp_session, Playback};
+pub use downloads::DownloadStatus;
 pub use node::{NodeStatus, SyncItem};
 pub use types::*;
 
@@ -59,6 +61,8 @@ pub trait CoreDelegate: Send + Sync {
     fn history_changed(&self);
     /// Another device changed a synced setting: `settings` and `app_prefs` have it.
     fn settings_changed(&self);
+    /// The download queue moved on: `download_status` has where it is.
+    fn downloads_changed(&self);
 }
 
 /// Where the core's warnings go: the system log, so they can be read off a device later.
@@ -149,6 +153,7 @@ pub struct StreamCore {
     /// Edits per playlist, so a burst of them syncs its copies once.
     copy_edits: Mutex<std::collections::HashMap<String, u64>>,
     copy_locks: Mutex<playlists::CopyLocks>,
+    downloads: Mutex<downloads::Queue>,
 }
 
 impl Drop for StreamCore {
@@ -286,6 +291,7 @@ impl StreamCore {
             copy_states: Mutex::new(Default::default()),
             copy_edits: Mutex::new(Default::default()),
             copy_locks: Mutex::new(Default::default()),
+            downloads: Mutex::new(Default::default()),
         });
         *slot.write() = Some(Arc::downgrade(&core));
         core.restore_accounts();
@@ -945,45 +951,9 @@ impl StreamCore {
 
     /// Keeps songs on this device, to play offline: songs from the Stream node are downloaded
     /// as their files, Spotify songs fetched into librespot's cache. Both are then Downloaded.
+    /// Returns once they're queued; `download_status` follows them.
     pub async fn download_songs(self: Arc<Self>, track_ids: Vec<String>) -> Result<(), CoreError> {
-        let remote: Vec<(String, String, String)> = self
-            .db
-            .remote_songs(Some(&track_ids))
-            .into_iter()
-            .filter(|(.., downloaded)| !downloaded)
-            .map(|(id, hash, rel, _)| (id, hash, rel))
-            .collect();
-        let spotify: Vec<String> = track_ids.into_iter().filter(|id| id.starts_with("spotify:track:")).collect();
-        let pb = self.playback.read().clone();
-        if pb.is_none() && !spotify.is_empty() && remote.is_empty() {
-            return Err(CoreError::NotSignedIn);
-        }
-        let me = self.clone();
-        self.rt
-            .spawn(async move {
-                if !remote.is_empty() {
-                    let db = me.db.clone();
-                    let delegate = me.delegate.clone();
-                    me.node
-                        .download(remote, &move |id: &str| {
-                            db.set_downloaded(&[id.to_string()], true);
-                            delegate.library_changed();
-                        })
-                        .await?;
-                }
-                if let Some(pb) = pb {
-                    for id in &spotify {
-                        if spotify::download::fetch(&pb.session, id).await.is_ok() {
-                            me.db.set_downloaded(std::slice::from_ref(id), true);
-                            me.delegate.library_changed();
-                        }
-                    }
-                }
-                Ok::<_, anyhow::Error>(())
-            })
-            .await
-            .map_err(err)?
-            .map_err(err)
+        self.queue_downloads(track_ids)
     }
 
     /// Removes an album's or playlist's downloads; its songs still stream.
@@ -996,6 +966,7 @@ impl StreamCore {
     /// Takes songs off this device; they still stream. A Spotify song's audio stays in
     /// librespot's cache until it's trimmed, but it no longer counts as Downloaded.
     pub fn remove_downloads(&self, track_ids: Vec<String>) {
+        self.unqueue_downloads(&track_ids);
         for (_, hash, rel, _) in self.db.remote_songs(Some(&track_ids)) {
             self.node.remove_download(&hash, &rel);
         }

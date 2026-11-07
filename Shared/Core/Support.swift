@@ -1,3 +1,4 @@
+import AzaUI
 import StreamBindings
 import SwiftUI
 
@@ -119,10 +120,12 @@ extension ButtonStyle where Self == PressableStyle {
 
 /// The ⬇ marker shared by synced local files and Spotify downloads.
 struct DownloadedBadge: View {
+    @Environment(\.accent) private var accent
+
     var body: some View {
         Image(systemName: "arrow.down.circle.fill")
             .font(.caption2)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(accent)
             .accessibilityLabel("Downloaded")
     }
 }

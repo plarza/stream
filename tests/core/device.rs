@@ -54,6 +54,7 @@ impl CoreDelegate for Events {
     fn sync_needed(&self) {}
     fn history_changed(&self) {}
     fn settings_changed(&self) {}
+    fn downloads_changed(&self) {}
 }
 
 /// One device running Stream: a core with its own data, and the fixture library scanned.
@@ -120,7 +121,7 @@ impl Device {
     }
 
     pub fn albums(&self) -> Vec<Item> {
-        self.core.section(LibrarySection::Albums, 0, 100)
+        self.core.section(LibrarySection::UploadedAlbums, 0, 100)
     }
 
     pub fn item(&self, section: LibrarySection, title: &str) -> Item {
@@ -132,7 +133,7 @@ impl Device {
 
     /// An album's songs in order.
     pub fn album(&self, title: &str) -> Vec<Track> {
-        let mut t: Vec<Track> = self.core.section_tracks(LibrarySection::Songs).into_iter().filter(|t| t.album == title).collect();
+        let mut t: Vec<Track> = self.core.section_tracks(LibrarySection::Uploads).into_iter().filter(|t| t.album == title).collect();
         t.sort_by_key(|t| (t.disc_number, t.track_number));
         assert!(!t.is_empty(), "no songs on {title:?}");
         t

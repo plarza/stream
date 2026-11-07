@@ -18,8 +18,15 @@ pub struct World {
     pub spotify_playlists: HashMap<String, (String, Vec<String>)>,
     /// SoundCloud's catalogue: what its search finds.
     pub soundcloud: Vec<Value>,
+    /// The albums saved and the artists followed in your Spotify library.
+    pub spotify_saved_albums: Vec<Value>,
+    pub spotify_followed: Vec<Value>,
     pub soundcloud_playlists: HashMap<u64, (String, Vec<u64>)>,
     pub soundcloud_likes: Vec<u64>,
+    /// The Stream node's files by SHA-256.
+    pub node_files: HashMap<String, Vec<u8>>,
+    /// While set, the node holds every file download until it's cleared.
+    pub node_hold: bool,
     /// The web player's client ID right now; SoundCloud turns it over now and then.
     pub client_id: String,
     /// Every request: "GET /sc-api/search/tracks".
@@ -132,9 +139,34 @@ fn route(method: &str, path: &str, q: &HashMap<String, String>, auth: &str, body
     let mut w = world.lock();
     let seg: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     match (method, seg.as_slice()) {
+        // ---- the Stream node ----
+        ("GET", ["node", "v1", "files"]) => {
+            let files: Vec<Value> = w.node_files.keys().map(|h| json!({ "hash": h })).collect();
+            ok(json!({ "files": files, "used": 0, "quota": 10_000_000_000u64 }))
+        }
+        ("GET", ["node", "v1", "files", hash]) => {
+            let hash = hash.to_string();
+            if w.node_hold {
+                drop(w);
+                while world.lock().node_hold {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                w = world.lock();
+            }
+            match w.node_files.get(&hash) {
+                Some(bytes) => (200, "application/octet-stream", bytes.clone()),
+                None => status(404),
+            }
+        }
         // ---- Spotify Web API ----
         ("GET", ["spotify", "me"]) => ok(json!({ "id": "aiden", "display_name": "aiden", "product": "premium" })),
-        ("GET", ["spotify", "me", "following"]) => ok(json!({ "artists": { "items": [], "next": null } })),
+        ("GET", ["spotify", "me", "following"]) => {
+            ok(json!({ "artists": { "items": w.spotify_followed.clone(), "next": null } }))
+        }
+        ("GET", ["spotify", "me", "albums"]) => {
+            let items: Vec<Value> = w.spotify_saved_albums.iter().map(|a| json!({ "album": a })).collect();
+            ok(json!({ "items": items, "next": null }))
+        }
         ("GET", ["spotify", "me", _]) => ok(json!({ "items": [], "next": null })),
         ("GET", ["spotify", "search"]) => {
             let query = q.get("q").cloned().unwrap_or_default();
