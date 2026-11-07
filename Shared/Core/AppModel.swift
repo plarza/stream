@@ -52,6 +52,12 @@ final class AppModel {
     /// Launched by the UI tests (`-uiTesting YES`): isolated library, silent, nothing persisted.
     /// Arguments go in `-key value` pairs; AppKit misreads a bare flag followed by a pair.
     static let isTesting = ProcessInfo.processInfo.arguments.contains("-uiTesting")
+    /// Under test, choices kept in defaults (sorts, filters) start fresh, so one test's
+    /// choices can't change what the next one sees.
+    static func forgetChoices() {
+        guard let id = Bundle.main.bundleIdentifier else { return }
+        UserDefaults.standard.removePersistentDomain(forName: id)
+    }
     static func argument(_ name: String) -> String? {
         let a = ProcessInfo.processInfo.arguments
         guard let i = a.firstIndex(of: name), i + 1 < a.count else { return nil }
@@ -76,6 +82,7 @@ final class AppModel {
             let root = fm.temporaryDirectory.appendingPathComponent("stream-uitest-\(UUID().uuidString)", isDirectory: true)
             support = root.appendingPathComponent("data")
             caches = root.appendingPathComponent("cache")
+            Self.forgetChoices()
         }
         #if os(iOS)
         // Where the old Wi-Fi sync put the Mac's files; any that are songs on the Stream node become downloads.
@@ -236,18 +243,6 @@ final class AppModel {
     func previous() { Haptics.tap(); core.previous() }
     func seek(to ms: UInt32) { core.seek(ms: ms) }
 
-    /// Buttons answer at once; the core (and Spotify) catch up, and a failure puts it back.
-    func setLiked(_ track: Track, _ liked: Bool) {
-        Haptics.success()
-        if player.track?.id == track.id { player.track?.liked = liked }
-        Task {
-            do { try await core.setLiked(trackId: track.id, liked: liked) } catch {
-                if player.track?.id == track.id { player.track?.liked = !liked }
-                show(Self.message(error))
-            }
-        }
-    }
-
     func setShuffle(_ on: Bool) {
         Haptics.tap()
         player.shuffle = on
@@ -362,6 +357,7 @@ final class AppModel {
             // UI tests share one launch; this puts the app back on Home, silent and with nothing open.
             core.pause()
             core.spotifySignOut()
+            Self.forgetChoices()
             showNowPlaying = false
             resetRequested &+= 1
         case "play":
