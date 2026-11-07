@@ -128,6 +128,11 @@ final class iOSUITests: StreamUITestCase {
         wait(el("search.problem"))
         el("result.Tunnel").tap()
         waitLabel(el("mini.title"), "Tunnel")
+        // Recent searches are what you played or opened from results, not what you typed.
+        field.buttons["Clear text"].tap()
+        wait(el("recentSearch.Tunnel"))
+        el("recentSearch.remove.Tunnel").tap()
+        XCTAssertTrue(el("recentSearch.Tunnel").waitForNonExistence(timeout: 2))
     }
 
     func testHistoryShowsPlayedSongs() {

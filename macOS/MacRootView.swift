@@ -667,6 +667,7 @@ struct CommandPalette: View {
     @Environment(\.dismiss) private var dismiss
     @State private var search = SearchModel()
     @State private var selected = 0
+    @State private var recents: [Item] = []
     @FocusState private var focused: Bool
     let open: (Item) -> Void
 
@@ -707,15 +708,16 @@ struct CommandPalette: View {
             }
         }
         .frame(width: 560, height: 420)
-        .onAppear { focused = true }
+        .onAppear { focused = true; recents = model.core.recentSearches() }
         .onChange(of: search.query) { selected = 0; search.run(model) }
     }
 
-    private var results: [Item] { Array(search.results.prefix(40)) }
+    /// Before you type, what you last picked from search; then what matches.
+    private var results: [Item] { Array((search.query.isEmpty ? recents : search.results).prefix(40)) }
 
     private func choose() {
         guard results.indices.contains(selected) else { return }
-        model.core.addRecentSearch(query: search.query)
+        model.core.addRecentSearch(item: results[selected])
         open(results[selected])
     }
 }

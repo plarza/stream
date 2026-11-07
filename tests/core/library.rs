@@ -88,3 +88,25 @@ fn a_songs_own_lrc_file_gives_its_synced_lyrics() {
     // From the file alone: nothing waits on LRCLIB.
     assert!(start.elapsed() < std::time::Duration::from_secs(2), "took {:?}", start.elapsed());
 }
+
+#[test]
+fn recent_searches_are_what_you_picked_from_results() {
+    let mac = Device::mac();
+    let core = &mac.core;
+    assert!(core.recent_searches().is_empty());
+
+    let song = core.search_library("neon".into(), SearchFilter::All).into_iter().find(|i| i.title == "Neon Lights").unwrap();
+    let album = core.search_library("night drive".into(), SearchFilter::Albums).into_iter().next().unwrap();
+    core.add_recent_search(song.clone());
+    core.add_recent_search(album.clone());
+    assert_eq!(titles(&core.recent_searches()), ["Night Drive", "Neon Lights"]);
+
+    // Picking it again brings it back to the top, once.
+    core.add_recent_search(song.clone());
+    assert_eq!(titles(&core.recent_searches()), ["Neon Lights", "Night Drive"]);
+
+    core.remove_recent_search(song.id.clone());
+    assert_eq!(titles(&core.recent_searches()), ["Night Drive"]);
+    core.clear_recent_searches();
+    assert!(core.recent_searches().is_empty());
+}

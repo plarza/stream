@@ -112,9 +112,12 @@ CREATE TABLE IF NOT EXISTS recents (
     played_at INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS recent_searches (
-    query TEXT PRIMARY KEY,
-    at    INTEGER NOT NULL
+-- What you picked from search results (JSON Item), newest first, as search's empty page shows them.
+DROP TABLE IF EXISTS recent_searches;
+CREATE TABLE IF NOT EXISTS searched (
+    id   TEXT PRIMARY KEY,
+    item TEXT NOT NULL,
+    at   INTEGER NOT NULL  -- order picked, newest highest
 );
 
 CREATE TABLE IF NOT EXISTS scrobbles (
@@ -1408,23 +1411,27 @@ impl Db {
             .collect()
     }
 
-    pub fn recent_searches(&self) -> Vec<String> {
-        let conn = self.conn.lock();
-        let Ok(mut stmt) = conn.prepare_cached("SELECT query FROM recent_searches ORDER BY at DESC LIMIT 20") else {
-            return vec![];
-        };
-        stmt.query_map([], |r| r.get(0)).map(|rows| rows.filter_map(Result::ok).collect()).unwrap_or_default()
+    pub fn recent_searches(&self) -> Vec<Item> {
+        self.json_items("SELECT item FROM searched ORDER BY at DESC LIMIT 30")
     }
 
-    pub fn add_recent_search(&self, q: &str) {
-        let _ = self.conn.lock().execute(
-            "INSERT INTO recent_searches(query, at) VALUES(?1, ?2) ON CONFLICT(query) DO UPDATE SET at = excluded.at",
-            params![q.trim(), now()],
+    pub fn add_recent_search(&self, item: &Item) {
+        let json = serde_json::to_string(item).unwrap_or_default();
+        let conn = self.conn.lock();
+        let _ = conn.execute(
+            "INSERT INTO searched(id, item, at) VALUES(?1, ?2, (SELECT COALESCE(MAX(at), 0) + 1 FROM searched))
+             ON CONFLICT(id) DO UPDATE SET item = excluded.item, at = excluded.at",
+            params![item.id, json],
         );
+        let _ = conn.execute("DELETE FROM searched WHERE id NOT IN (SELECT id FROM searched ORDER BY at DESC LIMIT 30)", []);
+    }
+
+    pub fn remove_recent_search(&self, id: &str) {
+        let _ = self.conn.lock().execute("DELETE FROM searched WHERE id = ?1", params![id]);
     }
 
     pub fn clear_recent_searches(&self) {
-        let _ = self.conn.lock().execute("DELETE FROM recent_searches", []);
+        let _ = self.conn.lock().execute("DELETE FROM searched", []);
     }
 
     // ---- scrobbles ---------------------------------------------------------

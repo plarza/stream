@@ -685,14 +685,18 @@ impl StreamCore {
         self.rt.spawn(async move { me.search_spotify_inner(&query, filter).await }).await.map_err(err)?
     }
 
-    pub fn recent_searches(&self) -> Vec<String> {
+    /// What you picked from search results, newest first: search's page before you type.
+    pub fn recent_searches(&self) -> Vec<Item> {
         self.db.recent_searches()
     }
 
-    pub fn add_recent_search(&self, query: String) {
-        if !query.trim().is_empty() {
-            self.db.add_recent_search(&query);
-        }
+    /// You picked this from search results: it goes to the top of recent searches.
+    pub fn add_recent_search(&self, item: Item) {
+        self.db.add_recent_search(&item);
+    }
+
+    pub fn remove_recent_search(&self, id: String) {
+        self.db.remove_recent_search(&id);
     }
 
     pub fn clear_recent_searches(&self) {

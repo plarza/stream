@@ -240,7 +240,7 @@ bottom accessory.
 | Album / Playlist / Artist | `05` **C**: compact header (art + metadata), art-tinted page, actions row (play, shuffle, save, pin). Their songs sort from the ⇅ menu in the actions row (the list's own order, title, artist, album, length, reversed), the same for every playlist, every album and every artist. Artists add their header photo, the whole discography newest first with Albums / Singles / EPs pills, and About (bio, monthly listeners, followers, rank, top cities) |
 | Queue | `06` **A** without the toggle row: "Playing Next" + "Continue from …" |
 | Settings → Services | `09` **A** One Services list: a row per service and Last.fm with its status, each opening its own page |
-| Search | `07` **C**: one relevance-ranked list across library + Spotify, type chips (All, Songs, Albums, Artists, Playlists); the empty state shows recent searches |
+| Search | `07` **C**: one relevance-ranked list across library + Spotify, type chips (All, Songs, Albums, Artists, Playlists); the empty state shows recent searches: the songs, albums, artists and playlists you played or opened from results (not what you typed), newest first, each with × to remove |
 
 **Mac**
 
