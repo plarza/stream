@@ -18,6 +18,8 @@ pub struct World {
     pub spotify_playlists: HashMap<String, (String, Vec<String>)>,
     /// SoundCloud's catalogue: what its search finds.
     pub soundcloud: Vec<Value>,
+    /// SoundCloud's accounts, which its search finds by name.
+    pub soundcloud_users: Vec<Value>,
     /// The albums saved and the artists followed in your Spotify library.
     pub spotify_saved_albums: Vec<Value>,
     pub spotify_followed: Vec<Value>,
@@ -72,7 +74,7 @@ pub fn spotify_track(id: &str, title: &str, artist: &str, ms: u32, isrc: &str) -
 /// A SoundCloud upload. `encrypted`: only offered as DRM, like most major-label releases.
 pub fn soundcloud_track(n: u64, title: &str, user: &str, ms: u32, isrc: Option<&str>, encrypted: bool) -> Value {
     json!({
-        "id": n, "title": title, "full_duration": ms, "duration": ms,
+        "kind": "track", "id": n, "title": title, "full_duration": ms, "duration": ms,
         "user": { "id": 900 + n, "username": user, "avatar_url": null },
         "artwork_url": null,
         "publisher_metadata": isrc.map(|i| json!({ "isrc": i, "artist": user })),
@@ -238,6 +240,14 @@ fn route(method: &str, path: &str, q: &HashMap<String, String>, auth: &str, body
                 Some(p) => ok(json!({ "kind": "playlist", "id": n, "title": p.0 })),
                 None => status(404),
             }
+        }
+        // soundcloud.com's own search: songs and accounts together, the most heard first.
+        ("GET", ["sc-api", "search"]) => {
+            let query = q.get("q").cloned().unwrap_or_default();
+            let mut found: Vec<Value> = w.soundcloud.iter().filter(|t| words_in(&query, t["title"].as_str().unwrap_or(""))).map(|t| with_media(t, base)).collect();
+            found.extend(w.soundcloud_users.iter().filter(|u| words_in(&query, u["username"].as_str().unwrap_or(""))).cloned());
+            found.sort_by_key(|x| std::cmp::Reverse(x["playback_count"].as_u64().or(x["followers_count"].as_u64()).unwrap_or(0)));
+            ok(json!({ "collection": found, "next_href": null }))
         }
         ("GET", ["sc-api", "search", "tracks"]) => {
             let query = q.get("q").cloned().unwrap_or_default();

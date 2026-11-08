@@ -677,7 +677,7 @@ impl StreamCore {
             vec![]
         };
         let found = own.into_iter().chain(self.db.search(&query, filter, 40)).filter(|i| on.is_on(Service::of(i.source))).collect();
-        search::rank(&query, vec![found])
+        search::rank(&query, vec![found], |_, _| false).into_iter().filter_map(|copies| copies.into_iter().next()).collect()
     }
 
     pub async fn search_spotify(self: Arc<Self>, query: String, filter: SearchFilter) -> Result<Vec<Item>, CoreError> {
@@ -1515,40 +1515,24 @@ impl StreamCore {
             Some(Err(e)) => problems.push(ServiceProblem { service: Service::SoundCloud, message: format!("{e:#}") }),
             None => {}
         }
-        let lists = std::iter::once(library).chain(order.into_iter().map(|s| found.remove(&s).unwrap_or_default())).collect();
-        SearchResults { items: self.best_copies(search::rank(q, lists)), problems }
-    }
-
-    /// One song found on several services shows once, as its best copy (see
-    /// [`matching::rank`]), where the first of them was listed.
-    fn best_copies(&self, items: Vec<Item>) -> Vec<Item> {
-        let mut out: Vec<Item> = Vec::with_capacity(items.len());
-        // Songs listed so far: their tags, their copy and where they are in `out`.
-        let mut songs: Vec<(matching::Tags, Track, usize)> = Vec::new();
-        for item in items {
-            let track = (item.kind == ItemKind::Track).then(|| self.db.track(&item.id)).flatten();
-            let Some(track) = track else {
-                out.push(item);
-                continue;
-            };
-            let tags = matching::Tags { title: track.title.clone(), artist: track.artist.clone(), duration_ms: track.duration_ms, isrc: None };
-            let same = songs
-                .iter_mut()
-                .find(|(t, kept, _)| kept.source != track.source && matching::score(t, &tags) >= matching::SAME);
-            match same {
-                Some((_, kept, at)) => {
-                    if matching::rank(&track) < matching::rank(kept) {
-                        out[*at] = item;
-                        *kept = track;
-                    }
-                }
-                None => {
-                    songs.push((tags, track, out.len()));
-                    out.push(item);
-                }
-            }
-        }
-        out
+        let lists: Vec<Vec<Item>> = std::iter::once(library).chain(order.into_iter().map(|s| found.remove(&s).unwrap_or_default())).collect();
+        // One song on several services is one result, shown as its best copy (see [`matching::rank`]).
+        let songs: std::collections::HashMap<String, (matching::Tags, Track)> = lists
+            .iter()
+            .flatten()
+            .filter(|i| i.kind == ItemKind::Track)
+            .filter_map(|i| self.db.track(&i.id))
+            .map(|t| (t.id.clone(), (matching::Tags { title: t.title.clone(), artist: t.artist.clone(), duration_ms: t.duration_ms, isrc: None }, t)))
+            .collect();
+        let same = |a: &Item, b: &Item| match (songs.get(&a.id), songs.get(&b.id)) {
+            (Some((ta, a)), Some((tb, b))) => a.source != b.source && matching::score(ta, tb) >= matching::SAME,
+            _ => false,
+        };
+        let items = search::rank(q, lists, same)
+            .into_iter()
+            .filter_map(|copies| copies.into_iter().min_by_key(|c| songs.get(&c.id).map(|(_, t)| matching::rank(t))))
+            .collect();
+        SearchResults { items, problems }
     }
 
     /// A SoundCloud song's audio, or the same song elsewhere when SoundCloud only has it

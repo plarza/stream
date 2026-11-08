@@ -37,9 +37,9 @@ struct StreamMacApp: App {
         // where macOS puts them in its own apps, inside the floating sidebar.
         .windowToolbarStyle(.unified(showsTitle: false))
         .defaultSize(width: 1240, height: 800)
-        // Always open the window at launch, even if it was closed last time.
+        // Always open the window at launch, even if it was closed last time, where and as
+        // big as it was when it closed (macOS restores the frame).
         .defaultLaunchBehavior(.presented)
-        .restorationBehavior(.disabled)
         .commands {
             CommandGroup(after: .toolbar) {
                 Button("Zoom In") { zoom = Zoom.next(zoom, 1) }.keyboardShortcut("+", modifiers: .command)

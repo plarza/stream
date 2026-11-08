@@ -184,42 +184,35 @@ impl SoundCloud {
 
     // ---- search ---------------------------------------------------------------------
 
+    /// SoundCloud's own search, in its own order. For everything, the one search soundcloud.com
+    /// runs: SoundCloud ranks songs, people and playlists together by what it knows of them
+    /// (who listens, who follows), so an account that only shares a name with a song
+    /// doesn't come before the song.
     pub async fn search(&self, q: &str, filter: SearchFilter) -> Result<Vec<Item>> {
-        let query = |n: u32| [("q", q.to_string()), ("limit", n.to_string())];
-        let (tracks, playlists, users) = match filter {
+        let (path, limit) = match filter {
             SearchFilter::Podcasts => return Ok(vec![]),
-            SearchFilter::Songs => (Some(20), None, None),
-            SearchFilter::Playlists | SearchFilter::Albums => (None, Some(15), None),
-            SearchFilter::Artists => (None, None, Some(15)),
-            SearchFilter::All => (Some(10), Some(4), Some(3)),
+            SearchFilter::All => ("/search", 20),
+            SearchFilter::Songs => ("/search/tracks", 20),
+            SearchFilter::Albums => ("/search/albums", 15),
+            SearchFilter::Playlists => ("/search/playlists_without_albums", 15),
+            SearchFilter::Artists => ("/search/users", 15),
         };
-        let (t, p, u) = tokio::join!(
-            async { match tracks { Some(n) => self.get("/search/tracks", &query(n)).await.map(Some), None => Ok(None) } },
-            async {
-                let path = if filter == SearchFilter::Albums { "/search/albums" } else { "/search/playlists_without_albums" };
-                match playlists { Some(n) => self.get(path, &query(n)).await.map(Some), None => Ok(None) }
-            },
-            async { match users { Some(n) => self.get("/search/users", &query(n)).await.map(Some), None => Ok(None) } },
-        );
-        let rows: Vec<SpotifyTrackRow> = t?.map(|v| collection(&v).iter().filter_map(track_row).collect()).unwrap_or_default();
+        let v = self.get(path, &[("q", q.to_string()), ("limit", limit.to_string())]).await?;
+        let found = collection(&v);
+        let rows: Vec<SpotifyTrackRow> = found.iter().filter(|x| x["kind"] == "track").filter_map(track_row).collect();
         let _ = self.db.upsert_streamed_tracks(Source::SoundCloud, "AAC 160", &rows);
-        let mut tracks: Vec<Item> = rows.iter().map(|r| {
-            let mut i = row_track(r).as_item();
-            i.subtitle = format!("Song · {}", r.artist);
-            i
-        }).collect();
-        let mut lists: Vec<Item> = p?.map(|v| collection(&v).iter().filter_map(playlist_item).collect()).unwrap_or_default();
-        let mut artists: Vec<Item> = u?.map(|v| collection(&v).iter().filter_map(user_item).collect()).unwrap_or_default();
-        let mut out = Vec::new();
-        if !artists.is_empty() {
-            out.push(artists.remove(0));
-        }
-        out.extend(tracks.drain(..tracks.len().min(4)));
-        out.extend(lists.drain(..lists.len().min(2)));
-        out.extend(tracks);
-        out.extend(lists);
-        out.extend(artists);
-        Ok(out)
+        Ok(found
+            .iter()
+            .filter_map(|x| match x["kind"].as_str()? {
+                "track" => track_row(x).map(|r| {
+                    let mut i = row_track(&r).as_item();
+                    i.subtitle = format!("Song · {}", r.artist);
+                    i
+                }),
+                "user" => user_item(x),
+                _ => playlist_item(x),
+            })
+            .collect())
     }
 
     /// Up to `limit` songs for a plain query, as records, to match a song against.

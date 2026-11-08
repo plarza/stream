@@ -4,7 +4,9 @@
 //!
 //! The ranking is Meilisearch's: rules applied one after another, each only ordering what the
 //! one before it left tied. Then reciprocal rank fusion (Cormack, Clarke and Büttcher, 2009)
-//! of the services' own orders, your library first, settles the rest.
+//! of the services' own orders, your library first, settles the rest. One song on several
+//! services is one result, its ranks summed as the paper does: what several services agree
+//! on comes before what only one of them has.
 //!
 //! 1. **Words**: how many of the words you typed it has (the last one may be unfinished).
 //! 2. **Typo**: fewer typos. One is allowed in a word of 5 letters, two from 9.
@@ -26,26 +28,48 @@ const NOISE: &[&str] = &["the", "a", "an", "and", "original", "mix", "version", 
 /// Reciprocal rank fusion's constant, from the paper.
 const RRF_K: f32 = 60.0;
 
-/// `lists` in order of trust (your library first, then the services): every item once,
-/// best match first.
-pub fn rank(query: &str, lists: Vec<Vec<Item>>) -> Vec<Item> {
+/// `lists` in order of trust (your library first, then the services): every result once,
+/// best match first, each as its copies (`same` says which items are one song), in the
+/// order they were found.
+pub fn rank(query: &str, lists: Vec<Vec<Item>>, same: impl Fn(&Item, &Item) -> bool) -> Vec<Vec<Item>> {
+    struct Found {
+        rules: Rules,
+        yours: bool,
+        fused: f32,
+        lists: HashSet<usize>,
+        copies: Vec<Item>,
+    }
     let asked = query_words(query);
     let mut seen = HashSet::new();
-    let mut ranked: Vec<(Rules, Reverse<u8>, f32, usize, Item)> = Vec::new();
+    let mut found: Vec<Found> = Vec::new();
     for (trust, list) in lists.into_iter().enumerate() {
         for (at, item) in list.into_iter().enumerate() {
-            if seen.insert(item.id.clone()) {
-                let fused = 1.0 / (RRF_K + at as f32 + 1.0);
-                ranked.push((rules(&asked, &item), Reverse(u8::from(trust == 0)), fused, ranked.len(), item));
+            if !seen.insert(item.id.clone()) {
+                continue;
+            }
+            let rules = rules(&asked, &item);
+            let fused = 1.0 / (RRF_K + at as f32 + 1.0);
+            match found.iter_mut().find(|f| f.copies.iter().any(|c| same(c, &item))) {
+                Some(f) => {
+                    // Each list counts once, at its best rank.
+                    if f.lists.insert(trust) {
+                        f.fused += fused;
+                    }
+                    f.rules = f.rules.clone().max(rules);
+                    f.yours |= trust == 0;
+                    f.copies.push(item);
+                }
+                None => found.push(Found { rules, yours: trust == 0, fused, lists: HashSet::from([trust]), copies: vec![item] }),
             }
         }
     }
-    ranked.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(b.2.total_cmp(&a.2)).then(a.3.cmp(&b.3)));
-    ranked.into_iter().map(|r| r.4).collect()
+    // Stable: what was found first stays first when all else ties.
+    found.sort_by(|a, b| b.rules.cmp(&a.rules).then(b.yours.cmp(&a.yours)).then(b.fused.total_cmp(&a.fused)));
+    found.into_iter().map(|f| f.copies).collect()
 }
 
 /// Meilisearch's rules, as one key: greater is better.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 struct Rules {
     words: usize,
     typos: Reverse<usize>,

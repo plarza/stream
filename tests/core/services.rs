@@ -85,6 +85,30 @@ fn search_puts_what_you_typed_first_whichever_service_has_it() {
 }
 
 #[test]
+fn accounts_and_uploads_that_only_share_a_songs_name_come_after_the_song() {
+    let fake = Fake::start();
+    {
+        let mut w = fake.world.lock();
+        w.spotify.push(spotify_track("sicko", "SICKO MODE", "Travis Scott", 312000, "USSM11806475"));
+        let mut real = soundcloud_track(31, "SICKO MODE", "Travis Scott", 312000, None, false);
+        real["playback_count"] = 71_713_494.into();
+        w.soundcloud.push(real);
+        let mut cover = soundcloud_track(32, "Sicko mode", "someone", 150000, None, false);
+        cover["playback_count"] = 412.into();
+        w.soundcloud.push(cover);
+        w.soundcloud_users.push(serde_json::json!({ "kind": "user", "id": 77, "username": "sicko mode", "followers_count": 153 }));
+    }
+    let mac = Device::online(&fake);
+    let r = search(&mac, "sicko mode");
+    let found = ids(&r);
+    // The song both services have, once; then what only SoundCloud has, as SoundCloud ranks it.
+    assert_eq!(found.first(), Some(&"spotify:track:sicko"), "{found:?}");
+    assert!(!found.contains(&"soundcloud:track:31"), "{found:?}");
+    let at = |id: &str| found.iter().position(|s| *s == id).unwrap_or_else(|| panic!("{id} missing from {found:?}"));
+    assert!(at("soundcloud:track:32") > 0 && at("soundcloud:artist:77") > 0, "{found:?}");
+}
+
+#[test]
 fn services_turned_off_follow_you_to_your_other_devices() {
     let a = Device::mac();
     let b = Device::mac();

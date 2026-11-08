@@ -133,6 +133,12 @@ struct MacRootView: View {
             model.libraryRequest = nil
             pick(.section(s))
         }
+        .onChange(of: model.searchRequest, initial: true) {
+            guard let q = model.searchRequest else { return }
+            model.searchRequest = nil
+            pick(.search)
+            search.query = q
+        }
         .onChange(of: model.showNowPlaying) { _, shown in
             if !shown, let item = model.pendingNavigation {
                 model.pendingNavigation = nil
