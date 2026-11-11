@@ -29,7 +29,7 @@ Because it uses librespot, Stream isn't for the App Store. Install it with `scri
 - **Synced lyrics**, word by word where the source has it. Tap a line to seek.
 - **A queue** of Play Next and Play Later above the rest of the album or playlist.
 - **Artist pages**: header photo, top songs, every release with filter pills, bio, listeners and top cities.
-- **Offline.** Download a song, album or playlist from its page or long-press menu. One ⬇ badge marks anything that plays offline.
+- **Offline.** Download a song, album or playlist from its page or long-press menu. One ⬇ badge marks anything that plays offline. On the Mac, downloaded Uploads are saved under their own names in Music → Stream, or a folder you pick in Settings, and right-clicking a song shows its file in Finder.
 - **Podcasts** you follow on Spotify, in Library and in search. An episode picks up where you left off and is marked played when you finish it.
 - **History** of every song you played, on any device, by day.
 - **Pick up where you left off.** The playing song and its position follow you to your other devices.
@@ -41,7 +41,7 @@ On the Mac there's a floating glass sidebar and player, ⌘K to play or go to an
 
 ## Your data
 
-Everything stays on your devices unless you sign in with aza. The library is a SQLite database in the app's container, and your Spotify and Last.fm credentials are in the Keychain, on that device only. Stream reads your music folders in place and never copies or changes them.
+Everything stays on your devices unless you sign in with aza. The library is a SQLite database in the app's container, and your Spotify and Last.fm credentials are in the Keychain, on that device only. Stream reads your music folders in place and never copies or changes them. Downloaded Uploads are files in your downloads folder; downloaded Spotify songs stay in librespot's encrypted cache.
 
 Signed in with aza, your settings, pins, history and the list of your own songs sync through aza sync, and the files themselves go to the Stream node at `stream.aza.network`. They are stored by hash, never transcoded, and stream while they play.
 

@@ -106,6 +106,9 @@ pub struct CoreConfig {
     /// iPhone: where the old Wi-Fi sync put the Mac's files; any that are songs on the
     /// Stream node become downloads. Mac: unused (watched folders instead).
     pub music_dir: Option<String>,
+    /// Where downloads from the Stream node go until another folder is chosen (Mac: Music →
+    /// Stream). None: Downloads in `data_dir`.
+    pub downloads_dir: Option<String>,
     pub is_phone: bool,
     /// UI tests only: a stand-in for Spotify's accounts service and Web API.
     pub spotify_accounts_url: Option<String>,
@@ -230,6 +233,9 @@ impl StreamCore {
                 art_dir.clone(),
                 &data,
                 &cache,
+                db.get_kv("downloads_folder")
+                    .or(config.downloads_dir.clone())
+                    .map_or_else(|| data.join("Downloads"), PathBuf::from),
                 config.music_dir.clone().filter(|_| config.is_phone).map(PathBuf::from),
                 rt.handle().clone(),
             )
@@ -485,6 +491,34 @@ impl StreamCore {
         self.rescan();
     }
 
+    /// The folder songs downloaded from the Stream node are kept in, under the paths they have
+    /// on the device they came from.
+    pub fn downloads_folder(&self) -> String {
+        self.node.downloads_dir().display().to_string()
+    }
+
+    /// Moves the downloads to `folder`, in the background, and keeps new ones there.
+    pub fn set_downloads_folder(self: Arc<Self>, folder: String) {
+        self.db.set_kv("downloads_folder", &folder);
+        let me = self.clone();
+        self.rt.spawn_blocking(move || {
+            me.node.move_downloads(PathBuf::from(folder));
+            // Songs in the old folder that sit inside a music folder are your own files now,
+            // and any in the new one are downloads.
+            me.rescan();
+        });
+    }
+
+    /// The song's file on this device, for Show in Finder: one of your own, or a download
+    /// from the Stream node. Spotify downloads are in librespot's encrypted cache, not files.
+    pub fn file_path(&self, track_id: String) -> Option<String> {
+        let path = match self.db.local_source(&track_id)? {
+            db::LocalSource::File { path, .. } => PathBuf::from(path),
+            db::LocalSource::Remote { hash, .. } => self.node.download_path(&hash)?,
+        };
+        path.exists().then(|| path.display().to_string())
+    }
+
     /// Rescans music folders in the background (cheap when nothing changed).
     pub fn rescan(self: Arc<Self>) {
         {
@@ -502,7 +536,7 @@ impl StreamCore {
                 loop {
                     // The iPhone has no music folders (but UI tests' fixtures): its songs come from the Stream node.
                     let roots: Vec<PathBuf> = me.folders.lock().clone();
-                    let changed = scan::scan(&me.db, &roots, &me.art_dir, true, &me.scan_progress).unwrap_or_else(|e| {
+                    let changed = scan::scan(&me.db, &roots, &me.node.downloads_dir(), &me.art_dir, true, &me.scan_progress).unwrap_or_else(|e| {
                         me.delegate.message(format!("Scanning failed: {e:#}"));
                         false
                     });
@@ -955,8 +989,8 @@ impl StreamCore {
     /// librespot's cache until it's trimmed, but it no longer counts as Downloaded.
     pub fn remove_downloads(&self, track_ids: Vec<String>) {
         self.unqueue_downloads(&track_ids);
-        for (_, hash, rel, _) in self.db.remote_songs(Some(&track_ids)) {
-            self.node.remove_download(&hash, &rel);
+        for (_, hash, ..) in self.db.remote_songs(Some(&track_ids)) {
+            self.node.remove_download(&hash);
         }
         // A device's own files (the Mac's music folders) aren't downloads to remove.
         let ids: Vec<String> = track_ids

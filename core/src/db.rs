@@ -321,6 +321,10 @@ impl Db {
             .unwrap_or_default()
     }
 
+    pub fn delete_kv(&self, key: &str) {
+        let _ = self.conn.lock().execute("DELETE FROM kv WHERE key = ?1", [key]);
+    }
+
     pub fn set_kv(&self, key: &str, value: &str) {
         let _ = self.conn.lock().execute(
             "INSERT INTO kv(key, value) VALUES(?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value",

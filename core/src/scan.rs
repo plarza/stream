@@ -28,7 +28,8 @@ pub struct Progress {
 /// Bump when what the scanner extracts changes, so every file is read again.
 const SCAN_VERSION: &str = "5";
 
-pub fn scan(db: &Db, roots: &[PathBuf], art_dir: &Path, downloaded: bool, progress: &Progress) -> anyhow::Result<bool> {
+/// `skip` is the downloads folder: songs there are downloads, even inside a music folder.
+pub fn scan(db: &Db, roots: &[PathBuf], skip: &Path, art_dir: &Path, downloaded: bool, progress: &Progress) -> anyhow::Result<bool> {
     let mut known = db.local_index();
     if db.get_kv("scan_version").as_deref() != Some(SCAN_VERSION) {
         known.values_mut().for_each(|v| *v = (-1, -1));
@@ -39,7 +40,7 @@ pub fn scan(db: &Db, roots: &[PathBuf], art_dir: &Path, downloaded: bool, progre
 
     for root in roots {
         let walk = walkdir::WalkDir::new(root).follow_links(true).into_iter();
-        for entry in walk.filter_entry(|e| e.depth() == 0 || !is_project(e)).filter_map(Result::ok) {
+        for entry in walk.filter_entry(|e| e.depth() == 0 || !(is_project(e) || e.path() == skip)).filter_map(Result::ok) {
             let path = entry.path();
             if !entry.file_type().is_file() || !is_audio(path) {
                 continue;

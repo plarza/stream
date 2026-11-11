@@ -88,14 +88,17 @@ final class AppModel {
         // Where the old Wi-Fi sync put the Mac's files; any that are songs on the Stream node become downloads.
         let musicDir: URL? = Self.isTesting ? nil : fm.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Music", isDirectory: true)
         let isPhone = true
+        let downloadsDir: URL? = nil
         #else
         let musicDir: URL? = nil
         let isPhone = false
+        // Downloads go to Music → Stream until another folder is picked in Settings.
+        let downloadsDir: URL? = Self.isTesting ? nil : fm.urls(for: .musicDirectory, in: .userDomainMask)[0].appendingPathComponent("Stream", isDirectory: true)
         #endif
         let bridge = CoreBridge()
         self.bridge = bridge
         // UI tests stand in for Spotify's accounts service and Web API (see tests/Shared/FakeSpotify.swift).
-        let config = CoreConfig(dataDir: support.path, cacheDir: caches.path, musicDir: musicDir?.path, isPhone: isPhone,
+        let config = CoreConfig(dataDir: support.path, cacheDir: caches.path, musicDir: musicDir?.path, downloadsDir: downloadsDir?.path, isPhone: isPhone,
                                 spotifyAccountsUrl: Self.isTesting ? Self.argument("-spotifyAccounts") : nil,
                                 spotifyApiUrl: Self.isTesting ? Self.argument("-spotifyApi") : nil,
                                 // Tests and screenshots: lyrics come from the songs' own .lrc files, never the internet.
@@ -307,6 +310,14 @@ final class AppModel {
             } catch { show(Self.message(error)) }
         }
     }
+
+    #if os(macOS)
+    /// Opens a Finder window with the song's file selected.
+    func showInFinder(_ track: Track) {
+        guard let path = core.filePath(trackId: track.id) else { return show("“\(track.title)” isn’t on this Mac") }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+    }
+    #endif
 
     func playNext(_ tracks: [Track]) { Haptics.tap(); core.playNext(tracks: tracks); show("Playing next") }
     func playLater(_ tracks: [Track]) { Haptics.tap(); core.playLater(tracks: tracks); show("Added to queue") }

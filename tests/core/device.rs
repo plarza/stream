@@ -108,6 +108,7 @@ impl Device {
                 data_dir: dir.path().join("data").display().to_string(),
                 cache_dir: dir.path().join("cache").display().to_string(),
                 music_dir: None,
+                downloads_dir: None,
                 is_phone,
                 spotify_accounts_url: at("/spotify-accounts"),
                 spotify_api_url: at("/spotify"),

@@ -7,7 +7,7 @@
 //! and the Last.fm key and sign-in. Swift moves the items between the core and the aza client.
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -84,7 +84,11 @@ pub struct Node {
     http: reqwest::Client,
     db: Arc<Db>,
     art_dir: PathBuf,
-    downloads: PathBuf,
+    /// The downloads folder. Each download keeps the path it has on the device it came from,
+    /// recorded as `download:<hash>` → its path in here.
+    downloads: RwLock<PathBuf>,
+    /// Where downloads were kept before they had names: `<hash>.<ext>` in the app's data.
+    old_downloads: PathBuf,
     stream_dir: PathBuf,
     /// iPhone: where the old Wi-Fi sync put the Mac's files. Any that match a song are moved
     /// into downloads instead of fetched again.
@@ -110,6 +114,39 @@ pub(crate) fn sha256_file(path: &Path) -> Result<String> {
         h.update(&buf[..n]);
     }
     Ok(hex::encode(h.finalize()))
+}
+
+/// Where a file is written before it's whole.
+fn part_of(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".part");
+    path.with_file_name(name)
+}
+
+/// Moves a file, copying it when `to` is on another disk, and makes the folders it needs.
+fn move_file(from: &Path, to: &Path) -> Result<()> {
+    if let Some(dir) = to.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("making {}", dir.display()))?;
+    }
+    if std::fs::rename(from, to).is_ok() {
+        return Ok(());
+    }
+    let part = part_of(to);
+    std::fs::copy(from, &part).with_context(|| format!("copying to {}", to.display()))?;
+    std::fs::rename(&part, to)?;
+    let _ = std::fs::remove_file(from);
+    Ok(())
+}
+
+/// Removes the folders `name` was in under `root` that are now empty (bar Finder's .DS_Store).
+fn prune(root: &Path, name: &Path) {
+    for dir in name.ancestors().skip(1).take_while(|d| !d.as_os_str().is_empty()) {
+        let dir = root.join(dir);
+        let _ = std::fs::remove_file(dir.join(".DS_Store"));
+        if std::fs::remove_dir(&dir).is_err() {
+            break;
+        }
+    }
 }
 
 fn ext_of(rel_path: &str) -> String {
@@ -152,19 +189,18 @@ impl Node {
         art_dir: PathBuf,
         data_dir: &Path,
         cache_dir: &Path,
+        downloads: PathBuf,
         legacy_dir: Option<PathBuf>,
         rt: tokio::runtime::Handle,
     ) -> Result<Node> {
-        let downloads = data_dir.join("Downloads");
         let stream_dir = cache_dir.join("stream");
-        for d in [&downloads, &stream_dir] {
-            std::fs::create_dir_all(d)?;
-        }
-        Ok(Node {
+        std::fs::create_dir_all(&stream_dir)?;
+        let node = Node {
             http,
             db,
             art_dir,
-            downloads,
+            downloads: RwLock::new(downloads),
+            old_downloads: data_dir.join("Downloads"),
             stream_dir,
             legacy_dir,
             rt,
@@ -173,7 +209,9 @@ impl Node {
             uploading: AtomicBool::new(false),
             fetching_art: AtomicBool::new(false),
             streams: Arc::new(Mutex::new(HashMap::new())),
-        })
+        };
+        node.name_old_downloads();
+        Ok(node)
     }
 
     pub fn connect(&self, url: String, token: String) {
@@ -448,7 +486,7 @@ impl Node {
         }
         if !remove.is_empty() {
             for h in &remove {
-                let _ = std::fs::remove_file(self.download_path(h, ""));
+                self.remove_download(h);
             }
             let _ = self.db.remove_remote(&remove);
         }
@@ -457,15 +495,11 @@ impl Node {
 
     /// Whether a song is downloaded here, moving in a copy the old Wi-Fi sync left.
     fn adopt_download(&self, hash: &str, rel: &str, size: u64) -> bool {
-        let dest = self.download_path(hash, rel);
-        if dest.exists() {
+        if self.download_path(hash).is_some() {
             return true;
         }
         let Some(old) = self.legacy_dir.as_ref().map(|d| d.join(rel)) else { return false };
-        if std::fs::metadata(&old).is_ok_and(|m| m.len() == size) {
-            return std::fs::rename(&old, &dest).is_ok();
-        }
-        false
+        std::fs::metadata(&old).is_ok_and(|m| m.len() == size) && self.keep(hash, rel, &old).is_ok()
     }
 
     // ---- art --------------------------------------------------------------------------
@@ -507,19 +541,87 @@ impl Node {
 
     // ---- downloads ----------------------------------------------------------------------
 
-    fn download_path(&self, hash: &str, rel: &str) -> PathBuf {
-        if rel.is_empty() {
-            // Whatever its extension: find it.
-            if let Ok(dir) = std::fs::read_dir(&self.downloads) {
-                for e in dir.filter_map(Result::ok) {
-                    if e.file_name().to_string_lossy().starts_with(hash) {
-                        return e.path();
-                    }
-                }
-            }
-            return self.downloads.join(hash);
+    pub fn downloads_dir(&self) -> PathBuf {
+        self.downloads.read().clone()
+    }
+
+    /// A downloaded song's file, while it's there.
+    pub fn download_path(&self, hash: &str) -> Option<PathBuf> {
+        let name = self.db.get_kv(&format!("download:{hash}"))?;
+        let path = self.downloads.read().join(name);
+        path.exists().then_some(path)
+    }
+
+    /// Where a new download goes: under the downloads folder at `rel`, the path it has on the
+    /// device it came from, numbered when another file is there. Returns it relative to the
+    /// folder, and in full.
+    fn new_download_path(&self, hash: &str, rel: &str) -> (String, PathBuf) {
+        let dir = self.downloads.read().clone();
+        let mut clean: PathBuf = Path::new(rel)
+            .components()
+            .filter_map(|c| match c {
+                Component::Normal(s) => Some(s),
+                _ => None,
+            })
+            .collect();
+        if clean.as_os_str().is_empty() {
+            clean = PathBuf::from(format!("{hash}.{}", ext_of(rel)));
         }
-        self.downloads.join(format!("{hash}.{}", ext_of(rel)))
+        let stem = clean.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let ext = clean.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+        let mut name = clean.clone();
+        let mut n = 1;
+        while dir.join(&name).exists() || part_of(&dir.join(&name)).exists() {
+            n += 1;
+            name = clean.with_file_name(format!("{stem} {n}{ext}"));
+        }
+        let full = dir.join(&name);
+        (name.to_string_lossy().into_owned(), full)
+    }
+
+    /// Moves `file` into the downloads folder as the song `hash`.
+    fn keep(&self, hash: &str, rel: &str, file: &Path) -> Result<PathBuf> {
+        let (name, dest) = self.new_download_path(hash, rel);
+        move_file(file, &dest)?;
+        self.db.set_kv(&format!("download:{hash}"), &name);
+        Ok(dest)
+    }
+
+    /// Downloads from before they had names, `<hash>.<ext>` in the app's data, moved into the
+    /// downloads folder under their names.
+    fn name_old_downloads(&self) {
+        let Ok(dir) = std::fs::read_dir(&self.old_downloads) else { return };
+        let old: Vec<PathBuf> = dir.filter_map(Result::ok).map(|e| e.path()).filter(|p| p.is_file()).collect();
+        if old.is_empty() {
+            return;
+        }
+        for (_, hash, rel, _) in self.db.remote_songs(None) {
+            if let Some(file) = old.iter().find(|p| p.file_stem().is_some_and(|s| s.to_string_lossy() == hash))
+                && let Err(e) = self.keep(&hash, &rel, file)
+            {
+                log::warn!("moving the download {}: {e:#}", file.display());
+            }
+        }
+        let _ = std::fs::remove_dir(&self.old_downloads);
+    }
+
+    /// Moves every download into `to`, where new ones go from now on.
+    pub fn move_downloads(&self, to: PathBuf) {
+        let from = std::mem::replace(&mut *self.downloads.write(), to.clone());
+        if from == to {
+            return;
+        }
+        for (key, name) in self.db.kv_prefixed("download:") {
+            let file = from.join(&name);
+            if !file.exists() {
+                continue;
+            }
+            let hash = key.trim_start_matches("download:");
+            match self.keep(hash, &name, &file) {
+                Ok(_) => prune(&from, Path::new(&name)),
+                Err(e) => log::warn!("moving the download {}: {e:#}", file.display()),
+            }
+        }
     }
 
     fn cached_path(&self, hash: &str, rel: &str) -> PathBuf {
@@ -528,26 +630,34 @@ impl Node {
 
     /// Keeps a song from the node on this device, telling `progress` how much has arrived.
     pub async fn download_one(&self, hash: &str, rel: &str, progress: Arc<dyn Fn(f32) + Send + Sync>) -> Result<()> {
-        let (base, token) = self.conn()?;
-        let dest = self.download_path(hash, rel);
-        let cached = self.cached_path(hash, rel);
-        if !dest.exists() {
-            if cached.exists() {
-                tokio::fs::rename(&cached, &dest).await?;
+        if self.download_path(hash).is_none() {
+            let cached = self.cached_path(hash, rel);
+            let file = if cached.exists() {
+                cached
             } else {
-                self.fetch(&base, &token, hash, &dest, &*progress).await?;
-            }
+                let (base, token) = self.conn()?;
+                let part = self.stream_dir.join(format!("{hash}.download"));
+                self.fetch(&base, &token, hash, &part, &*progress).await?;
+                part
+            };
+            self.keep(hash, rel, &file)?;
         }
         progress(1.0);
         Ok(())
     }
 
-    pub fn remove_download(&self, hash: &str, rel: &str) {
-        let _ = std::fs::remove_file(self.download_path(hash, rel));
+    /// Takes a download off this device, with any folders it leaves empty.
+    pub fn remove_download(&self, hash: &str) {
+        let key = format!("download:{hash}");
+        let Some(name) = self.db.get_kv(&key) else { return };
+        let dir = self.downloads.read().clone();
+        let _ = std::fs::remove_file(dir.join(&name));
+        prune(&dir, Path::new(&name));
+        self.db.delete_kv(&key);
     }
 
     async fn fetch(&self, base: &str, token: &str, hash: &str, dest: &Path, progress: &(dyn Fn(f32) + Send + Sync)) -> Result<()> {
-        let part = dest.with_extension("part");
+        let part = part_of(dest);
         let res = check(self.http.get(format!("{base}/v1/files/{hash}")).bearer_auth(token).send().await?).await?;
         let size = res.content_length().unwrap_or(0);
         let mut got = 0u64;
@@ -578,8 +688,7 @@ impl Node {
     /// The song's audio: the download, a cached stream, or a stream from the node that plays
     /// while the rest arrives.
     pub fn open(&self, hash: &str, rel: &str, size: u64) -> Result<Box<dyn MediaSource>> {
-        let dest = self.download_path(hash, rel);
-        if dest.exists() {
+        if let Some(dest) = self.download_path(hash) {
             return Ok(Box::new(std::fs::File::open(dest)?));
         }
         let cached = self.cached_path(hash, rel);

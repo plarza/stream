@@ -242,6 +242,13 @@ struct ItemMenu: ViewModifier {
                 if t.albumId != nil {
                     Button { model.openAlbum(of: t) } label: { Label("Go to Album", systemImage: "square.stack") }
                 }
+                #if os(macOS)
+                // Your own files, and Uploads once downloaded. Spotify downloads aren't files.
+                if t.source == .local && (!t.remote || t.downloaded) {
+                    Button { model.showInFinder(t) } label: { Label("Show in Finder", systemImage: "folder") }
+                        .accessibilityIdentifier("menu.showInFinder")
+                }
+                #endif
             }
             if let downloaded = downloadState {
                 Button { model.setDownloaded(item, !downloaded) } label: {

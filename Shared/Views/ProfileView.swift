@@ -17,6 +17,7 @@ struct ProfileView: View {
     @State private var refreshing = false
     #if os(macOS)
     @State private var folders: [String] = []
+    @State private var downloadsFolder = ""
     #endif
 
     var body: some View {
@@ -32,6 +33,9 @@ struct ProfileView: View {
                         Toggle("Autoplay similar songs", isOn: $settings.autoplay)
                             .accessibilityIdentifier("settings.autoplay")
                     }
+                    #if os(macOS)
+                    downloads
+                    #endif
                     heading("Appearance")
                     AppearanceSection()
                 }
@@ -74,6 +78,7 @@ struct ProfileView: View {
             settings = model.core.settings()
             #if os(macOS)
             folders = model.core.musicFolders()
+            downloadsFolder = model.core.downloadsFolder()
             #endif
         }
         .task {
@@ -307,6 +312,38 @@ struct ProfileView: View {
     }
 
     #if os(macOS)
+    /// Where downloaded Uploads are saved, and a folder picker to move them.
+    private var downloads: some View {
+        SettingsCard("Downloads") {
+            HStack {
+                Label((downloadsFolder as NSString).abbreviatingWithTildeInPath, systemImage: "folder")
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Button("Show in Finder") {
+                    let url = URL(fileURLWithPath: downloadsFolder, isDirectory: true)
+                    try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+            }
+            Button("Change Folder…") {
+                let panel = NSOpenPanel()
+                panel.canChooseDirectories = true
+                panel.canChooseFiles = false
+                panel.canCreateDirectories = true
+                panel.directoryURL = URL(fileURLWithPath: downloadsFolder).deletingLastPathComponent()
+                panel.prompt = "Choose"
+                if panel.runModal() == .OK, let url = panel.url, url.path != downloadsFolder {
+                    downloadsFolder = url.path
+                    model.core.setDownloadsFolder(folder: url.path)
+                }
+            }
+            .accessibilityIdentifier("settings.downloadsFolder")
+        } footer: {
+            Text("Uploads you download are saved here, named as on the device they came from, and move with the folder. Spotify songs you download stay in Spotify’s encrypted cache.")
+        }
+    }
+
     private var musicFolders: some View {
         SettingsCard("Music folders") {
             ForEach(folders, id: \.self) { f in

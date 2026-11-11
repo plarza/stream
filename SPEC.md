@@ -72,8 +72,12 @@ Rules:
 - Mixed playlists live **on Spotify**, using `spotify:local:` entries that resolve to your files.
 - Made For You, Discover Weekly and Daily Mixes are tucked inside Library → Playlists.
 - **Offline:** manual "Download" on a song, album or playlist (its page, or a long-press). Uses
-  librespot's encrypted audio cache for Spotify songs; Uploads are downloaded as their files.
-  Both land in Library → **Downloaded**.
+  librespot's encrypted audio cache for Spotify songs; Uploads are downloaded as their files,
+  under the path they have on the device they came from, into the downloads folder (Mac: Music →
+  Stream unless another is picked in Settings → Downloads, which moves them; iPhone: the app's
+  data). Music folders skip the downloads folder when scanned. Both land in Library →
+  **Downloaded**. On the Mac, right-clicking a song with a file here (your own, or a downloaded
+  Upload) offers **Show in Finder**.
 - There are no liked songs: the songs you keep go in your playlists. The **+** beside the song
   playing (Now Playing, and the Mac's player bar) adds it to one of them or a new one. An
   album's + saves it to your Spotify library (Library → Albums).

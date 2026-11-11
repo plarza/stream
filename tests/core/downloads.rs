@@ -69,3 +69,41 @@ fn removing_a_download_takes_its_songs_out_of_the_queue() {
     until(5, "the queue to empty", || phone.core.download_status() == DownloadStatus::default());
     assert!(phone.core.section(LibrarySection::Downloaded, 0, 100).is_empty());
 }
+
+#[test]
+fn downloads_keep_their_names_in_a_folder_you_can_move() {
+    let fake = Fake::start();
+    let phone = phone_with_uploads(&fake);
+    let album = phone.item(LibrarySection::UploadedAlbums, "Night Drive");
+    let song = ids(&phone, &["Neon Lights"]).remove(0);
+    assert_eq!(phone.core.file_path(song.clone()), None, "only streams until it's downloaded");
+
+    crate::playlists::tokio_block(phone.core.clone().download(album.id.clone())).unwrap();
+    until(10, "every song to download", || phone.core.section(LibrarySection::Downloaded, 0, 100).len() == 4);
+    let first = std::path::Path::new(&phone.core.downloads_folder()).join("Neon Coast - Night Drive");
+    let file = first.join("01 Neon Lights.flac");
+    assert_eq!(phone.core.file_path(song.clone()), Some(file.display().to_string()));
+    let original = std::path::Path::new(&library()).join("Neon Coast - Night Drive/01 Neon Lights.flac");
+    assert_eq!(std::fs::read(&file).unwrap(), std::fs::read(original).unwrap());
+
+    let elsewhere = tempfile::tempdir().unwrap();
+    let to = elsewhere.path().join("Stream");
+    phone.core.clone().set_downloads_folder(to.display().to_string());
+    let moved = to.join("Neon Coast - Night Drive/01 Neon Lights.flac");
+    until(5, "the downloads to move", || phone.core.file_path(song.clone()) == Some(moved.display().to_string()));
+    until(5, "the old album folder to go", || !first.exists());
+    assert_eq!(phone.core.downloads_folder(), to.display().to_string());
+    assert!(phone.album("Night Drive").iter().all(|t| t.downloaded));
+
+    crate::playlists::tokio_block(phone.core.clone().remove_download(album.id)).unwrap();
+    assert!(!to.join("Neon Coast - Night Drive").exists(), "removing them leaves no empty folder");
+    assert_eq!(phone.core.file_path(song), None);
+}
+
+#[test]
+fn a_mac_shows_its_own_files_where_they_are() {
+    let mac = Device::mac();
+    let song = mac.album("Night Drive").into_iter().find(|s| s.title == "Neon Lights").unwrap();
+    let path = std::path::Path::new(&library()).join("Neon Coast - Night Drive/01 Neon Lights.flac");
+    assert_eq!(mac.core.file_path(song.id), Some(path.display().to_string()));
+}
