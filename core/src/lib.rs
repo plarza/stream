@@ -491,8 +491,7 @@ impl StreamCore {
         self.rescan();
     }
 
-    /// The folder songs downloaded from the Stream node are kept in, under the paths they have
-    /// on the device they came from.
+    /// The folder for downloaded Uploads and Spotify songs. Uploads keep their original paths.
     pub fn downloads_folder(&self) -> String {
         self.node.downloads_dir().display().to_string()
     }
@@ -510,8 +509,11 @@ impl StreamCore {
     }
 
     /// The song's file on this device, for Show in Finder: one of your own, or a download
-    /// from the Stream node. Spotify downloads are in librespot's encrypted cache, not files.
+    /// from the Stream node or Spotify.
     pub fn file_path(&self, track_id: String) -> Option<String> {
+        if track_id.starts_with("spotify:track:") {
+            return self.node.download_path(&track_id).map(|p| p.display().to_string());
+        }
         let path = match self.db.local_source(&track_id)? {
             db::LocalSource::File { path, .. } => PathBuf::from(path),
             db::LocalSource::Remote { hash, .. } => self.node.download_path(&hash)?,
@@ -985,12 +987,14 @@ impl StreamCore {
         Ok(())
     }
 
-    /// Takes songs off this device; they still stream. A Spotify song's audio stays in
-    /// librespot's cache until it's trimmed, but it no longer counts as Downloaded.
+    /// Removes downloaded files from this device; the songs still stream.
     pub fn remove_downloads(&self, track_ids: Vec<String>) {
         self.unqueue_downloads(&track_ids);
         for (_, hash, ..) in self.db.remote_songs(Some(&track_ids)) {
             self.node.remove_download(&hash);
+        }
+        for id in &track_ids {
+            if id.starts_with("spotify:track:") { self.node.remove_download(id); }
         }
         // A device's own files (the Mac's music folders) aren't downloads to remove.
         let ids: Vec<String> = track_ids

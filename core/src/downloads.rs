@@ -74,7 +74,7 @@ impl StreamCore {
     pub(crate) fn queue_downloads(self: &Arc<Self>, track_ids: Vec<String>) -> Result<(), CoreError> {
         let songs: Vec<String> = track_ids
             .into_iter()
-            .filter(|id| self.db.track(id).is_some_and(|t| !t.downloaded && (t.source == Source::Spotify || t.remote)))
+            .filter(|id| self.db.track(id).is_some_and(|t| (!t.downloaded || (t.source == Source::Spotify && self.node.download_path(id).is_none())) && (t.source == Source::Spotify || t.remote)))
             .collect();
         let needs_spotify = songs.iter().any(|id| id.starts_with("spotify:track:"));
         if needs_spotify && self.playback.read().is_none() && !songs.iter().any(|id| !id.starts_with("spotify:track:")) {
@@ -179,6 +179,18 @@ impl StreamCore {
             return self.node.download_one(&hash, &rel, progress).await;
         }
         let pb = self.playback.read().clone().ok_or_else(|| anyhow::anyhow!("not signed in to Spotify"))?;
-        spotify::download::fetch(&pb.session, id, progress).await
+        if self.node.download_path(id).is_some() { return Ok(()); }
+        let track = self.db.track(id).ok_or_else(|| anyhow::anyhow!("unknown song"))?;
+        let folder = self.node.downloads_dir();
+        std::fs::create_dir_all(&folder)?;
+        let temp = folder.join(format!(".{}.part", id.replace(':', "-")));
+        let result = spotify::download::fetch(&pb.session, id, temp.clone(), progress).await;
+        let result = result.and_then(|()| {
+            let clean = |s: &str| s.chars().map(|c| if c == '/' || c == ':' || c.is_control() { '_' } else { c }).collect::<String>();
+            let name = format!("Spotify/{} - {} [{}].ogg", clean(&track.artist), clean(&track.title), id.trim_start_matches("spotify:track:"));
+            self.node.keep(id, &name, &temp).map(|_| ())
+        });
+        let _ = std::fs::remove_file(temp);
+        result
     }
 }

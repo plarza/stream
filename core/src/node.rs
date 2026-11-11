@@ -580,7 +580,7 @@ impl Node {
     }
 
     /// Moves `file` into the downloads folder as the song `hash`.
-    fn keep(&self, hash: &str, rel: &str, file: &Path) -> Result<PathBuf> {
+    pub(crate) fn keep(&self, hash: &str, rel: &str, file: &Path) -> Result<PathBuf> {
         let (name, dest) = self.new_download_path(hash, rel);
         move_file(file, &dest)?;
         self.db.set_kv(&format!("download:{hash}"), &name);

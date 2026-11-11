@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use futures_util::{StreamExt, stream};
-use librespot_audio::AudioFile;
+use librespot_audio::{AudioDecrypt, AudioFile};
 use librespot_core::SpotifyUri;
 use librespot_core::session::Session;
 use librespot_metadata::audio::AudioFileFormat;
@@ -13,38 +13,37 @@ use crate::types::{CollectionPage, Item, ItemKind, Source};
 
 const IMAGE_HOST: &str = "https://i.scdn.co/image/";
 
-/// Fetches a song's audio completely so librespot keeps it in its cache.
-pub async fn fetch(session: &Session, uri: &str, progress: std::sync::Arc<dyn Fn(f32) + Send + Sync>) -> Result<()> {
+/// Saves a complete, playable Vorbis file, without Spotify's custom header.
+pub async fn fetch(session: &Session, uri: &str, dest: std::path::PathBuf, progress: std::sync::Arc<dyn Fn(f32) + Send + Sync>) -> Result<()> {
     let id = SpotifyUri::from_uri(uri).map_err(|e| anyhow::anyhow!("{e}"))?;
     let track = SessionTrack::get(session, &id).await.map_err(|e| anyhow::anyhow!("{e}"))?;
     let file_id = [AudioFileFormat::OGG_VORBIS_320, AudioFileFormat::OGG_VORBIS_160]
-        .iter()
-        .find_map(|f| track.files.get(f).copied())
+        .iter().find_map(|f| track.files.get(f).copied())
         .context("no Vorbis audio for this song")?;
-    let file = AudioFile::open(session, file_id, 1 << 20).await.map_err(|e| anyhow::anyhow!("{e}"))?;
-    if file.is_cached() {
-        return Ok(());
-    }
+    let SpotifyUri::Track { id: track_id } = id else { anyhow::bail!("not a Spotify track"); };
+    let key = session.audio_key().request(track_id, file_id).await?;
+    let file = AudioFile::open(session, file_id, 1 << 20).await?;
     let size = file.get_stream_loader_controller().map(|c| c.len()).unwrap_or(0);
-    let mut file = file;
-    tokio::task::spawn_blocking(move || {
-        // Reading to the end completes the download, which librespot then caches.
-        use std::io::Read;
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        use std::io::{Read, Seek, SeekFrom, Write};
+        let mut audio = AudioDecrypt::new(Some(key), file);
+        audio.seek(SeekFrom::Start(0xa7))?;
+        let mut output = std::fs::File::create(&dest)?;
         let mut buf = vec![0u8; 64 * 1024];
         let mut got = 0usize;
-        while let Ok(n) = file.read(&mut buf) {
-            if n == 0 {
-                break;
-            }
+        loop {
+            let n = audio.read(&mut buf)?;
+            if n == 0 { break; }
+            if got == 0 { anyhow::ensure!(buf[..n].starts_with(b"OggS"), "invalid Vorbis download"); }
+            output.write_all(&buf[..n])?;
             got += n;
-            if size > 0 {
-                progress(got as f32 / size as f32);
-            }
+            if size > 0 { progress((got + 0xa7) as f32 / size as f32); }
         }
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        drop(file);
-    })
-    .await?;
+        anyhow::ensure!(got > 0, "empty Vorbis download");
+        anyhow::ensure!(size == 0 || got + 0xa7 == size, "incomplete Vorbis download");
+        output.sync_all()?;
+        Ok(())
+    }).await??;
     Ok(())
 }
 

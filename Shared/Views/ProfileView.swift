@@ -340,7 +340,7 @@ struct ProfileView: View {
             }
             .accessibilityIdentifier("settings.downloadsFolder")
         } footer: {
-            Text("Uploads you download are saved here, named as on the device they came from, and move with the folder. Spotify songs you download stay in Spotify’s encrypted cache.")
+            Text("Downloaded songs are saved here and move with the folder. Uploads keep their original names; Spotify songs are saved as playable Ogg files in the Spotify subfolder.")
         }
     }
 

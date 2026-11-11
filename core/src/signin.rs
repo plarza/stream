@@ -136,7 +136,7 @@ impl StreamCore {
 
     /// Logs in to the streaming servers, a few tries for network trouble (librespot
     /// already walks the access points on each).
-    async fn connect_playback(&self, creds: librespot_core::authentication::Credentials) -> Result<(), Refusal> {
+    async fn connect_playback(self: &Arc<Self>, creds: librespot_core::authentication::Credentials) -> Result<(), Refusal> {
         // A stand-in Spotify (the UI tests') hands out tokens the real streaming servers
         // always refuse; refuse them here, as they would, without going online for it.
         if self.endpoints.accounts != auth::Endpoints::default().accounts {
@@ -153,6 +153,12 @@ impl StreamCore {
                     self.delegate.secret_set(SECRET_PLAYBACK.into(), Some(sp_session::credentials_to_json(&reusable)));
                     *self.playback.write() = Some(Arc::new(pb));
                     self.account.lock().spotify_playback = true;
+                    // Materialize older cache-only downloads after the session is ready.
+                    let old = self.db.section_tracks(crate::types::LibrarySection::Downloaded)
+                        .into_iter().filter(|t| t.source == crate::types::Source::Spotify
+                            && self.node.download_path(&t.id).is_none())
+                        .map(|t| t.id).collect();
+                    let _ = self.queue_downloads(old);
                     return Ok(());
                 }
                 Err(e) => {

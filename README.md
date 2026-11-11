@@ -41,7 +41,7 @@ On the Mac there's a floating glass sidebar and player, ⌘K to play or go to an
 
 ## Your data
 
-Everything stays on your devices unless you sign in with aza. The library is a SQLite database in the app's container, and your Spotify and Last.fm credentials are in the Keychain, on that device only. Stream reads your music folders in place and never copies or changes them. Downloaded Uploads are files in your downloads folder; downloaded Spotify songs stay in librespot's encrypted cache.
+Everything stays on your devices unless you sign in with aza. The library is a SQLite database in the app's container, and your Spotify and Last.fm credentials are in the Keychain, on that device only. Stream reads your music folders in place and never copies or changes them. Downloaded Uploads and Spotify songs are files in your downloads folder. Spotify downloads are playable Ogg files in the Spotify subfolder and can be shown in Finder. Older cache-only downloads are converted when Spotify connects.
 
 Signed in with aza, your settings, pins, history and the list of your own songs sync through aza sync, and the files themselves go to the Stream node at `stream.aza.network`. They are stored by hash, never transcoded, and stream while they play.
 
